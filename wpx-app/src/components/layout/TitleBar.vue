@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { User } from '@lucide/vue'
+import { Infinity as InfinityIcon, Square, User } from '@lucide/vue'
 import { useAuth } from '@/composables/useAuth'
 import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useAuthStore } from '@/stores/auth'
 import { useTrayStore } from '@/stores/tray'
+import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import {
   detectPlatform,
@@ -43,13 +44,41 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  overlay: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const trayStore = useTrayStore()
 const authStore = useAuthStore()
+const userPreferencesStore = useUserPreferencesStore()
 const { isAuthenticated, currentUser } = storeToRefs(authStore)
 const { login, logout, isLoggingIn } = useAuth()
 const { openSettings } = useOpenSettings()
+
+const focusModeEnabled = computed(() => userPreferencesStore.paper?.focusMode === true)
+const focusModePaperSize = computed(() => userPreferencesStore.paper?.paperSize || 'none')
+const focusModeAvailable = computed(() => focusModePaperSize.value !== 'none')
+const focusModeButtonTitle = computed(() =>
+  focusModeAvailable.value
+    ? focusModeEnabled.value
+      ? '退出焦点模式'
+      : '焦点写作模式'
+    : '请先在通用设置中选择纸张尺寸',
+)
+const focusModeButtonLabel = computed(() =>
+  focusModeEnabled.value ? '退出焦点模式' : '进入焦点模式',
+)
+
+async function handleToggleFocusMode() {
+  if (!focusModeAvailable.value) return
+  try {
+    await userPreferencesStore.toggleFocusMode()
+  } catch (error) {
+    console.warn('[TitleBar] Failed to toggle focus mode:', error)
+  }
+}
 
 const isMaximized = ref(false)
 const windowMenuOpen = ref(false)
@@ -206,6 +235,7 @@ async function handleTitleBarDblClick(event) {
   if (event.target.closest('.title-bar__controls')) return
   if (event.target.closest('.title-bar__menu-btn')) return
   if (event.target.closest('.title-bar__settings-btn')) return
+  if (event.target.closest('.title-bar__focus-btn')) return
   if (event.target.closest('.title-bar__user')) return
   await handleToggleMaximize()
 }
@@ -232,6 +262,7 @@ onUnmounted(() => {
     :class="{
       'title-bar--mac': isMac,
       'title-bar--win': !isMac,
+      'title-bar--overlay': overlay,
     }"
     @dblclick="handleTitleBarDblClick"
   >
@@ -258,6 +289,33 @@ onUnmounted(() => {
     <div class="title-bar__spacer" aria-hidden="true" />
 
     <div class="title-bar__actions">
+      <button
+        type="button"
+        class="title-bar__menu-btn title-bar__focus-btn"
+        :class="{
+          'title-bar__focus-btn--active': focusModeEnabled,
+          'title-bar__focus-btn--disabled': !focusModeAvailable,
+        }"
+        :aria-label="focusModeButtonLabel"
+        :aria-pressed="focusModeEnabled"
+        :title="focusModeButtonTitle"
+        :disabled="!focusModeAvailable"
+        data-focus-mode-toggle
+        @click="handleToggleFocusMode"
+      >
+        <Square
+          v-if="focusModeEnabled"
+          :size="16"
+          :stroke-width="1.8"
+          aria-hidden="true"
+        />
+        <InfinityIcon
+          v-else
+          :size="16"
+          :stroke-width="1.8"
+          aria-hidden="true"
+        />
+      </button>
       <button
         v-if="showWindowMenu"
         ref="windowMenuAnchor"
@@ -422,7 +480,7 @@ onUnmounted(() => {
 .title-bar {
   display: flex;
   align-items: center;
-  height: 36px;
+  height: var(--title-bar-height, 36px);
   flex-shrink: 0;
   padding: 0 0 0 12px;
   background: var(--theme-bg-subtle);
@@ -431,6 +489,18 @@ onUnmounted(() => {
   user-select: none;
   -webkit-app-region: drag;
   app-region: drag;
+}
+
+.title-bar--overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-title-bar, 80);
+  background: color-mix(in srgb, var(--theme-bg-subtle) 52%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom-color: color-mix(in srgb, var(--theme-border) 38%, transparent);
 }
 
 .title-bar__leading {
@@ -495,6 +565,25 @@ onUnmounted(() => {
 .title-bar__menu-btn--active {
   background: var(--theme-bg-muted);
   color: var(--theme-fg);
+}
+
+.title-bar__focus-btn--active {
+  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+  color: var(--theme-accent);
+}
+
+.title-bar__focus-btn--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.title-bar__focus-btn:disabled {
+  pointer-events: auto;
+}
+
+.title-bar__focus-btn:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
 }
 
 .title-bar__user {

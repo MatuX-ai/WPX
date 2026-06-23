@@ -20,7 +20,7 @@ function get7zaBinaryName() {
 function get7zaPath() {
   const binaryName = get7zaBinaryName()
 
-  if (app.isPackaged) {
+  if (app && app.isPackaged) {
     return path.join(process.resourcesPath, 'bin', binaryName)
   }
 
@@ -32,7 +32,7 @@ function get7zaPath() {
  * @returns {string}
  */
 function get7ZipLicensePath() {
-  if (app.isPackaged) {
+  if (app && app.isPackaged) {
     return path.join(process.resourcesPath, 'bin', LICENSE_FILE_NAME)
   }
 
@@ -71,10 +71,12 @@ function verify7zaBinaryAtStartup() {
   return false
 }
 
-if (app.isReady()) {
-  verify7zaBinaryAtStartup()
-} else {
-  app.whenReady().then(verify7zaBinaryAtStartup)
+if (app && typeof app.isReady === 'function') {
+  if (app.isReady()) {
+    verify7zaBinaryAtStartup()
+  } else if (typeof app.whenReady === 'function') {
+    app.whenReady().then(verify7zaBinaryAtStartup)
+  }
 }
 
 module.exports = {

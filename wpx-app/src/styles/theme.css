@@ -21,6 +21,11 @@
   --theme-border: #e2e8f0;
   --theme-surface: #ffffff;
 
+  /* 危险/错误提示（图片编辑器去背景错误条） */
+  --theme-danger-bg: #fef2f2;
+  --theme-danger-border: #fecaca;
+  --theme-danger-fg: #b91c1c;
+
   /* 阴影 */
   --theme-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --theme-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.1);
@@ -38,6 +43,10 @@
 
   /* 编辑器正文字号（通用设置可覆盖） */
   --wpx-editor-base-font-size: 16px;
+
+  /* 焦点写作模式背景与纸张阴影 */
+  --wpx-focus-mode-bg: #f0f0f0;
+  --wpx-focus-mode-paper-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 
 /* ── 深色主题 ── */
@@ -56,9 +65,16 @@
   --theme-border: #404040;
   --theme-surface: #252525;
 
+  --theme-danger-bg: #2d1f1f;
+  --theme-danger-border: #5c2929;
+  --theme-danger-fg: #fca5a5;
+
   --theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --theme-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
   --theme-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  --wpx-focus-mode-bg: #1a1a1a;
+  --wpx-focus-mode-paper-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
 /* 跟随系统：JS 未加载前的兜底（默认 system） */
@@ -78,8 +94,15 @@
     --theme-border: #404040;
     --theme-surface: #252525;
 
+    --theme-danger-bg: #2d1f1f;
+    --theme-danger-border: #5c2929;
+    --theme-danger-fg: #fca5a5;
+
     --theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --theme-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
     --theme-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+    --wpx-focus-mode-bg: #1a1a1a;
+    --wpx-focus-mode-paper-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 12px 28px rgba(0, 0, 0, 0.45);
   }
 }

@@ -2,13 +2,26 @@ const { execFile } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
-const { app } = require('electron')
+const { app, ipcMain } = require('electron')
 const fontService = require('../font-service')
 const {
   embedFontsInDocx,
   injectHtmlFontFaces,
   buildPdfHeaderIncludes,
 } = require('./export-font-embedder')
+const {
+  buildDocxFooterXml,
+  buildPdfGeometryArgs,
+  buildPdfHeaderInclude,
+  buildHtmlFitCss,
+  normalizeExportOptions,
+  writeDocxReferenceDocx,
+} = require('./export-paper-layout')
+const {
+  analyzeLayoutSuggestions,
+  applyLayoutSuggestions,
+  isAvailable: isAiLayoutAvailable,
+} = require('./ai-layout-suggest-service')
 
 const PANDOC_INSTALL_HINT =
   '请先安装 Pandoc：https://pandoc.org/installing.html。' +
@@ -161,11 +174,32 @@ function buildPandocInputFormat(contentFormat) {
 }
 
 function runPandoc(inputPath, outputPath, format, options = {}) {
-  const { subsetFonts = [], contentFormat = 'markdown', headerPath = null } = options
+  const {
+    subsetFonts = [],
+    contentFormat = 'markdown',
+    headerPath = null,
+    referenceDocxPath = null,
+    geometryArgs = [],
+    toc = false,
+  } = options
   const pandocInputFormat = buildPandocInputFormat(contentFormat)
   const args = [inputPath, '-f', pandocInputFormat, '-o', outputPath]
   /** @type {NodeJS.ProcessEnv} */
   let env = { ...process.env }
+
+  if (referenceDocxPath) {
+    args.push('--reference-doc', referenceDocxPath)
+  }
+
+  if (Array.isArray(geometryArgs)) {
+    for (const pair of geometryArgs) {
+      args.push(...pair)
+    }
+  }
+
+  if (toc) {
+    args.push('--toc')
+  }
 
   if ((format === 'pdf' || format === 'docx') && subsetFonts.length > 0) {
     env.WPX_EXPORT_SUBSET_FONTS = subsetFonts.map((item) => item.path).join(path.delimiter)
@@ -229,6 +263,7 @@ function parseExportRequest(req) {
   const format = req.body?.format
   const embedFonts = req.body?.embedFonts
   const contentFormat = req.body?.contentFormat
+  const rawExportOptions = req.body?.exportOptions
 
   if (!content || typeof content !== 'string') {
     return { error: '缺少 content 参数（markdown 字符串）' }
@@ -246,12 +281,15 @@ function parseExportRequest(req) {
     return { error: 'contentFormat 仅支持 markdown 或 html' }
   }
 
+  const exportOptions = normalizeExportOptions(rawExportOptions)
+
   return {
     content,
     format,
     embedFonts,
     contentFormat: contentFormat || 'markdown',
     userId: resolveUserId(req),
+    exportOptions,
   }
 }
 
@@ -261,13 +299,14 @@ async function handleExport(req, res) {
     return res.status(400).json({ error: parsed.error })
   }
 
-  const { content, format, embedFonts, contentFormat, userId } = parsed
+  const { content, format, embedFonts, contentFormat, userId, exportOptions } = parsed
   const formatMeta = SUPPORTED_FORMATS[format]
   const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'wpx-export-'))
   const inputPath = path.join(tempDir, contentFormat === 'html' ? 'input.html' : 'input.md')
   const outputPath = path.join(tempDir, `output.${formatMeta.ext}`)
   const subsetDir = path.join(tempDir, 'fonts')
   let pdfHeaderPath = null
+  let referenceDocxPath = null
 
   try {
     fontService.setUserCredentials({ userId })
@@ -284,6 +323,21 @@ async function handleExport(req, res) {
     }
 
     let exportContent = content
+
+    // 在导出前调用 AI 排版建议（可选；不可用时静默回退）
+    if (isAiLayoutAvailable()) {
+      try {
+        const suggestions = await analyzeLayoutSuggestions(exportContent, exportOptions.paper)
+        if (Array.isArray(suggestions) && suggestions.length > 0) {
+          exportContent = applyLayoutSuggestions(exportContent, suggestions, format)
+        }
+      } catch (error) {
+        if (process.env.WPX_EXPORT_DEBUG) {
+          console.warn('[export-routes] ai layout suggest failed:', error?.message)
+        }
+      }
+    }
+
     if (shouldEmbedFonts && contentFormat === 'html') {
       exportContent = injectHtmlFontFaces(
         content,
@@ -292,19 +346,49 @@ async function handleExport(req, res) {
           path: font.path,
         })),
       )
+    } else if (format === 'html' && exportOptions) {
+      // HTML 输出直接注入适配 CSS
+      const fitCss = buildHtmlFitCss(exportOptions)
+      if (/<head[\s>]/i.test(exportContent)) {
+        exportContent = exportContent.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n${fitCss}\n`)
+      } else {
+        exportContent = `<head>${fitCss}</head>\n${exportContent}`
+      }
     }
 
     await fs.promises.writeFile(inputPath, exportContent, 'utf8')
 
-    if (format === 'pdf' && subsetFonts.length > 0) {
-      pdfHeaderPath = path.join(tempDir, 'font-header.tex')
-      await fs.promises.writeFile(pdfHeaderPath, buildPdfHeaderIncludes(subsetFonts), 'utf8')
+    // PDF：组合字体头 + 页眉页脚 + 分页 widow/orphan 控制
+    if (format === 'pdf' && (subsetFonts.length > 0 || exportOptions.paper.headerFooter !== 'none' || exportOptions.fitImagesToWidth || exportOptions.autoPaginate)) {
+      const headerLines = []
+      if (subsetFonts.length > 0) {
+        headerLines.push(buildPdfHeaderIncludes(subsetFonts))
+      }
+      const layoutHeader = buildPdfHeaderInclude(exportOptions.paper, exportOptions)
+      if (layoutHeader) {
+        headerLines.push(layoutHeader)
+      }
+      if (headerLines.length > 0) {
+        pdfHeaderPath = path.join(tempDir, 'font-header.tex')
+        await fs.promises.writeFile(pdfHeaderPath, headerLines.join('\n'), 'utf8')
+      }
     }
+
+    // docx：根据纸张参数动态生成 reference.docx（页面尺寸、页边距、页脚）
+    if (format === 'docx') {
+      referenceDocxPath = path.join(tempDir, 'reference.docx')
+      await writeDocxReferenceDocx(referenceDocxPath, exportOptions.paper)
+    }
+
+    const geometryArgs = format === 'pdf' ? buildPdfGeometryArgs(exportOptions.paper) : []
 
     await runPandoc(inputPath, outputPath, format, {
       subsetFonts,
       contentFormat,
       headerPath: pdfHeaderPath,
+      referenceDocxPath,
+      geometryArgs,
+      toc: Boolean(exportOptions.generateToc),
     })
 
     if (format === 'docx' && subsetFonts.length > 0) {
@@ -370,8 +454,43 @@ function registerExportRoutes(app, upload) {
   })
 }
 
+/**
+ * 注册 'export:ai-layout-suggest' IPC 通道。
+ * 渲染层将来可直接通过 window.electronAPI.aiLayoutSuggest(...) 调用。
+ * 当前后端默认静默回退（返回空数组），前端 UI 不实现。
+ *
+ * @param {import('electron').IpcMain} [targetIpcMain]
+ */
+function registerExportAiLayoutSuggestHandler(targetIpcMain = ipcMain) {
+  if (!targetIpcMain || typeof targetIpcMain.handle !== 'function') return
+
+  targetIpcMain.handle('export:ai-layout-suggest', async (_event, payload = {}) => {
+    const markdown = typeof payload?.markdown === 'string' ? payload.markdown : ''
+    const paper = payload?.paper && typeof payload.paper === 'object' ? payload.paper : null
+
+    if (!markdown) {
+      return { suggestions: [], available: false, reason: 'empty markdown' }
+    }
+
+    try {
+      const suggestions = await analyzeLayoutSuggestions(markdown, paper)
+      return {
+        suggestions: Array.isArray(suggestions) ? suggestions : [],
+        available: isAiLayoutAvailable(),
+      }
+    } catch (error) {
+      return {
+        suggestions: [],
+        available: false,
+        reason: error?.message || 'unknown error',
+      }
+    }
+  })
+}
+
 module.exports = {
   registerExportRoutes,
+  registerExportAiLayoutSuggestHandler,
   checkPandocAvailable,
   checkPdfEngineAvailable,
   PANDOC_INSTALL_HINT,

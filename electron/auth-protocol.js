@@ -1,6 +1,7 @@
 const { ipcMain, shell } = require('electron')
 
 const ACCOUNT_LOGIN_BASE = 'https://account.proclaw.cc/login'
+const ACCOUNT_REGISTER_BASE = 'https://account.proclaw.cc/register'
 const AUTH_CALLBACK_SCHEME = 'wpx://auth'
 
 /**
@@ -16,13 +17,15 @@ function broadcastAuthCallback(windows, payload) {
 
 /**
  * @param {string} state
+ * @param {'login' | 'register'} [entry]
  */
-function buildLoginUrl(state) {
+function buildLoginUrl(state, entry = 'login') {
+  const base = entry === 'register' ? ACCOUNT_REGISTER_BASE : ACCOUNT_LOGIN_BASE
   const params = new URLSearchParams({
     callback: AUTH_CALLBACK_SCHEME,
     state: String(state || '').trim(),
   })
-  return `${ACCOUNT_LOGIN_BASE}?${params.toString()}`
+  return `${base}?${params.toString()}`
 }
 
 /**
@@ -82,7 +85,8 @@ function registerAuthProtocolIpcHandlers() {
       throw new Error('state 不能为空')
     }
 
-    await shell.openExternal(buildLoginUrl(state))
+    const entry = payload.entry === 'register' ? 'register' : 'login'
+    await shell.openExternal(buildLoginUrl(state, entry))
     return { ok: true }
   })
 }

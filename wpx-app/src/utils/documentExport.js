@@ -18,19 +18,46 @@ export function downloadBlob(blob, filename) {
 }
 
 /**
+ * @typedef {Object} PaperMarginPayload
+ * @property {number} top
+ * @property {number} bottom
+ * @property {number} left
+ * @property {number} right
+ */
+
+/**
+ * @typedef {Object} PaperPayload
+ * @property {'A4' | 'Letter' | '16K' | 'mobile' | 'none'} paperSize
+ * @property {'wide' | 'normal' | 'narrow' | 'custom'} paperMargin
+ * @property {PaperMarginPayload} [customMargin]
+ * @property {'none' | 'pageNumber' | 'custom'} headerFooter
+ */
+
+/**
+ * @typedef {Object} ExportOptionPayload
+ * @property {PaperPayload} paper
+ * @property {boolean} [autoPaginate]
+ * @property {boolean} [fitImagesToWidth]
+ * @property {boolean} [generateToc]
+ */
+
+/**
  * @param {string} content
  * @param {'docx' | 'pdf' | 'html'} format
  * @param {string} [filename]
- * @param {{ embedFonts?: Array<{ fontId?: string, path?: string, text: string }>, contentFormat?: 'markdown' | 'html' }} [options]
+ * @param {{ embedFonts?: Array<{ fontId?: string, path?: string, text: string }>, contentFormat?: 'markdown' | 'html', exportOptions?: ExportOptionPayload }} [options]
  */
 export async function exportViaApi(content, format, filename = 'document', options = {}) {
   const apiBase = await getLocalApiBase()
-  const { embedFonts, contentFormat = 'markdown' } = options
+  const { embedFonts, contentFormat = 'markdown', exportOptions } = options
 
   /** @type {Record<string, unknown>} */
   const body = { content, format, contentFormat }
   if (Array.isArray(embedFonts) && embedFonts.length > 0) {
     body.embedFonts = embedFonts
+  }
+  if (exportOptions && typeof exportOptions === 'object') {
+    body.exportOptions = exportOptions
   }
 
   const response = await fetch(`${apiBase}/api/export`, {

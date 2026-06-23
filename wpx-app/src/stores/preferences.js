@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { DEFAULT_AVATAR_ID } from '@/constants/aiAvatars'
 import { createDefaultModelSettings } from '@/constants/modelPreferences'
 import { createDefaultAgentSettings } from '@/constants/agentPreferences'
+import { createDefaultPaperSettings } from '@/constants/paperPreferences'
 import { createDefaultGeneralSettings } from '@/constants/generalPreferences'
 import { useSettingsStore } from '@/stores/settings'
 import { useThemeStore } from '@/stores/theme'
@@ -31,6 +32,7 @@ export function createDefaultPreferences() {
       avatarId: DEFAULT_AVATAR_ID,
     },
     agent: createDefaultAgentSettings(),
+    paper: createDefaultPaperSettings(),
     models: createDefaultModelSettings(),
     general: createDefaultGeneralSettings(),
     libraryRootPath: '',

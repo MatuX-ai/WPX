@@ -14,7 +14,28 @@ const WINDOW_CREATE_ERROR = {
 const MAX_WINDOWS_MESSAGE = '最多只能打开8个窗口，请关闭一个后再试'
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
 const WPX_APP_ROOT = path.join(__dirname, '..', 'wpx-app')
-const PROD_INDEX_HTML = path.join(WPX_APP_ROOT, 'dist', 'index.html')
+
+function resolvePreloadPath() {
+  const appPath = app.getAppPath()
+  const candidates = [
+    path.join(appPath, 'electron', 'preload.js'),
+    path.join(appPath.replace(/\.asar$/, '.asar.unpacked'), 'electron', 'preload.js'),
+    path.join(__dirname, 'preload.js'),
+  ]
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]
+}
+
+function resolveProdIndexHtml() {
+  const candidates = [
+    path.join(app.getAppPath(), 'wpx-app', 'dist', 'index.html'),
+    path.join(WPX_APP_ROOT, 'dist', 'index.html'),
+  ]
+  const resolved = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!resolved) {
+    console.error('[window] dist/index.html not found, tried:', candidates)
+  }
+  return resolved ?? candidates[0]
+}
 
 const ICON_CANDIDATES = [
   path.join(WPX_APP_ROOT, 'public', 'icon.ico'),
@@ -78,7 +99,7 @@ class WindowManager {
       icon: resolveIconPath(),
       backgroundColor: '#1a1a1a',
       webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
+        preload: resolvePreloadPath(),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -117,7 +138,7 @@ class WindowManager {
     if (isDev) {
       window.loadURL(`${DEV_SERVER_URL}?${search}`)
     } else {
-      window.loadFile(PROD_INDEX_HTML, { search })
+      window.loadFile(resolveProdIndexHtml(), { search })
     }
 
     return { ok: true, windowId }

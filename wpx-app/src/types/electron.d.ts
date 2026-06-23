@@ -121,7 +121,10 @@ declare global {
         }) => Promise<{ ok: boolean }>
         getToken?: () => Promise<{ token: string; refreshToken: string }>
         clearToken?: () => Promise<{ ok: boolean }>
-        startLogin?: (payload: { state: string }) => Promise<{ ok: boolean }>
+        startLogin?: (payload: {
+          state: string
+          entry?: 'login' | 'register'
+        }) => Promise<{ ok: boolean }>
         onCallback?: (
           callback: (payload: {
             token?: string
@@ -144,9 +147,10 @@ declare global {
           used: number
           remaining: number
           date?: string
+          unit?: 'token'
           code?: string
         }>
-        consume?: (payload: {
+        check?: (payload: {
           isGuest?: boolean
           userId?: string | null
         }) => Promise<{
@@ -158,6 +162,23 @@ declare global {
           used: number
           remaining: number
           date?: string
+          unit?: 'token'
+        }>
+        consumeTokens?: (payload: {
+          isGuest?: boolean
+          userId?: string | null
+          tokens?: number
+        }) => Promise<{
+          ok: boolean
+          consumed?: number
+          code?: string
+          subjectKey?: string
+          isGuest?: boolean
+          limit: number
+          used: number
+          remaining: number
+          date?: string
+          unit?: 'token'
         }>
         resetDeviceId?: () => Promise<{
           ok: boolean
@@ -193,6 +214,12 @@ declare global {
       knowledge?: {
         list?: () => Promise<{ items: KnowledgeItem[] }>
         preview?: (id: string) => Promise<KnowledgePreview>
+        fetchUrlPreview?: (
+          url: string,
+        ) => Promise<
+          | { success: true; preview: KnowledgeUrlPreview }
+          | { success: false; code: 'ANTI_BOT' | 'DYNAMIC_PAGE'; message: string }
+        >
         upload?: (payload: KnowledgeUploadPayload) => Promise<{ success: boolean; item: KnowledgeItem }>
         delete?: (id: string) => Promise<{ success: boolean; id: string }>
         clearIndex?: () => Promise<{ success: boolean; cleared?: number }>
@@ -243,6 +270,9 @@ declare global {
       fonts?: {
         getAll?: () => Promise<FontListResult>
         getBuiltIn?: () => Promise<FontListResult>
+        checkRecommended?: (
+          payload?: FontCheckRecommendedPayload,
+        ) => Promise<FontCheckRecommendedResult>
         getPreferences?: () => Promise<FontPreferencesResult>
         setEnabled?: (payload: FontSetEnabledPayload) => Promise<FontPreferencesResult>
         download?: (payload: FontDownloadPayload) => Promise<FontDownloadResult>
@@ -277,11 +307,40 @@ declare global {
     content: string
   }
 
+  interface KnowledgeUrlParagraph {
+    id: string
+    text: string
+    kind?: string
+  }
+
+  interface KnowledgeUrlImage {
+    id: string
+    url: string
+    alt?: string
+    width?: number
+    height?: number
+  }
+
+  interface KnowledgeUrlPreview {
+    url: string
+    title: string
+    paragraphs: KnowledgeUrlParagraph[]
+    images: KnowledgeUrlImage[]
+  }
+
+  interface KnowledgeWebImportPayload {
+    title?: string
+    sourceUrl?: string
+    paragraphs?: Array<{ text: string; kind?: string }>
+    images?: Array<{ url: string; alt?: string; width?: number; height?: number }>
+  }
+
   interface KnowledgeUploadPayload {
     filename?: string
     mimeType?: string
     data?: ArrayBuffer | Uint8Array
     url?: string
+    webImport?: KnowledgeWebImportPayload
   }
 
   interface SmartTemplate {
@@ -389,7 +448,7 @@ declare global {
     weightName: string
     type: string
     copyright: string | null
-    source: 'built-in' | 'free' | 'commercial'
+    source: 'built-in' | 'free' | 'commercial' | 'system'
     format: 'ttf' | 'otf' | 'enc' | 'wpxfont' | 'unknown'
   }
 
@@ -484,5 +543,31 @@ declare global {
 
   interface FontSubsetExportResult extends FontOperationResult {
     subset?: FontSubsetResult
+  }
+
+  interface FontRecommendedFreeFont {
+    id: string
+    name: string
+    category?: string
+    sampleText?: string
+    description?: string
+    downloadUrl?: string
+    fileName?: string
+    systemAliases?: string[]
+  }
+
+  interface FontCheckRecommendedPayload {
+    recommended?: FontRecommendedFreeFont[]
+  }
+
+  interface FontCheckRecommendedResultAvailable extends FontRecommendedFreeFont {
+    matchedFamily: string
+  }
+
+  interface FontCheckRecommendedResult extends FontOperationResult {
+    recommended?: FontRecommendedFreeFont[]
+    available?: FontCheckRecommendedResultAvailable[]
+    missing?: FontRecommendedFreeFont[]
+    systemFontCount?: number
   }
 }

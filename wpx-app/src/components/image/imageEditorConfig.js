@@ -61,25 +61,17 @@ export const editorLocale = {
   'Delete-all': '全部删除',
 }
 
-/** 浅色主题，隐藏品牌 logo 区域 */
+/** 浅色主题，隐藏品牌 logo 区域；load/download 按钮由 CSS display:none 隐藏 */
 export const editorTheme = {
   'common.backgroundColor': '#f8fafc',
   'common.border': '0px',
   'header.backgroundColor': 'transparent',
   'header.border': '0px',
-  'loadButton.backgroundColor': '#fff',
-  'loadButton.border': '0px',
-  'loadButton.color': '#fff',
-  'loadButton.fontSize': '0px',
-  'downloadButton.backgroundColor': '#fff',
-  'downloadButton.border': '0px',
-  'downloadButton.color': '#fff',
-  'downloadButton.fontSize': '0px',
-  'menu.backgroundColor': '#fff',
+  'menu.backgroundColor': 'transparent',
   'menu.normalIcon.color': '#64748b',
   'menu.activeIcon.color': '#7c3aed',
   'menu.disabledIcon.color': '#cbd5e1',
-  'submenu.backgroundColor': '#fff',
+  'submenu.backgroundColor': 'rgba(255, 255, 255, 0.55)',
   'submenu.partition.color': '#e2e8f0',
   'submenu.normalLabel.color': '#475569',
   'submenu.activeLabel.color': '#7c3aed',
@@ -93,4 +85,9 @@ export const editorTheme = {
   'range.title.color': '#475569',
 }
 
-export const EDITOR_MENUS = ['crop', 'rotate', 'filter', 'shape', 'text', 'mask']
+export const EDITOR_MENUS = ['crop', 'rotate', 'shape', 'text']
+
+/** 顶栏基线高度：标题行(36) + 图标工具栏(40) + 子菜单栏(48)
+ *  实际运行期通过 getBoundingClientRect() 动态获取，错误条等动态内容变化时自动调整 */
+export const IMAGE_EDITOR_HEADER_BASE_H = 124
+export const IMAGE_EDITOR_FOOTER_H = 52

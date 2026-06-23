@@ -144,7 +144,7 @@ export function useAuth() {
 
   ensureAuthCallbackListener()
 
-  async function login() {
+  async function login(options = {}) {
     if (pendingLogin) {
       throw new Error('已有登录流程进行中')
     }
@@ -161,6 +161,7 @@ export function useAuth() {
     ensureAuthCallbackListener()
 
     const state = generateAuthState()
+    const entry = options.entry === 'register' ? 'register' : 'login'
     isLoggingIn.value = true
 
     try {
@@ -179,7 +180,7 @@ export function useAuth() {
         }
 
         void api
-          .startLogin({ state })
+          .startLogin({ state, entry })
           .catch((error) => {
             clearPendingLogin()
             reject(error)
@@ -190,6 +191,10 @@ export function useAuth() {
     } finally {
       isLoggingIn.value = false
     }
+  }
+
+  async function register() {
+    return login({ entry: 'register' })
   }
 
   async function logout() {
@@ -225,6 +230,7 @@ export function useAuth() {
 
   return {
     login,
+    register,
     logout,
     isLoggingIn,
     isAuthenticated,

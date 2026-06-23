@@ -110,8 +110,16 @@ export async function importSettingsFromPayload(payload) {
   modelSettingsStore.hydrateFromPreferences(preferences.models)
   generalSettingsStore.hydrateFromPreferences(preferences)
 
-  if (backup.skills && typeof backup.skills === 'object') {
-    skillsStore.applyEnabledMap(backup.skills)
+  if (backup.skills) {
+    // 兼容新格式（string[] 禁用列表）和旧格式（Record<string, boolean>）
+    const skillsMap = Array.isArray(backup.skills)
+      ? Object.fromEntries(
+          skillsStore.allSkills.map((s) => [s.id, !backup.skills.includes(s.id)]),
+        )
+      : backup.skills
+    if (typeof skillsMap === 'object') {
+      skillsStore.applyEnabledMap(skillsMap)
+    }
   }
 
   if (isElectron()) {

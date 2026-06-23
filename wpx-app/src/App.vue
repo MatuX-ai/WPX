@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterView } from 'vue-router'
 import LoginGuide from '@/components/auth/LoginGuide.vue'
+import FontRecommendationDialog from '@/components/font/FontRecommendationDialog.vue'
 import { useAuth } from '@/composables/useAuth'
 import { provideLoginGuide } from '@/composables/useLoginGuide'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +13,12 @@ import { useModelSettingsStore } from '@/stores/modelSettings'
 import { useSkillsStore } from '@/stores/skills'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { getElectronAPI, isElectron } from '@/utils/electron'
+import { useFontRecommendationCheck } from '@/composables/useFontRecommendationCheck'
+import {
+  dismissFontRecommendationDialog,
+  maybePromptFontRecommendation,
+  useFontRecommendationDialog,
+} from '@/composables/useFontRecommendationLauncher'
 
 const authStore = useAuthStore()
 const { sessionRestored } = storeToRefs(authStore)
@@ -25,20 +32,61 @@ const skillsStore = useSkillsStore()
 const generalSettingsStore = useGeneralSettingsStore()
 const modelSettingsStore = useModelSettingsStore()
 
+// 字体推荐弹窗状态与数据
+const fontRecommendationDialog = useFontRecommendationDialog()
+const fontRecommendation = useFontRecommendationCheck()
+
 let unsubscribePreferencesChanged = null
 let unsubscribeSkillsStorage = null
+let fontRecommendationTimer = null
 
 function applyRemotePreferences(preferences) {
   if (!preferences || typeof preferences !== 'object') return
 
   preferencesStore.applyPreferences(preferences)
   userPreferencesStore.hydrateFromPreferences(preferences.agent)
+  if (preferences.paper && typeof preferences.paper === 'object') {
+    userPreferencesStore.hydrateFromPreferences(preferences.paper)
+  }
   modelSettingsStore.hydrateFromPreferences(preferences.models)
   generalSettingsStore.hydrateFromPreferences(preferences)
 
   if (preferences.skills && typeof preferences.skills === 'object') {
     skillsStore.applyEnabledMap(preferences.skills, { persist: false })
   }
+}
+
+function handleFontRecommendationDownloadAll() {
+  dismissFontRecommendationDialog({ markedDownloaded: true })
+}
+
+function handleFontRecommendationSkip() {
+  dismissFontRecommendationDialog()
+}
+
+function handleFontRecommendationNeverAsk() {
+  dismissFontRecommendationDialog({ dismissPermanently: true })
+}
+
+function handleFontRecommendationInstallManually() {
+  // 用户表示自己已安装全部推荐字体 → 不再提醒，但仍然记录检查时间
+  dismissFontRecommendationDialog({ dismissPermanently: true })
+}
+
+function handleFontRecommendationClose() {
+  dismissFontRecommendationDialog()
+}
+
+function scheduleFontRecommendationPrompt() {
+  if (!isElectron()) return
+  // 延迟 2.5s 执行：避开启动期 IO 集中、字体下载目录初始化等
+  if (fontRecommendationTimer) {
+    clearTimeout(fontRecommendationTimer)
+  }
+  fontRecommendationTimer = setTimeout(() => {
+    fontRecommendationTimer = null
+    void maybePromptFontRecommendation({ force: false })
+  }, 2500)
 }
 
 onMounted(async () => {
@@ -63,7 +111,10 @@ onMounted(async () => {
   }
 
   const api = getElectronAPI()
-  if (!api?.preferences?.get) return
+  if (!api?.preferences?.get) {
+    scheduleFontRecommendationPrompt()
+    return
+  }
 
   try {
     const preferences = await api.preferences.get()
@@ -77,6 +128,8 @@ onMounted(async () => {
       applyRemotePreferences(preferences)
     })
   }
+
+  scheduleFontRecommendationPrompt()
 })
 
 onUnmounted(() => {
@@ -84,6 +137,10 @@ onUnmounted(() => {
   unsubscribePreferencesChanged = null
   unsubscribeSkillsStorage?.()
   unsubscribeSkillsStorage = null
+  if (fontRecommendationTimer) {
+    clearTimeout(fontRecommendationTimer)
+    fontRecommendationTimer = null
+  }
 })
 </script>
 
@@ -92,8 +149,21 @@ onUnmounted(() => {
     <RouterView v-if="sessionRestored" />
     <LoginGuide v-if="sessionRestored" />
 
+    <FontRecommendationDialog
+      :visible="fontRecommendationDialog.visible.value"
+      :missing="fontRecommendation.missing.value"
+      :available="fontRecommendation.available.value"
+      :system-font-count="fontRecommendation.systemFontCount.value"
+      :loading="fontRecommendation.loading.value"
+      @close="handleFontRecommendationClose"
+      @download-all="handleFontRecommendationDownloadAll"
+      @skip="handleFontRecommendationSkip"
+      @never-ask="handleFontRecommendationNeverAsk"
+      @install-manually="handleFontRecommendationInstallManually"
+    />
+
     <div
-      v-else
+      v-if="!sessionRestored"
       class="app-session-loader"
       role="status"
       aria-live="polite"
@@ -107,7 +177,8 @@ onUnmounted(() => {
 
 <style scoped>
 .app-root {
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .app-session-loader {

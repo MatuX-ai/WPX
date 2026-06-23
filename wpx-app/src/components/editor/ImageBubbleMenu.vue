@@ -34,9 +34,9 @@ function handleEditImage() {
   emit('edit-image')
 }
 
-function setAlign(align) {
+function setFloat(floatValue) {
   clearError()
-  props.editor.chain().focus().updateAttributes('image', { align }).run()
+  props.editor.chain().focus().updateAttributes('image', { float: floatValue }).run()
 }
 
 async function handleRemoveBg() {
@@ -97,30 +97,33 @@ async function handleRemoveBg() {
 
         <button
           type="button"
-          title="左对齐"
+          title="左环绕：图片在左，文字在右环绕"
+          aria-label="左环绕"
           class="rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-          :class="editor.isActive('image', { align: 'left' }) ? 'bg-brand-50 text-brand-700' : ''"
-          @click="setAlign('left')"
+          :class="editor.isActive('image', { float: 'left' }) ? 'bg-brand-50 text-brand-700' : ''"
+          @click="setFloat('left')"
         >
-          左对齐
+          🡄 左环绕
         </button>
         <button
           type="button"
-          title="居中"
+          title="右环绕：图片在右，文字在左环绕"
+          aria-label="右环绕"
           class="rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-          :class="editor.isActive('image', { align: 'center' }) ? 'bg-brand-50 text-brand-700' : ''"
-          @click="setAlign('center')"
+          :class="editor.isActive('image', { float: 'right' }) ? 'bg-brand-50 text-brand-700' : ''"
+          @click="setFloat('right')"
         >
-          居中
+          🡆 右环绕
         </button>
         <button
           type="button"
-          title="右对齐"
+          title="独占行：图片独占一行，不环绕"
+          aria-label="独占行"
           class="rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-          :class="editor.isActive('image', { align: 'right' }) ? 'bg-brand-50 text-brand-700' : ''"
-          @click="setAlign('right')"
+          :class="editor.isActive('image', { float: 'none' }) ? 'bg-brand-50 text-brand-700' : ''"
+          @click="setFloat('none')"
         >
-          右对齐
+          ⬍ 独占行
         </button>
       </div>
       <p v-if="actionError" class="text-xs text-red-600">{{ actionError }}</p>

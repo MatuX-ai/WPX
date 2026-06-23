@@ -9,6 +9,7 @@ import { expect } from '@playwright/test'
  *   user?: { id: string, nickname: string, avatar?: string },
  *   tokens?: { access: string, refresh: string },
  *   guestQuota?: { limit?: number, used?: number, remaining?: number },
+ *   userQuota?: { limit?: number, used?: number, remaining?: number },
  *   quotaExhausted?: boolean,
  *   refreshValid?: boolean,
  *   withFonts?: boolean,
@@ -34,16 +35,26 @@ async function setupAuthInitScript(page, options = {}) {
     refresh: 'e2e-refresh-token',
   }
   const guestQuota = {
-    limit: options.guestQuota?.limit ?? 50,
+    limit: options.guestQuota?.limit ?? 0,
     used: options.guestQuota?.used ?? 0,
     remaining:
       options.guestQuota?.remaining ??
-      Math.max(0, (options.guestQuota?.limit ?? 50) - (options.guestQuota?.used ?? 0)),
+      Math.max(0, (options.guestQuota?.limit ?? 0) - (options.guestQuota?.used ?? 0)),
+  }
+  const userQuota = {
+    limit: options.userQuota?.limit ?? 100_000_000,
+    used: options.userQuota?.used ?? 0,
+    remaining:
+      options.userQuota?.remaining ??
+      Math.max(
+        0,
+        (options.userQuota?.limit ?? 100_000_000) - (options.userQuota?.used ?? 0),
+      ),
   }
   const quotaExhausted = Boolean(options.quotaExhausted)
 
   await page.addInitScript(
-    ({ user, tokens, guestQuota, quotaExhausted, withFonts }) => {
+    ({ user, tokens, guestQuota, userQuota, quotaExhausted, withFonts }) => {
       /** @type {{ token: string, refreshToken: string } | null} */
       let storedCredentials = null
       const storageKey = 'wpx-e2e-auth-credentials'
@@ -72,7 +83,18 @@ async function setupAuthInitScript(page, options = {}) {
         loginUrl: '',
       }
 
-      function buildGuestSubjectKey() {
+      function getTodayKey() {
+        return new Date().toISOString().slice(0, 10)
+      }
+
+      function isLoggedIn() {
+        return Boolean(storedCredentials?.token)
+      }
+
+      function buildSubjectKey() {
+        if (isLoggedIn()) {
+          return `user:${user.id}`
+        }
         let deviceId = localStorage.getItem('wpx-device-id') || ''
         if (!deviceId) {
           deviceId = crypto.randomUUID()
@@ -81,32 +103,54 @@ async function setupAuthInitScript(page, options = {}) {
         return `guest:${deviceId}`
       }
 
-      function readGuestUsage() {
+      function readTokenUsage() {
         const key = 'wpx-free-quota-web'
-        const subjectKey = buildGuestSubjectKey()
+        const subjectKey = buildSubjectKey()
         try {
           const raw = localStorage.getItem(key)
           const parsed = raw ? JSON.parse(raw) : {}
           const row = parsed[subjectKey]
-          const today = new Date().toISOString().slice(0, 10)
+          const today = getTodayKey()
           if (!row || row.date !== today) return 0
-          return Number(row.count) || 0
+          return Number(row.tokensUsed) || 0
         } catch {
           return 0
         }
       }
 
-      function writeGuestUsage(count) {
+      function writeTokenUsage(tokensUsed) {
         const key = 'wpx-free-quota-web'
-        const subjectKey = buildGuestSubjectKey()
-        const today = new Date().toISOString().slice(0, 10)
+        const subjectKey = buildSubjectKey()
+        const today = getTodayKey()
         try {
           const raw = localStorage.getItem(key)
           const parsed = raw ? JSON.parse(raw) : {}
-          parsed[subjectKey] = { date: today, count }
+          parsed[subjectKey] = { date: today, tokensUsed }
           localStorage.setItem(key, JSON.stringify(parsed))
         } catch {
           // ignore
+        }
+      }
+
+      function getActiveQuotaConfig() {
+        if (isLoggedIn()) {
+          return userQuota
+        }
+        return guestQuota
+      }
+
+      function buildQuotaStatus() {
+        const config = getActiveQuotaConfig()
+        const used = quotaExhausted ? config.limit : readTokenUsage()
+        const remaining = Math.max(0, config.limit - used)
+        return {
+          ok: true,
+          isGuest: !isLoggedIn(),
+          limit: config.limit,
+          used,
+          remaining,
+          unit: 'token',
+          subjectKey: buildSubjectKey(),
         }
       }
 
@@ -155,38 +199,34 @@ async function setupAuthInitScript(page, options = {}) {
           },
         },
         freeQuota: {
-          getStatus: async () => {
-            const used = quotaExhausted ? guestQuota.limit : readGuestUsage()
-            const remaining = Math.max(0, guestQuota.limit - used)
-            return {
-              ok: true,
-              isGuest: true,
-              limit: guestQuota.limit,
-              used,
-              remaining,
-              subjectKey: buildGuestSubjectKey(),
-            }
-          },
-          consume: async () => {
-            const used = readGuestUsage()
-            if (quotaExhausted || used >= guestQuota.limit) {
+          getStatus: async () => buildQuotaStatus(),
+          check: async () => {
+            const status = buildQuotaStatus()
+            if (status.limit <= 0 || status.remaining <= 0) {
               return {
                 ok: false,
                 code: 'FREE_QUOTA_EXHAUSTED',
-                isGuest: true,
-                limit: guestQuota.limit,
-                used,
-                remaining: 0,
+                ...status,
               }
             }
-            const nextUsed = used + 1
-            writeGuestUsage(nextUsed)
             return {
               ok: true,
-              isGuest: true,
-              limit: guestQuota.limit,
-              used: nextUsed,
-              remaining: Math.max(0, guestQuota.limit - nextUsed),
+              ...status,
+            }
+          },
+          consumeTokens: async (payload = {}) => {
+            const tokens = Math.max(0, Math.ceil(Number(payload.tokens) || 0))
+            const status = buildQuotaStatus()
+            if (tokens === 0) {
+              return { ok: true, consumed: 0, ...status }
+            }
+            const nextUsed = status.used + tokens
+            writeTokenUsage(nextUsed)
+            const refreshed = buildQuotaStatus()
+            return {
+              ok: true,
+              consumed: tokens,
+              ...refreshed,
             }
           },
           resetDeviceId: async () => {
@@ -238,7 +278,7 @@ async function setupAuthInitScript(page, options = {}) {
         }
       }
     },
-    { user, tokens, guestQuota, quotaExhausted, withFonts: Boolean(options.withFonts) },
+    { user, tokens, guestQuota, userQuota, quotaExhausted, withFonts: Boolean(options.withFonts) },
   )
 }
 
@@ -258,11 +298,21 @@ export async function setupAuthAccountRoutes(page, options = {}) {
     refresh: 'e2e-refresh-token',
   }
   const guestQuota = {
-    limit: options.guestQuota?.limit ?? 50,
+    limit: options.guestQuota?.limit ?? 0,
     used: options.guestQuota?.used ?? 0,
     remaining:
       options.guestQuota?.remaining ??
-      Math.max(0, (options.guestQuota?.limit ?? 50) - (options.guestQuota?.used ?? 0)),
+      Math.max(0, (options.guestQuota?.limit ?? 0) - (options.guestQuota?.used ?? 0)),
+  }
+  const userQuota = {
+    limit: options.userQuota?.limit ?? 100_000_000,
+    used: options.userQuota?.used ?? 0,
+    remaining:
+      options.userQuota?.remaining ??
+      Math.max(
+        0,
+        (options.userQuota?.limit ?? 100_000_000) - (options.userQuota?.used ?? 0),
+      ),
   }
   const quotaExhausted = Boolean(options.quotaExhausted)
   const refreshValid = options.refreshValid !== false
@@ -320,13 +370,15 @@ export async function setupAuthAccountRoutes(page, options = {}) {
   })
 
   await page.route('**/ai.proclaw.cc/api/free/quota', async (route) => {
+    const activeQuota = userQuota.limit > 0 ? userQuota : guestQuota
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        limit: guestQuota.limit,
-        remaining: quotaExhausted ? 0 : guestQuota.remaining,
-        used: quotaExhausted ? guestQuota.limit : guestQuota.used,
+        limit: activeQuota.limit,
+        remaining: quotaExhausted ? 0 : activeQuota.remaining,
+        used: quotaExhausted ? activeQuota.limit : activeQuota.used,
+        unit: 'token',
       }),
     })
   })

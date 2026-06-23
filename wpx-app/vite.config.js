@@ -3,6 +3,17 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 
+/** file:// 下 crossorigin 会导致模块脚本 CORS 失败，Electron 打包后按钮/事件失效 */
+function electronBuildHtmlPlugin() {
+  return {
+    name: 'wpx-electron-html',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html.replace(/\s+crossorigin/g, '')
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const knowledgePort = env.KNOWLEDGE_SERVICE_PORT || process.env.KNOWLEDGE_SERVICE_PORT || '3003'
@@ -10,9 +21,11 @@ export default defineConfig(({ mode }) => {
   return {
     // Electron 生产环境通过 loadFile 加载，资源路径须为相对路径
     base: './',
-    plugins: [vue(), tailwindcss()],
+    plugins: [vue(), tailwindcss(), electronBuildHtmlPlugin()],
     build: {
+      outDir: 'dist',
       chunkSizeWarningLimit: 800,
+      cssCodeSplit: true,
       // Vite 8.0.14+ Rolldown 会破坏 Vue init_* 辅助函数；wpx-app 锁定 vite@8.0.10
     },
     esbuild: {

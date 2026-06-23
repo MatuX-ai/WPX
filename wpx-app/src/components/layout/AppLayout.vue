@@ -101,6 +101,7 @@ onUnmounted(() => {
       :document-name="appStore.documentTitle"
       :save-status="appStore.documentSaveStatus"
       :save-status-refresh-tick="appStore.saveStatusRefreshTick"
+      :overlay="!showNavbar"
     />
     <AppNavbar v-if="showNavbar" />
 
@@ -128,7 +129,9 @@ onUnmounted(() => {
 .app-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--theme-bg);
   color: var(--theme-fg);
 }
@@ -143,7 +146,16 @@ onUnmounted(() => {
 }
 
 .app-main--immersive {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-main--immersive :deep(.editor-layout) {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding-top: var(--title-bar-height, 36px);
 }
 
 .app-shell--archive-drag {

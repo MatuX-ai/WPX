@@ -83,6 +83,14 @@ function serializeBlock(node) {
     case 'image': {
       const alt = node.attrs?.alt || ''
       const src = node.attrs?.src || ''
+      const float = node.attrs?.float || 'left'
+      const align = node.attrs?.align || 'left'
+      if (float === 'left' || float === 'right') {
+        return (
+          `<img src="${src}" alt="${alt}" class="editor-image" ` +
+          `data-float="${float}" data-align="${align}" />\n\n`
+        )
+      }
       return `![${alt}](${src})\n\n`
     }
     case 'table':

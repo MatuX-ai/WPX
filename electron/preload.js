@@ -72,7 +72,8 @@ const electronAPI = {
   },
   freeQuota: {
     getStatus: (payload) => ipcRenderer.invoke('free-quota:get-status', payload),
-    consume: (payload) => ipcRenderer.invoke('free-quota:consume', payload),
+    check: (payload) => ipcRenderer.invoke('free-quota:check', payload),
+    consumeTokens: (payload) => ipcRenderer.invoke('free-quota:consume-tokens', payload),
     resetDeviceId: () => ipcRenderer.invoke('free-quota:reset-device-id'),
   },
   models: {
@@ -86,6 +87,7 @@ const electronAPI = {
   knowledge: {
     list: () => ipcRenderer.invoke('knowledge:list'),
     preview: (id) => ipcRenderer.invoke('knowledge:preview', id),
+    fetchUrlPreview: (url) => ipcRenderer.invoke('knowledge:fetch-url-preview', url),
     upload: (payload) => ipcRenderer.invoke('knowledge:upload', payload),
     delete: (id) => ipcRenderer.invoke('knowledge:delete', id),
     clearIndex: () => ipcRenderer.invoke('knowledge:clear-index'),
@@ -123,6 +125,7 @@ const electronAPI = {
   fonts: {
     getAll: () => ipcRenderer.invoke('font:get-all'),
     getBuiltIn: () => ipcRenderer.invoke('font:get-built-in'),
+    checkRecommended: (payload) => ipcRenderer.invoke('font:check-recommended', payload),
     getPreferences: () => ipcRenderer.invoke('font:get-preferences'),
     setEnabled: (payload) => ipcRenderer.invoke('font:set-enabled', payload),
     download: (payload) => ipcRenderer.invoke('font:download', payload),

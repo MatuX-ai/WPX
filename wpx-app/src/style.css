@@ -32,6 +32,7 @@
 
   --animate-save-blink: save-blink 1s ease-in-out infinite;
   --animate-ai-ring: ai-ring-spin 2s linear infinite;
+  --animate-editor-spin: editor-spin 0.8s linear infinite;
 }
 
 @keyframes save-blink {
@@ -46,6 +47,12 @@
 }
 
 @keyframes ai-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes editor-spin {
   to {
     transform: rotate(360deg);
   }
@@ -138,12 +145,15 @@ samp {
 }
 
 :root {
+  --title-bar-height: 36px;
+  --editor-toolbar-height: 36px;
+  --z-editor-toolbar: 70;
+  --z-title-bar: 80;
   --z-knowledge-trigger: 30;
   --z-knowledge-backdrop: 40;
   --z-knowledge-panel: 50;
   --z-ai-avatar: 1000;
   --z-ai-chat: 1001;
-  --z-image-editor: 1002;
   --z-toast: 1050;
   --z-modal: 1100;
 }

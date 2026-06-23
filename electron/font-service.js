@@ -11,7 +11,7 @@ const fontkit = require('fontkit')
 const execFileAsync = promisify(execFile)
 
 const PROJECT_ROOT = path.join(__dirname, '..')
-const FONT_EXTENSIONS = new Set(['.ttf', '.otf'])
+const FONT_EXTENSIONS = new Set(['.ttf', '.otf', '.ttc'])
 const COMMERCIAL_META_SUFFIX = '.meta.json'
 const COMMERCIAL_ENCRYPTED_SUFFIX = '.enc'
 const LEGACY_COMMERCIAL_ENCRYPTED_SUFFIX = '.wpxfont'
@@ -30,7 +30,7 @@ const SUBSET_BASE_CHARS =
   ' \n\r\t.,;:!?\'"()[]{}<>+-=*/\\|@#$%^&_~`。，、；：？！「」『』（）【】《》…—·'
 const SUBSET_TIMEOUT_MS = 120_000
 
-/** @typedef {'built-in' | 'free' | 'commercial'} FontSource */
+/** @typedef {'built-in' | 'free' | 'commercial' | 'system'} FontSource */
 /** @typedef {'fonttools' | 'harfbuzz' | 'fontkit'} SubsetEngine */
 
 /**
@@ -971,16 +971,143 @@ class FontService {
   /**
    * @returns {Promise<FontInfo[]>}
    */
+  async getSystemFonts() {
+    const systemDirs = this.getSystemFontDirs()
+    if (systemDirs.length === 0) return []
+
+    /** @type {FontInfo[]} */
+    const allFonts = []
+
+    for (const dir of systemDirs) {
+      const fonts = await this.scanFontDirectory(dir, 'system')
+      allFonts.push(...fonts)
+    }
+
+    return allFonts
+  }
+
+  /**
+   * @returns {string[]}
+   */
+  getSystemFontDirs() {
+    const platform = process.platform
+    const dirs = []
+
+    if (platform === 'win32') {
+      const windir = process.env.WINDIR || 'C:\\Windows'
+      dirs.push(path.join(windir, 'Fonts'))
+    } else if (platform === 'darwin') {
+      dirs.push('/System/Library/Fonts')
+      dirs.push('/Library/Fonts')
+      try {
+        const home = os.homedir()
+        if (home) dirs.push(path.join(home, 'Library', 'Fonts'))
+      } catch {
+        // ignore homedir lookup failures
+      }
+    } else {
+      dirs.push('/usr/share/fonts')
+      dirs.push('/usr/local/share/fonts')
+      try {
+        const home = os.homedir()
+        if (home) dirs.push(path.join(home, '.fonts'))
+      } catch {
+        // ignore homedir lookup failures
+      }
+    }
+
+    return dirs
+  }
+
+  /**
+   * 对比系统已安装字体与推荐免费字体，返回缺失的推荐字体清单。
+   * 用于首启动 AI 助手推荐字体弹窗。
+   *
+   * @param {Array<{
+   *   id: string,
+   *   name: string,
+   *   category?: string,
+   *   sampleText?: string,
+   *   description?: string,
+   *   downloadUrl?: string,
+   *   fileName?: string,
+   *   systemAliases?: string[]
+   * }>} recommendedList
+   * @returns {Promise<{
+   *   recommended: typeof recommendedList,
+   *   available: Array<typeof recommendedList[number] & { matchedFamily: string }>,
+   *   missing: typeof recommendedList,
+   *   systemFontCount: number
+   * }>}
+   */
+  async checkRecommendedFonts(recommendedList) {
+    /** @type {Array<{ id: string, name: string, category?: string, sampleText?: string, description?: string, downloadUrl?: string, fileName?: string, systemAliases?: string[] }>} */
+    const recommended = Array.isArray(recommendedList) ? recommendedList : []
+
+    let systemFonts = []
+    try {
+      systemFonts = await this.getSystemFonts()
+    } catch (error) {
+      console.warn('[font-service] Failed to scan system fonts for recommendation check:', error?.message)
+    }
+
+    /** @type {Set<string>} */
+    const systemFamilyIndex = new Set()
+    for (const font of systemFonts) {
+      const family = (font.family || font.name || '').toLowerCase().trim()
+      if (family) systemFamilyIndex.add(family)
+    }
+
+    /** @type {typeof recommended} */
+    const available = []
+    /** @type {typeof recommended} */
+    const missing = []
+
+    for (const entry of recommended) {
+      const aliases = Array.isArray(entry.systemAliases) ? entry.systemAliases : []
+      const aliasIndex = new Set(
+        aliases
+          .filter((alias) => typeof alias === 'string' && alias.trim())
+          .map((alias) => alias.toLowerCase().trim()),
+      )
+
+      let matchedFamily = null
+      for (const family of systemFamilyIndex) {
+        if (aliasIndex.has(family)) {
+          matchedFamily = family
+          break
+        }
+      }
+
+      if (matchedFamily) {
+        available.push({ ...entry, matchedFamily })
+      } else {
+        missing.push(entry)
+      }
+    }
+
+    return {
+      recommended,
+      available,
+      missing,
+      systemFontCount: systemFonts.length,
+    }
+  }
+
+  /**
+   * @returns {Promise<FontInfo[]>}
+   */
   async getAllFonts() {
-    const [builtIn, downloaded, commercial] = await Promise.all([
+    const [builtIn, downloaded, commercial, system] = await Promise.all([
       this.getBuiltInFonts(),
       this.getDownloadedFonts(),
       this.getCommercialFonts(),
+      this.getSystemFonts(),
     ])
 
     await this.flushDiskCache()
 
-    return [...builtIn, ...downloaded, ...commercial]
+    return [...builtIn, ...downloaded, ...commercial, ...system]
   }
 
   /** @returns {string} */

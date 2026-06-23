@@ -103,6 +103,20 @@ export const useEditorStore = defineStore('editor', () => {
     pendingFontApply.value = null
   }
 
+  /** @type {import('vue').Ref<{ mode: 'insert' | 'open', content: string, title?: string, type?: string, ts: number } | null>} */
+  const pendingKnowledgeImport = ref(null)
+
+  function requestKnowledgeImport(payload) {
+    pendingKnowledgeImport.value = {
+      ...payload,
+      ts: Date.now(),
+    }
+  }
+
+  function clearPendingKnowledgeImport() {
+    pendingKnowledgeImport.value = null
+  }
+
   return {
     selection,
     frozenSelection,
@@ -125,5 +139,8 @@ export const useEditorStore = defineStore('editor', () => {
     pendingFontApply,
     requestApplyFont,
     clearPendingFontApply,
+    pendingKnowledgeImport,
+    requestKnowledgeImport,
+    clearPendingKnowledgeImport,
   }
 })

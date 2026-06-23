@@ -1,6 +1,6 @@
 {
   "name": "wpx",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
   "author": {
     "name": "WPX Team",
@@ -49,6 +49,9 @@
         "from": "resources/fonts",
         "to": "fonts"
       }
+    ],
+    "asarUnpack": [
+      "electron/preload.js"
     ],
     "npmRebuild": false,
     "protocols": [
@@ -130,12 +133,14 @@
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
+    "@mozilla/readability": "^0.6.0",
     "cors": "^2.8.6",
     "electron-is-dev": "^3.0.1",
     "electron-store": "^11.0.2",
     "express": "^5.2.1",
     "fontkit": "^2.0.4",
     "jszip": "^3.10.1",
+    "linkedom": "^0.18.12",
     "lowdb": "^7.0.1",
     "mammoth": "^1.12.0",
     "multer": "^2.2.0",

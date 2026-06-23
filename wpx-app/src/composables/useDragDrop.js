@@ -83,7 +83,7 @@ function insertTextFileContent(editor, text, extension) {
  */
 function insertImageContent(editor, src) {
   if (!editor || !src) return
-  editor.chain().focus().setImage({ src }).run()
+  editor.chain().focus().setImage({ src, float: 'left' }).run()
 }
 
 /**

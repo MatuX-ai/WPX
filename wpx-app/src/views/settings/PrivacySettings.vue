@@ -133,7 +133,7 @@ async function runClearDeviceId() {
     }
 
     closeConfirmDialog()
-    toast.success('设备 ID 已重置，免费次数计数已清零')
+    toast.success('设备 ID 已重置，Token 用量计数已清零')
   } catch (error) {
     toast.error(error?.message || '清除设备 ID 失败，请重试')
   } finally {
@@ -273,10 +273,10 @@ function goToModelSettings() {
 
       <li>
         <strong>管理自定义 API Key</strong>
-        <span>在模型配置页查看、更新或清除已保存的 API Key。</span>
+        <span>在「我的模型」页查看、更新或清除已保存的 API Key。</span>
         <div class="privacy-item__actions">
           <button type="button" class="settings-btn-secondary" @click="goToModelSettings">
-            前往模型配置
+            前往我的模型
           </button>
         </div>
       </li>

@@ -39,10 +39,14 @@ export default {
         'ai-ring-spin': {
           to: { transform: 'rotate(360deg)' },
         },
+        'editor-spin': {
+          to: { transform: 'rotate(360deg)' },
+        },
       },
       animation: {
         'save-blink': 'save-blink 1s ease-in-out infinite',
         'ai-ring': 'ai-ring-spin 2s linear infinite',
+        'editor-spin': 'editor-spin 0.8s linear infinite',
       },
     },
   },

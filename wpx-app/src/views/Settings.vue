@@ -17,14 +17,14 @@ const avatarLoadFailed = ref(false)
 const navItems = [
   { name: 'settings-agent', label: 'Agent 设置', icon: '🤖' },
   { name: 'settings-skills', label: 'Skills 管理', icon: '⚡' },
-  { name: 'settings-models', label: '模型配置', icon: '🔌', requiresLogin: true },
+  { name: 'settings-models', label: '我的模型', icon: '🔌' },
   { name: 'settings-fonts', label: '字体与 Token', icon: '🔤', requiresLogin: true },
   { name: 'settings-general', label: '通用设置', icon: '⚙️' },
   { name: 'settings-privacy', label: '数据与隐私', icon: '🔒' },
   { name: 'settings-about', label: '关于', icon: 'ℹ️' },
 ]
 
-const LOGIN_REQUIRED_ROUTES = new Set(['settings-models', 'settings-fonts'])
+const LOGIN_REQUIRED_ROUTES = new Set(['settings-fonts'])
 
 const editorRoute = computed(() => ({
   name: 'editor',

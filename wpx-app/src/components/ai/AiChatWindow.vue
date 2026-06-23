@@ -47,10 +47,19 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['pin-change', 'send', 'close', 'focus', 'input-focus', 'input-blur'])
+const emit = defineEmits([
+  'pin-change',
+  'send',
+  'close',
+  'focus',
+  'input-focus',
+  'input-blur',
+  'onboarding-complete',
+  'regenerate',
+])
 
 const router = useRouter()
-const { login, isLoggingIn } = useAuth()
+const { login, register, isLoggingIn } = useAuth()
 
 const {
   resizeHandles: RESIZE_HANDLES,
@@ -379,6 +388,37 @@ function handleQuotaRecharge() {
   void router.push({ name: 'token-recharge' })
 }
 
+function handleGoToModelSettings() {
+  void router.push({ name: 'settings-models' })
+}
+
+function completeOnboarding() {
+  emit('onboarding-complete')
+}
+
+async function handleOnboardingSetup() {
+  completeOnboarding()
+  handleGoToModelSettings()
+}
+
+async function handleOnboardingRegister() {
+  completeOnboarding()
+  try {
+    await register()
+  } catch (error) {
+    console.warn('[AiChatWindow] register failed:', error)
+  }
+}
+
+async function handleOnboardingLogin() {
+  completeOnboarding()
+  try {
+    await login()
+  } catch (error) {
+    console.warn('[AiChatWindow] login failed:', error)
+  }
+}
+
 watch(
   () => windowH.value,
   () => scrollToBottom(),
@@ -417,7 +457,7 @@ watch(
   <Transition name="ai-chat-window-pop">
     <div
       v-if="visible"
-      class="ai-chat-window-host"
+      class="ai-chat-window-host floating-host"
       :class="{ 'ai-chat-window-host--dark': isDark }"
       :style="{
         ...(zIndex != null ? { zIndex } : {}),
@@ -545,18 +585,84 @@ watch(
                   {{ message.content }}
                 </p>
                 <div
+                  v-else-if="message.onboardingKind === 'setup'"
+                  class="ai-chat-window__onboarding"
+                >
+                  <AiMarkdownContent
+                    class="ai-chat-window__message-md ai-chat-window__message-md--onboarding"
+                    :content="message.content"
+                  />
+                  <div class="ai-chat-window__onboarding-actions">
+                    <button
+                      type="button"
+                      class="ai-chat-window__quota-action wpx-btn"
+                      @click="handleOnboardingSetup"
+                    >
+                      好的
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-else-if="message.onboardingKind === 'account'"
+                  class="ai-chat-window__onboarding"
+                >
+                  <AiMarkdownContent
+                    class="ai-chat-window__message-md ai-chat-window__message-md--onboarding"
+                    :content="message.content"
+                  />
+                  <div class="ai-chat-window__onboarding-actions">
+                    <button
+                      type="button"
+                      class="ai-chat-window__quota-action ai-chat-window__quota-action--secondary wpx-btn"
+                      :disabled="isLoggingIn"
+                      @click="handleOnboardingRegister"
+                    >
+                      {{ isLoggingIn ? '跳转中…' : '注册' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="ai-chat-window__quota-action wpx-btn"
+                      :disabled="isLoggingIn"
+                      @click="handleOnboardingLogin"
+                    >
+                      {{ isLoggingIn ? '跳转中…' : '登录' }}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-else-if="message.needsModelConfig"
+                  class="ai-chat-window__quota-exhausted"
+                >
+                  <p class="ai-chat-window__message-text">{{ message.content }}</p>
+                  <button
+                    type="button"
+                    class="ai-chat-window__quota-action wpx-btn"
+                    @click="handleGoToModelSettings"
+                  >
+                    去配置
+                  </button>
+                  <button
+                    v-if="message.isGuest"
+                    type="button"
+                    class="ai-chat-window__quota-action ai-chat-window__quota-action--secondary wpx-btn"
+                    :disabled="isLoggingIn"
+                    @click="handleQuotaLogin"
+                  >
+                    {{ isLoggingIn ? '登录中…' : '注册 / 登录' }}
+                  </button>
+                </div>
+                <div
                   v-else-if="message.quotaExhausted"
                   class="ai-chat-window__quota-exhausted"
                 >
                   <p class="ai-chat-window__message-text">{{ message.content }}</p>
                   <button
-                    v-if="message.isGuest"
+                    v-if="message.suggestConfigure"
                     type="button"
                     class="ai-chat-window__quota-action wpx-btn"
-                    :disabled="isLoggingIn"
-                    @click="handleQuotaLogin"
+                    @click="handleGoToModelSettings"
                   >
-                    {{ isLoggingIn ? '登录中…' : '登录' }}
+                    去配置
                   </button>
                   <button
                     v-else
@@ -567,6 +673,34 @@ watch(
                     充值
                   </button>
                 </div>
+                <!-- Skill 调用结果 -->
+                <div v-else-if="message.skillResult" class="ai-chat-window__skill-result">
+                  <div class="ai-chat-window__skill-result-header">
+                    <span class="ai-chat-window__skill-result-icon">
+                      {{ message.skillSuccess ? '✅' : '❌' }}
+                    </span>
+                    <span class="ai-chat-window__skill-result-label">
+                      {{ message.skillSuccess ? 'Skill 执行完成' : 'Skill 执行失败' }}
+                    </span>
+                  </div>
+                  <p v-if="message.skillSuccess" class="ai-chat-window__skill-result-text">
+                    已使用【{{ message.skillName }}】生成内容，已插入编辑器
+                  </p>
+                  <p v-else class="ai-chat-window__skill-result-text ai-chat-window__skill-result-text--error">
+                    {{ message.skillError }}
+                  </p>
+                  <div class="ai-chat-window__skill-result-actions">
+                    <button
+                      type="button"
+                      class="ai-chat-window__skill-retry-btn wpx-btn"
+                      :title="`重新调用 ${message.skillName}`"
+                      @click="emit('regenerate', { skillId: message.skillId, params: message.skillParams })"
+                    >
+                      重新生成
+                    </button>
+                  </div>
+                </div>
+
                 <AiMarkdownContent
                   v-else
                   class="ai-chat-window__message-md"
@@ -686,27 +820,18 @@ watch(
 
 /* 弹出动效见 src/styles/transitions.css */
 
+/* vdr-container/vdr-handle 公共基类见 src/styles/floating-window.css */
+
 .ai-chat-window-host :deep(.vdr-container) {
-  pointer-events: auto;
+  /* 浮窗自身特性：阴影 / 圆角 / 背景 / 边框 */
   border: 1px solid #ddd;
   box-shadow: var(--fw-shadow, 0 12px 40px rgba(15, 23, 42, 0.18));
   border-radius: var(--fw-radius, 16px);
-  overflow: hidden;
   background: var(--theme-bg, #fff);
 }
 
 .ai-chat-window-host--dark :deep(.vdr-container) {
   border-color: #333;
-}
-
-.ai-chat-window-host :deep(.vdr-handle) {
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.ai-chat-window-host :deep(.vdr-container:hover .vdr-handle),
-.ai-chat-window-host :deep(.vdr-container.active .vdr-handle) {
-  opacity: 1;
 }
 
 .ai-chat-window {
@@ -913,6 +1038,28 @@ watch(
   gap: 10px;
 }
 
+.ai-chat-window__onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-chat-window__onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-chat-window__message-md--onboarding :deep(p) {
+  margin: 0 0 0.5em;
+  line-height: 1.65;
+  color: var(--theme-fg);
+}
+
+.ai-chat-window__message-md--onboarding :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
 .ai-chat-window__quota-action {
   align-self: flex-start;
   padding: 6px 14px;
@@ -933,6 +1080,17 @@ watch(
 .ai-chat-window__quota-action:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.ai-chat-window__quota-action--secondary {
+  background: transparent;
+  border: 1px solid var(--theme-border);
+  color: var(--theme-fg-muted);
+}
+
+.ai-chat-window__quota-action--secondary:hover:not(:disabled) {
+  background: var(--theme-bg-subtle);
+  color: var(--theme-fg);
 }
 
 .ai-chat-window__footer {
@@ -1114,5 +1272,71 @@ watch(
 
 .ai-chat-window__input::placeholder {
   color: #94a3b8;
+}
+
+/* ── Skill 调用结果 ── */
+.ai-chat-window__skill-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-chat-window__skill-result-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-chat-window__skill-result-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.ai-chat-window__skill-result-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--theme-fg);
+}
+
+.ai-chat-window__skill-result-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--theme-fg, #1a1a1a);
+}
+
+.ai-chat-window__skill-result-text--error {
+  color: #dc2626;
+}
+
+.ai-chat-window__skill-result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-chat-window__skill-retry-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--theme-bg);
+  color: var(--theme-fg);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ai-chat-window__skill-retry-btn:hover {
+  background: var(--theme-bg-subtle);
+}
+
+.ai-chat-window-host--dark .ai-chat-window__skill-retry-btn {
+  border-color: #444;
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.ai-chat-window-host--dark .ai-chat-window__skill-retry-btn:hover {
+  background: #333;
 }
 </style>

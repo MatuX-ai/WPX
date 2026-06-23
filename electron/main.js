@@ -8,6 +8,7 @@ const {
   ipcMain,
   dialog,
   shell,
+  session,
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -20,6 +21,7 @@ const {
 const {
   checkPandocAvailable,
   PANDOC_INSTALL_HINT,
+  registerExportAiLayoutSuggestHandler,
 } = require('./services/export-routes')
 const {
   getAssociationsEnabled,
@@ -530,6 +532,18 @@ function initiateQuit() {
   }
 }
 
+function configureProductionSession() {
+  if (!app.isPackaged) return
+
+  // 生产环境 file:// 加载时，避免 CSP 阻止内联脚本或本地模块
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = { ...(details.responseHeaders ?? {}) }
+    delete responseHeaders['content-security-policy']
+    delete responseHeaders['Content-Security-Policy']
+    callback({ responseHeaders })
+  })
+}
+
 function registerIpcHandlers() {
   ipcMain.handle('tray:hide-main-window', () => {
     hideMainWindow()
@@ -725,6 +739,8 @@ function registerIpcHandlers() {
   ipcMain.handle('about:get-app-info', () => getAppInfo())
 
   ipcMain.handle('about:check-for-updates', async () => checkForUpdates())
+
+  registerExportAiLayoutSuggestHandler(ipcMain)
 }
 
 function registerGlobalShortcuts() {
@@ -878,6 +894,7 @@ setupOpenFileHandling()
 
 app.whenReady().then(async () => {
   await debugBootstrap
+  configureProductionSession()
 
   try {
     const { baseUrl } = await startLocalServer()

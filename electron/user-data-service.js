@@ -25,6 +25,18 @@ const DEFAULT_PREFERENCES = {
     replyLength: 'standard',
     languagePreference: 'zh',
   },
+  paper: {
+    paperSize: 'A4',
+    paperMargin: 'normal',
+    customMargin: {
+      top: 20,
+      bottom: 20,
+      left: 20,
+      right: 20,
+    },
+    headerFooter: 'none',
+    focusMode: false,
+  },
   models: {
     text: {
       source: 'platform',

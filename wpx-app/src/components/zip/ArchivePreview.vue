@@ -352,7 +352,7 @@ watch(fileEntries, () => {
     <Transition name="archive-preview-pop">
       <div
         v-if="visible"
-        class="archive-preview-host"
+        class="archive-preview-host floating-host"
         :style="{ zIndex: previewZIndex }"
       >
         <DraggableContainer :reference-line-visible="false" class="archive-preview-container">
@@ -653,10 +653,5 @@ watch(fileEntries, () => {
   opacity: 0;
   transform: scale(0.96);
 }
-</style>
-
-<style>
-.archive-preview-container .vdr-container.active {
-  border: none;
-}
+/* vdr-container 边框 / 手柄 opacity 公共基类见 src/styles/floating-window.css */
 </style>

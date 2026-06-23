@@ -226,9 +226,17 @@ function cancelOperation(operationId) {
 function parseSltListing(text) {
   /** @type {Array<{ name: string, size: number, compressedSize: number, date: string, isDirectory: boolean }>} */
   const entries = []
-  const blocks = text.split(/^-{10,}/m).filter((block) => block.trim())
 
-  for (const block of blocks) {
+  // 按 "Path = ..." 行切分 entry (适应 zip/7z 不同分隔符: zip 无 entry 间分隔符, 7z 用 ----------)
+  const pathRegex = /^Path = (.+)$/gm
+  const pathMatches = [...text.matchAll(pathRegex)]
+
+  // 第一个 Path = ... 是 archive 自身, 跳过
+  for (let i = 1; i < pathMatches.length; i++) {
+    const start = pathMatches[i].index
+    const end = i + 1 < pathMatches.length ? pathMatches[i + 1].index : text.length
+    const block = text.substring(start, end)
+
     /** @type {Record<string, string>} */
     const fields = {}
 

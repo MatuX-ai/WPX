@@ -1,5 +1,3 @@
-const WindowManager = require('./window-manager')
-
 /** @type {DevConfig | null} */
 let devConfig = null
 
@@ -30,6 +28,8 @@ function summarizePayload(payload) {
 
 function resolveWindowId(event) {
   if (!event?.sender) return null
+  // 延迟 require，避免 dev-logger ↔ window-manager ↔ window-debug 循环依赖
+  const WindowManager = require('./window-manager')
   return WindowManager.findWindowIdByWebContents(event.sender)
 }
 

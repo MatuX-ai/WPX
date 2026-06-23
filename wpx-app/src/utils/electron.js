@@ -13,7 +13,11 @@
 export function isElectron() {
   if (typeof window === 'undefined') return false
 
+  if (window.__WPX_ELECTRON__ === true) return true
+
   if (window.electronAPI) return true
+
+  if (window.location?.protocol === 'file:') return true
 
   if (typeof process !== 'undefined' && process?.type === 'renderer') {
     return true

@@ -3,6 +3,7 @@ const path = require('node:path')
 const fsp = require('node:fs/promises')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
+const { extractUrl, fetchUrlPreview, buildWebImportRecord } = require('./services/url-extractor')
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -91,60 +92,6 @@ async function extractDocx(data) {
   const mammoth = require('mammoth')
   const result = await mammoth.extractRawText({ buffer: data })
   return normalizeText(result.value || '')
-}
-
-async function extractUrl(url) {
-  const trimmed = String(url || '').trim()
-  let parsed
-  try {
-    parsed = new URL(trimmed)
-  } catch {
-    throw new Error('请输入有效的 http/https URL')
-  }
-
-  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
-    throw new Error('请输入有效的 http/https URL')
-  }
-
-  const response = await fetch(trimmed, {
-    headers: {
-      'User-Agent': 'WPX/1.0 (+https://wpx.app)',
-      Accept: 'text/html,application/xhtml+xml',
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`无法抓取该网页（HTTP ${response.status}）`)
-  }
-
-  const html = await response.text()
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-  const title = titleMatch
-    ? normalizeText(titleMatch[1].replace(/<[^>]+>/g, ''))
-    : parsed.hostname
-
-  const text = normalizeText(
-    html
-      .replace(/<script[\s\S]*?<\/script>/gi, '\n')
-      .replace(/<style[\s\S]*?<\/style>/gi, '\n')
-      .replace(/<noscript[\s\S]*?<\/noscript>/gi, '\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<[^>]+>/g, '\n')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/&amp;/gi, '&')
-      .replace(/&lt;/gi, '<')
-      .replace(/&gt;/gi, '>'),
-  )
-
-  if (!text) {
-    throw new Error('未能从网页提取正文内容')
-  }
-
-  return {
-    filename: `${title || parsed.hostname}.web`,
-    content: text,
-  }
 }
 
 async function parseUpload(filename, data) {
@@ -282,7 +229,10 @@ async function uploadKnowledgeFile(filename, data, mimeType = '') {
   return publicItem(record)
 }
 
-async function uploadKnowledgeUrl(url) {
+async function uploadKnowledgeUrl(payload) {
+  const url = typeof payload === 'string' ? payload : String(payload?.url || '').trim()
+  const webImport = typeof payload === 'object' ? payload.webImport : null
+
   const id = randomUUID()
   const uploadedAt = utcNowIso()
   const textPath = path.join(textDir, `${id}.txt`)
@@ -299,7 +249,7 @@ async function uploadKnowledgeUrl(url) {
     charCount: 0,
     parseStatus: 'pending',
     errorMessage: '',
-    sourceUrl: String(url || '').trim(),
+    sourceUrl: url || String(webImport?.sourceUrl || '').trim(),
   }
 
   items.unshift(record)
@@ -307,7 +257,15 @@ async function uploadKnowledgeUrl(url) {
   broadcastKnowledgeUpdated()
 
   try {
-    const { filename, content } = await extractUrl(url)
+    let filename
+    let content
+
+    if (webImport) {
+      ;({ filename, content } = buildWebImportRecord(webImport))
+    } else {
+      ;({ filename, content } = await extractUrl(url))
+    }
+
     await fsp.writeFile(textPath, content, 'utf8')
 
     record.filename = filename
@@ -331,8 +289,8 @@ async function uploadKnowledgeUrl(url) {
 }
 
 async function uploadKnowledge(payload = {}) {
-  if (payload.url) {
-    return uploadKnowledgeUrl(payload.url)
+  if (payload.webImport || payload.url) {
+    return uploadKnowledgeUrl(payload)
   }
 
   if (payload.filename && payload.data != null) {
@@ -381,6 +339,18 @@ function registerKnowledgeIpcHandlers() {
 
   ipcMain.handle('knowledge:preview', async (_event, id) => {
     return getKnowledgePreview(id)
+  })
+
+  ipcMain.handle('knowledge:fetch-url-preview', async (_event, url) => {
+    try {
+      const preview = await fetchUrlPreview(url)
+      return { success: true, preview }
+    } catch (error) {
+      if (error?.code === 'ANTI_BOT' || error?.code === 'DYNAMIC_PAGE') {
+        return { success: false, code: error.code, message: error.message }
+      }
+      throw error
+    }
   })
 
   ipcMain.handle('knowledge:upload', async (_event, payload) => {

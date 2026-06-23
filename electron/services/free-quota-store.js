@@ -1,12 +1,14 @@
 const crypto = require('node:crypto')
 
-/** @typedef {{ date: string, count: number }} QuotaUsageRow */
+/** @typedef {{ date: string, tokensUsed: number }} QuotaUsageRow */
 
 /** @type {import('electron-store').default | null} */
 let quotaStore = null
 
-const DEFAULT_GUEST_DAILY_LIMIT = 50
-const DEFAULT_USER_DAILY_LIMIT = 50
+/** 访客不提供公共模型免费 Token */
+const DEFAULT_GUEST_DAILY_TOKEN_LIMIT = 0
+/** 注册用户默认每日 100M Token */
+const DEFAULT_USER_DAILY_TOKEN_LIMIT = 100_000_000
 
 function getTodayKey() {
   const now = new Date()
@@ -32,16 +34,16 @@ function getOrCreateDeviceId() {
 /**
  * @param {boolean} isGuest
  */
-function getDailyLimit(isGuest) {
+function getDailyTokenLimit(isGuest) {
   if (!quotaStore) {
-    return isGuest ? DEFAULT_GUEST_DAILY_LIMIT : DEFAULT_USER_DAILY_LIMIT
+    return isGuest ? DEFAULT_GUEST_DAILY_TOKEN_LIMIT : DEFAULT_USER_DAILY_TOKEN_LIMIT
   }
 
   const limits = quotaStore.get('limits') || {}
   const configured = isGuest ? limits.guest : limits.user
-  const fallback = isGuest ? DEFAULT_GUEST_DAILY_LIMIT : DEFAULT_USER_DAILY_LIMIT
+  const fallback = isGuest ? DEFAULT_GUEST_DAILY_TOKEN_LIMIT : DEFAULT_USER_DAILY_TOKEN_LIMIT
   const value = Number(configured)
-  return Number.isFinite(value) && value > 0 ? value : fallback
+  return Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
 /**
@@ -59,6 +61,27 @@ function resolveSubjectKey(payload = {}) {
 }
 
 /**
+ * @param {unknown} row
+ * @param {string} today
+ * @returns {QuotaUsageRow}
+ */
+function normalizeUsageRow(row, today) {
+  if (!row || typeof row !== 'object' || row.date !== today) {
+    return { date: today, tokensUsed: 0 }
+  }
+
+  const record = /** @type {Record<string, unknown>} */ (row)
+  if (Number.isFinite(Number(record.tokensUsed))) {
+    return {
+      date: today,
+      tokensUsed: Math.max(0, Number(record.tokensUsed)),
+    }
+  }
+
+  return { date: today, tokensUsed: 0 }
+}
+
+/**
  * @param {string} subjectKey
  * @returns {QuotaUsageRow}
  */
@@ -68,17 +91,8 @@ function getUsageRow(subjectKey) {
   }
 
   const usage = quotaStore.get('usage') || {}
-  const row = usage[subjectKey]
   const today = getTodayKey()
-
-  if (!row || row.date !== today) {
-    return { date: today, count: 0 }
-  }
-
-  return {
-    date: today,
-    count: Number(row.count) || 0,
-  }
+  return normalizeUsageRow(usage[subjectKey], today)
 }
 
 /**
@@ -101,9 +115,9 @@ function setUsageRow(subjectKey, row) {
 function getQuotaStatus(payload = {}) {
   const isGuest = Boolean(payload.isGuest)
   const subjectKey = resolveSubjectKey(payload)
-  const limit = getDailyLimit(isGuest)
+  const limit = getDailyTokenLimit(isGuest)
   const row = getUsageRow(subjectKey)
-  const used = Math.max(0, row.count)
+  const used = Math.max(0, row.tokensUsed)
   const remaining = Math.max(0, limit - used)
 
   return {
@@ -114,16 +128,18 @@ function getQuotaStatus(payload = {}) {
     used,
     remaining,
     date: row.date,
+    unit: 'token',
   }
 }
 
 /**
+ * 调用平台模型前检查是否仍有剩余 Token 额度。
  * @param {{ isGuest?: boolean, userId?: string | null }} payload
  */
-function consumeQuota(payload = {}) {
+function checkQuotaAvailable(payload = {}) {
   const status = getQuotaStatus(payload)
 
-  if (status.remaining <= 0) {
+  if (status.limit <= 0 || status.remaining <= 0) {
     return {
       ok: false,
       code: 'FREE_QUOTA_EXHAUSTED',
@@ -131,17 +147,39 @@ function consumeQuota(payload = {}) {
     }
   }
 
-  const nextCount = status.used + 1
-  setUsageRow(status.subjectKey, {
-    date: status.date,
-    count: nextCount,
-  })
-
   return {
     ok: true,
     ...status,
-    used: nextCount,
-    remaining: Math.max(0, status.limit - nextCount),
+  }
+}
+
+/**
+ * 对话完成后按实际 Token 数累加用量（允许末次请求略超剩余额度）。
+ * @param {{ isGuest?: boolean, userId?: string | null, tokens?: number }} payload
+ */
+function consumeQuotaTokens(payload = {}) {
+  const tokens = Math.max(0, Math.ceil(Number(payload.tokens) || 0))
+  const status = getQuotaStatus(payload)
+
+  if (tokens === 0) {
+    return {
+      ok: true,
+      consumed: 0,
+      ...status,
+    }
+  }
+
+  const nextUsed = status.used + tokens
+  setUsageRow(status.subjectKey, {
+    date: status.date,
+    tokensUsed: nextUsed,
+  })
+
+  const refreshed = getQuotaStatus(payload)
+  return {
+    ok: true,
+    consumed: tokens,
+    ...refreshed,
   }
 }
 
@@ -177,8 +215,8 @@ async function initFreeQuotaStore() {
     defaults: {
       deviceId: '',
       limits: {
-        guest: DEFAULT_GUEST_DAILY_LIMIT,
-        user: DEFAULT_USER_DAILY_LIMIT,
+        guest: DEFAULT_GUEST_DAILY_TOKEN_LIMIT,
+        user: DEFAULT_USER_DAILY_TOKEN_LIMIT,
       },
       usage: {},
     },
@@ -188,10 +226,13 @@ async function initFreeQuotaStore() {
 module.exports = {
   initFreeQuotaStore,
   getQuotaStatus,
-  consumeQuota,
+  checkQuotaAvailable,
+  consumeQuotaTokens,
   resetGuestDeviceId,
   getOrCreateDeviceId,
-  getDailyLimit,
+  getDailyTokenLimit,
   resolveSubjectKey,
+  DEFAULT_GUEST_DAILY_TOKEN_LIMIT,
+  DEFAULT_USER_DAILY_TOKEN_LIMIT,
   FREE_QUOTA_EXHAUSTED: 'FREE_QUOTA_EXHAUSTED',
 }

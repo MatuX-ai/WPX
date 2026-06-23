@@ -12,6 +12,11 @@ function escapeHtml(text) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function escapeAttr(text) {
+  return escapeHtml(text).replace(/'/g, '&#39;')
 }
 
 function applyInlineMarkdown(text) {
@@ -19,6 +24,18 @@ function applyInlineMarkdown(text) {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
+}
+
+const IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]+)\)(?:\s*\([^)]*\))?$/
+const HR_LINE_RE = /^(-{3,}|\*{3,}|_{3,})$/
+
+function renderImageHtml(alt, src) {
+  const safeSrc = escapeAttr(src.trim())
+  const safeAlt = escapeAttr(alt)
+  return (
+    `<img src="${safeSrc}" alt="${safeAlt}" class="editor-image" ` +
+    `data-align="left" data-float="left" />`
+  )
 }
 
 export function markdownToHtml(markdown) {
@@ -52,6 +69,17 @@ export function markdownToHtml(markdown) {
 
     const trimmed = line.trim()
     if (!trimmed) continue
+
+    const imageMatch = trimmed.match(IMAGE_LINE_RE)
+    if (imageMatch) {
+      html.push(renderImageHtml(imageMatch[1], imageMatch[2]))
+      continue
+    }
+
+    if (HR_LINE_RE.test(trimmed)) {
+      html.push('<hr />')
+      continue
+    }
 
     if (trimmed.startsWith('### ')) {
       html.push(`<h3>${applyInlineMarkdown(trimmed.slice(4))}</h3>`)

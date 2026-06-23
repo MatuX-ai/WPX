@@ -36,15 +36,17 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => mockToast,
 }))
 
-const mockConsumeFreeQuota = vi.fn()
+const mockCheckFreeQuota = vi.fn()
+const mockConsumeFreeQuotaTokens = vi.fn()
 
 vi.mock('@/utils/freeQuota', () => ({
-  consumeFreeQuota: (...args) => mockConsumeFreeQuota(...args),
+  checkFreeQuota: (...args) => mockCheckFreeQuota(...args),
+  consumeFreeQuotaTokens: (...args) => mockConsumeFreeQuotaTokens(...args),
+  resolveUsageTokens: (usage) => Number(usage?.totalTokens) || 1,
   FREE_QUOTA_EXHAUSTED: 'FREE_QUOTA_EXHAUSTED',
-  FREE_QUOTA_MESSAGE: '今日免费次数已用完，请明天再试或登录获取更多次数',
   FreeQuotaExhaustedError: class FreeQuotaExhaustedError extends Error {
     constructor(details = {}) {
-      super('今日免费次数已用完，请明天再试或登录获取更多次数')
+      super('免费 Token 额度已用完')
       this.name = 'FreeQuotaExhaustedError'
       this.code = 'FREE_QUOTA_EXHAUSTED'
       this.details = details
@@ -57,7 +59,8 @@ describe('useAiChat — 自定义模型回退', () => {
     vi.clearAllMocks()
     setActivePinia(createPinia())
     localStorage.clear()
-    mockConsumeFreeQuota.mockResolvedValue({ ok: true, remaining: 49 })
+    mockCheckFreeQuota.mockResolvedValue({ ok: true, remaining: 99_999_980, unit: 'token' })
+    mockConsumeFreeQuotaTokens.mockResolvedValue({ ok: true, consumed: 20 })
 
     const { useModelSettingsStore } = await import('@/stores/modelSettings')
     const store = useModelSettingsStore()
@@ -79,21 +82,32 @@ describe('useAiChat — 自定义模型回退', () => {
 
   it('自定义模型缺少 API Key 时 sendMessage 被拦截', async () => {
     const { useAiChat } = await import('@/composables/useAiChat')
+    const { MISSING_CUSTOM_API } = await import('@/constants/aiModelMessages')
 
     const { sendMessage } = useAiChat(ref('system prompt'))
 
-    await sendMessage({ text: '你好' })
+    const result = await sendMessage({ text: '你好' })
 
-    expect(mockToast.error).toHaveBeenCalledWith('自定义模型未配置 API Key，请在模型设置中保存')
+    expect(result).toMatchObject({
+      ok: false,
+      code: MISSING_CUSTOM_API,
+      suggestConfigure: true,
+    })
     expect(mockSendMessage).not.toHaveBeenCalled()
-    expect(mockConsumeFreeQuota).not.toHaveBeenCalled()
+    expect(mockCheckFreeQuota).not.toHaveBeenCalled()
   })
 
-  it('平台模型免费次数用尽时 sendMessage 被拦截', async () => {
+  it('平台模型 Token 额度用尽时 sendMessage 被拦截', async () => {
     const { FreeQuotaExhaustedError } = await import('@/utils/freeQuota')
-    mockConsumeFreeQuota.mockRejectedValue(
-      new FreeQuotaExhaustedError({ remaining: 0, used: 50, limit: 50 }),
+    const { LOGGED_IN_QUOTA_EXHAUSTED_CONFIGURE_MESSAGE } = await import('@/constants/aiModelMessages')
+    mockCheckFreeQuota.mockRejectedValue(
+      new FreeQuotaExhaustedError({ remaining: 0, used: 100_000_000, limit: 100_000_000 }),
     )
+
+    const { useAuthStore } = await import('@/stores/auth')
+    const authStore = useAuthStore()
+    authStore.isGuest = false
+    authStore.currentUser = { id: 'user-1' }
 
     const { useModelSettingsStore } = await import('@/stores/modelSettings')
     const store = useModelSettingsStore()
@@ -107,7 +121,10 @@ describe('useAiChat — 自定义模型回退', () => {
     expect(result).toMatchObject({
       ok: false,
       code: 'FREE_QUOTA_EXHAUSTED',
+      message: LOGGED_IN_QUOTA_EXHAUSTED_CONFIGURE_MESSAGE,
+      suggestConfigure: true,
     })
     expect(mockSendMessage).not.toHaveBeenCalled()
+    expect(mockConsumeFreeQuotaTokens).not.toHaveBeenCalled()
   })
 })

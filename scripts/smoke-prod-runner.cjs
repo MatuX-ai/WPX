@@ -43,12 +43,31 @@ app.whenReady().then(async () => {
     const pageState = await win.webContents.executeJavaScript(`({
       hasApp: !!document.querySelector('#app')?.innerHTML?.trim(),
       title: document.title,
+      usesHashRouter: location.hash.startsWith('#/'),
+      hasElectronApi: !!window.electronAPI,
+      scriptCrossorigin: !!document.querySelector('script[crossorigin]'),
     })`)
     log(`[smoke] page state: ${JSON.stringify(pageState)}`)
-    const ok = pageState.hasApp && !failed
+
+    const clickState = await win.webContents.executeJavaScript(`(() => {
+      const btn = document.querySelector('button')
+      if (!btn) return { hasButton: false, clicked: false }
+      let clicked = false
+      btn.addEventListener('click', () => { clicked = true }, { once: true })
+      btn.click()
+      return { hasButton: true, clicked }
+    })()`)
+    log(`[smoke] click state: ${JSON.stringify(clickState)}`)
+
+    const ok =
+      pageState.hasApp &&
+      !failed &&
+      pageState.usesHashRouter &&
+      !pageState.scriptCrossorigin &&
+      (!clickState.hasButton || clickState.clicked)
     fs.writeFileSync(
       outFile,
-      JSON.stringify({ ok, failed, pageState, logs }, null, 2),
+      JSON.stringify({ ok, failed, pageState, clickState, logs }, null, 2),
       'utf8',
     )
     app.exit(ok ? 0 : 1)

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch, inject } from 'vue'
+import { onMounted, onUnmounted, ref, watch, inject, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { downloadBlob, exportViaApi } from '@/utils/documentExport'
@@ -17,7 +17,9 @@ import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useUserHabits } from '@/composables/useUserHabits'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useUserPreferencesStore } from '@/stores/userPreferences'
 import ExportFontConfirm from '@/components/fonts/ExportFontConfirm.vue'
+import ExportOptionsConfirm from '@/components/export/ExportOptionsConfirm.vue'
 
 const props = defineProps({
   getMarkdown: {
@@ -48,6 +50,7 @@ const props = defineProps({
 
 const router = useRouter()
 const authStore = useAuthStore()
+const userPreferencesStore = useUserPreferencesStore()
 const { isGuest } = storeToRefs(authStore)
 const { login, isLoggingIn } = useAuth()
 const { recordSave, getRecentDocumentTypes } = useUserHabits()
@@ -72,8 +75,24 @@ const recentTypes = ref([])
 const exportConfirmVisible = ref(false)
 const exportAnalysis = ref(null)
 const pendingExportOption = ref(null)
+const optionsConfirmVisible = ref(false)
+const pendingExportOptions = ref(null)
+const headingCount = ref(0)
 /** @type {import('vue').Ref<{ getEditor?: () => unknown } | null> | null} */
 const editorHostRef = inject('editorHostRef', null)
+
+const defaultPaperOptions = computed(() => {
+  const paper = userPreferencesStore.paper || {}
+  return {
+    paperSize: paper.paperSize,
+    paperMargin: paper.paperMargin,
+    customMargin: paper.customMargin,
+    headerFooter: paper.headerFooter,
+    autoPaginate: true,
+    fitImagesToWidth: true,
+    generateToc: false,
+  }
+})
 
 function resolveExportEditor() {
   const fromProp = props.getEditor?.()
@@ -109,6 +128,24 @@ function dismissExportConfirm() {
   closeExportConfirm()
 }
 
+function closeOptionsConfirm() {
+  if (loading.value) return
+  optionsConfirmVisible.value = false
+  pendingExportOptions.value = null
+}
+
+function countHeadingsInMarkdown(markdown) {
+  if (!markdown) return 0
+  const lines = markdown.split(/\r?\n/)
+  let count = 0
+  for (const line of lines) {
+    if (/^\s{0,3}#{1,6}\s+\S/.test(line)) {
+      count += 1
+    }
+  }
+  return count
+}
+
 function handleClickOutside(event) {
   if (menuRef.value && !menuRef.value.contains(event.target)) {
     closeMenu()
@@ -132,7 +169,7 @@ function resolveDocumentTitle() {
   return props.getDocumentTitle?.() || props.filename || '未命名文档'
 }
 
-async function performExport(option) {
+async function performExport(option, exportOptions = null) {
   const markdown = props.getMarkdown()
   if (!markdown?.trim()) {
     const message = '文档内容为空，无法导出'
@@ -159,16 +196,49 @@ async function performExport(option) {
       ? collectDocumentEmbedFonts(editor)
       : []
 
-  const exportOptions = {}
+  const exportOptionsPayload = {}
   let exportContent = markdown
 
   if (embedFonts.length > 0 && editor) {
-    exportOptions.embedFonts = embedFonts
-    exportOptions.contentFormat = 'html'
+    exportOptionsPayload.embedFonts = embedFonts
+    exportOptionsPayload.contentFormat = 'html'
     exportContent = editor.getHTML()
   }
 
-  await exportViaApi(exportContent, option.format, props.filename, exportOptions)
+  if (exportOptions && typeof exportOptions === 'object') {
+    exportOptionsPayload.exportOptions = buildExportOptionsPayload(exportOptions)
+  }
+
+  await exportViaApi(exportContent, option.format, props.filename, exportOptionsPayload)
+}
+
+function buildExportOptionsPayload(options) {
+  const margin = options.paperMargin === 'custom'
+    ? {
+        top: clampMargin(options.customMargin?.top),
+        bottom: clampMargin(options.customMargin?.bottom),
+        left: clampMargin(options.customMargin?.left),
+        right: clampMargin(options.customMargin?.right),
+      }
+    : null
+
+  return {
+    paper: {
+      paperSize: options.paperSize,
+      paperMargin: options.paperMargin,
+      ...(margin ? { customMargin: margin } : {}),
+      headerFooter: options.headerFooter,
+    },
+    autoPaginate: options.autoPaginate !== false,
+    fitImagesToWidth: options.fitImagesToWidth !== false,
+    generateToc: Boolean(options.generateToc),
+  }
+}
+
+function clampMargin(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 20
+  return Math.min(100, Math.max(0, Math.round(numeric)))
 }
 
 async function handleExport(option) {
@@ -185,6 +255,37 @@ async function handleExport(option) {
     return
   }
 
+  // Markdown 直接下载，不需要走 API 选项确认
+  if (!option.format) {
+    loading.value = true
+    try {
+      await performExport(option)
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
+  // 记录文档类型
+  const typeLabel = documentType.value.trim()
+  if (typeLabel) {
+    recordSave(typeLabel, props.getFormatSnapshot?.())
+    refreshRecentTypes()
+  }
+
+  pendingExportOption.value = option
+  pendingExportOptions.value = null
+  headingCount.value = countHeadingsInMarkdown(markdown)
+  optionsConfirmVisible.value = true
+}
+
+async function handleConfirmOptions(options) {
+  optionsConfirmVisible.value = false
+  pendingExportOptions.value = options
+  const option = pendingExportOption.value
+
+  if (!option) return
+
   loading.value = true
 
   try {
@@ -192,14 +293,13 @@ async function handleExport(option) {
     const localUsage = editor ? await detectCommercialFontUsage(editor).catch(() => null) : null
 
     if (localUsage?.hasCommercialFonts) {
-      pendingExportOption.value = option
-
       if (isGuest.value) {
         exportConfirmVisible.value = true
         exportAnalysis.value = null
         return
       }
 
+      const markdown = props.getMarkdown()
       const analysis = await analyzeExportFonts(editor, markdown).catch(() => null)
       if (analysis?.hasCommercialFonts) {
         exportAnalysis.value = analysis
@@ -208,7 +308,8 @@ async function handleExport(option) {
       }
     }
 
-    await performExport(option)
+    await performExport(option, options)
+    toast.success('导出成功')
   } catch (error) {
     const message = error?.message || '导出失败，请稍后重试'
     errorMessage.value = message
@@ -238,9 +339,10 @@ async function handleConfirmExport() {
     }
 
     const option = pendingExportOption.value
+    const exportOptions = pendingExportOptions.value
     closeExportConfirm()
     loading.value = true
-    await performExport(option)
+    await performExport(option, exportOptions)
     toast.success('导出成功')
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '导出失败')
@@ -262,6 +364,7 @@ async function handleGuestLogin() {
 async function handleUseFreeFont() {
   const editor = resolveExportEditor()
   const option = pendingExportOption.value
+  const exportOptions = pendingExportOptions.value
 
   if (!editor || !option) return
 
@@ -274,7 +377,7 @@ async function handleUseFreeFont() {
 
     closeExportConfirm()
     loading.value = true
-    await performExport(option)
+    await performExport(option, exportOptions)
     toast.success('已改用思源黑体并完成导出')
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '导出失败')
@@ -438,6 +541,16 @@ onUnmounted(() => {
       @login="handleGuestLogin"
       @use-free-font="handleUseFreeFont"
       @close="dismissExportConfirm"
+    />
+
+    <ExportOptionsConfirm
+      :visible="optionsConfirmVisible"
+      :defaults="defaultPaperOptions"
+      :heading-count="headingCount"
+      :format="pendingExportOption?.format || ''"
+      :loading="loading || confirmLoading"
+      @confirm="handleConfirmOptions"
+      @close="closeOptionsConfirm"
     />
 
     <p v-if="errorMessage" class="sr-only" role="status">{{ errorMessage }}</p>

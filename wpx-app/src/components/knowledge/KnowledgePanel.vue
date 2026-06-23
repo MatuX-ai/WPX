@@ -1,15 +1,25 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, Teleport } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ACCEPTED_FILE_TYPES,
   ACCEPTED_MIME_HINT,
+  buildWebImportEditorContent,
+  buildWebImportPayload,
+  buildWebImportSelection,
   fetchKnowledgeList,
   fetchKnowledgePreview,
+  fetchKnowledgeUrlPreview,
   onKnowledgeUpdated,
+  shouldPromptWebUrlImport,
   uploadKnowledgeFile,
   uploadKnowledgeUrl,
 } from '@/utils/knowledgeApi'
+import WebUrlImportSheet from '@/components/knowledge/WebUrlImportSheet.vue'
+import { useEditorOverlayOptional } from '@/composables/useEditorOverlay'
 import { useEscapeKey } from '@/composables/useEscapeKey'
+import { useToast } from '@/composables/useToast'
+import { useEditorStore } from '@/stores/editor'
 import { isElectron } from '@/utils/electron'
 
 const props = defineProps({
@@ -25,6 +35,11 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
+const router = useRouter()
+const editorStore = useEditorStore()
+const overlay = useEditorOverlayOptional()
+const toast = useToast()
+
 const items = ref([])
 const loading = ref(false)
 const uploading = ref(false)
@@ -34,6 +49,11 @@ const urlInput = ref('')
 const preview = ref(null)
 const previewLoading = ref(false)
 const fileInputRef = ref(null)
+const urlPreview = ref(null)
+const urlImportOpen = ref(false)
+const urlImportSubmitting = ref(false)
+const urlImportError = ref('')
+const isAntiBotError = ref(false)
 
 const typeLabels = {
   pdf: 'PDF',
@@ -71,6 +91,145 @@ function parseStatusLabel(status) {
 }
 
 const hasPreview = computed(() => Boolean(preview.value))
+const hasUrlImport = computed(() => urlImportOpen.value)
+const canImportToEditor = computed(
+  () => Boolean(preview.value?.content?.trim()) && !previewLoading.value,
+)
+
+function buildImportPayload(mode) {
+  return {
+    mode,
+    content: preview.value.content,
+    title: preview.value.filename,
+    type: preview.value.type,
+  }
+}
+
+function insertToEditor() {
+  if (!canImportToEditor.value) return
+  editorStore.requestKnowledgeImport(buildImportPayload('insert'))
+  if (!overlay) {
+    router.push({ name: 'editor' })
+  }
+  closePreview()
+}
+
+function openAsNewDocument() {
+  if (!canImportToEditor.value) return
+  editorStore.requestKnowledgeImport(buildImportPayload('open'))
+  if (!overlay) {
+    router.push({ name: 'editor' })
+  } else {
+    overlay.closeKnowledgePanel()
+  }
+  closePreview()
+}
+
+async function importWebContent(webImport) {
+  const result = await uploadKnowledgeUrl(webImport.sourceUrl, webImport)
+  const item = result?.item
+  if (item?.parseStatus === 'failed') {
+    isAntiBotError.value = item.errorMessage?.includes('请用其他方法') || item.errorMessage?.includes('动态加载') || false
+    error.value = item.errorMessage || 'URL 抓取失败'
+    return false
+  }
+
+  isAntiBotError.value = false
+
+  urlInput.value = ''
+  closeUrlImport()
+  await loadList()
+  return true
+}
+
+function setFetchError(err, fallback = 'URL 抓取失败') {
+  isAntiBotError.value = err?.code === 'ANTI_BOT' || err?.code === 'DYNAMIC_PAGE'
+  error.value = err?.message || fallback
+}
+
+async function submitUrl() {
+  const url = urlInput.value.trim()
+  if (!url) return
+
+  uploading.value = true
+  error.value = ''
+  isAntiBotError.value = false
+  try {
+    const previewData = await fetchKnowledgeUrlPreview(url)
+
+    if (shouldPromptWebUrlImport(previewData)) {
+      closePreview()
+      urlPreview.value = previewData
+      urlImportOpen.value = true
+      urlImportError.value = ''
+      return
+    }
+
+    const webImport = buildWebImportPayload(previewData, {
+      title: previewData.title,
+      sourceUrl: previewData.url,
+      paragraphs: previewData.paragraphs,
+      images: previewData.images,
+    })
+    await importWebContent(webImport)
+  } catch (err) {
+    setFetchError(err)
+  } finally {
+    uploading.value = false
+  }
+}
+
+function closeUrlImport() {
+  urlImportOpen.value = false
+  urlPreview.value = null
+  urlImportError.value = ''
+  urlImportSubmitting.value = false
+}
+
+async function confirmUrlImport(selection) {
+  if (!urlPreview.value || urlImportSubmitting.value) return
+
+  urlImportSubmitting.value = true
+  urlImportError.value = ''
+  try {
+    buildWebImportSelection(urlPreview.value, selection)
+    const webImport = buildWebImportPayload(urlPreview.value, selection)
+    const ok = await importWebContent(webImport)
+    if (ok) {
+      toast.success('已保存到资料库')
+    } else {
+      urlImportError.value = error.value || '保存失败'
+    }
+  } catch (err) {
+    urlImportError.value = err.message || '保存失败'
+  } finally {
+    urlImportSubmitting.value = false
+  }
+}
+
+function importUrlSelectionToEditor(selection) {
+  if (!urlPreview.value || urlImportSubmitting.value) return
+
+  urlImportError.value = ''
+  try {
+    buildWebImportSelection(urlPreview.value, selection)
+    const content = buildWebImportEditorContent(urlPreview.value, selection)
+    const title = selection.title || urlPreview.value.title
+
+    editorStore.requestKnowledgeImport({
+      mode: 'insert',
+      content,
+      title,
+      type: 'markdown',
+    })
+
+    urlInput.value = ''
+    closeUrlImport()
+    toast.success('已导入编辑区，可继续抓取其他网页')
+  } catch (err) {
+    urlImportError.value = err.message || '导入失败'
+  }
+}
 
 async function loadList() {
   loading.value = true
@@ -128,23 +287,6 @@ function openFilePicker() {
   fileInputRef.value?.click()
 }
 
-async function submitUrl() {
-  const url = urlInput.value.trim()
-  if (!url) return
-
-  uploading.value = true
-  error.value = ''
-  try {
-    await uploadKnowledgeUrl(url)
-    urlInput.value = ''
-    await loadList()
-  } catch (err) {
-    error.value = err.message || 'URL 抓取失败'
-  } finally {
-    uploading.value = false
-  }
-}
-
 function onUrlPaste(event) {
   const text = event.clipboardData?.getData('text')?.trim()
   if (!text) return
@@ -173,10 +315,15 @@ function closePreview() {
 
 function handleClose() {
   closePreview()
+  closeUrlImport()
   emit('close')
 }
 
 function handlePanelEscape() {
+  if (hasUrlImport.value) {
+    closeUrlImport()
+    return
+  }
   if (hasPreview.value || previewLoading.value) {
     closePreview()
     return
@@ -279,7 +426,7 @@ onUnmounted(() => {
               v-model="urlInput"
               type="url"
               class="knowledge-url__input"
-              placeholder="粘贴 URL 自动抓取正文"
+              placeholder="粘贴 URL，复杂页面可自选正文与图片"
               :disabled="uploading"
               @paste="onUrlPaste"
               @keydown.enter.prevent="submitUrl"
@@ -295,7 +442,9 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <p v-if="error" class="knowledge-panel__error">{{ error }}</p>
+        <p v-if="error" class="knowledge-panel__error" :class="{ 'knowledge-panel__error--soft': isAntiBotError }">
+          {{ error }}
+        </p>
 
         <section class="knowledge-list">
           <div class="knowledge-list__head">
@@ -332,12 +481,29 @@ onUnmounted(() => {
                     <span class="knowledge-item__dot">·</span>
                     <span class="knowledge-item__time">{{ formatTime(item.uploadedAt) }}</span>
                   </span>
+                  <span
+                    v-if="item.parseStatus === 'failed' && item.errorMessage"
+                    class="knowledge-item__error"
+                  >
+                    {{ item.errorMessage }}
+                  </span>
                 </span>
               </button>
             </li>
           </ul>
         </section>
       </div>
+
+      <WebUrlImportSheet
+        :open="urlImportOpen"
+        :loading="uploading && !urlPreview"
+        :submitting="urlImportSubmitting"
+        :error-message="urlImportError"
+        :preview="urlPreview"
+        @close="closeUrlImport"
+        @confirm="confirmUrlImport"
+        @import-to-editor="importUrlSelectionToEditor"
+      />
 
       <Transition name="knowledge-preview">
         <section v-if="hasPreview || previewLoading" class="knowledge-preview">
@@ -347,6 +513,24 @@ onUnmounted(() => {
               <p v-if="preview" class="knowledge-preview__meta">
                 {{ typeLabel(preview.type) }} · {{ formatTime(preview.uploadedAt) }}
               </p>
+            </div>
+            <div v-if="!previewLoading && preview" class="knowledge-preview__actions">
+              <button
+                type="button"
+                class="knowledge-preview__action"
+                :disabled="!canImportToEditor"
+                @click="insertToEditor"
+              >
+                插入编辑器
+              </button>
+              <button
+                type="button"
+                class="knowledge-preview__action knowledge-preview__action--primary"
+                :disabled="!canImportToEditor"
+                @click="openAsNewDocument"
+              >
+                作为新文档打开
+              </button>
             </div>
             <button type="button" class="knowledge-preview__close" aria-label="关闭预览" @click="closePreview">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -371,6 +555,7 @@ onUnmounted(() => {
   z-index: var(--z-knowledge-backdrop);
   background: rgba(15, 23, 42, 0.35);
   backdrop-filter: blur(2px);
+  pointer-events: auto;
 }
 
 .knowledge-backdrop-enter-active,
@@ -397,6 +582,8 @@ onUnmounted(() => {
   box-shadow: 8px 0 32px rgba(15, 23, 42, 0.12);
   transform: translateX(-100%);
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  pointer-events: auto;
 }
 
 .knowledge-panel--open {
@@ -569,6 +756,11 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
+.knowledge-panel__error--soft {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .knowledge-list {
   margin-top: 20px;
 }
@@ -686,6 +878,16 @@ onUnmounted(() => {
   color: #dc2626;
 }
 
+.knowledge-item__error {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #dc2626;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .knowledge-preview {
   position: absolute;
   inset: 0;
@@ -710,9 +912,58 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   padding: 16px 20px;
   border-bottom: 1px solid #f1f5f9;
+}
+
+.knowledge-preview__info {
+  min-width: 0;
+  flex: 1;
+}
+
+.knowledge-preview__actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.knowledge-preview__action {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.knowledge-preview__action:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.knowledge-preview__action--primary {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.knowledge-preview__action--primary:hover:not(:disabled) {
+  background: #ede9fe;
+  border-color: #c4b5fd;
+  color: #6d28d9;
+}
+
+.knowledge-preview__action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .knowledge-preview__title {

@@ -213,7 +213,7 @@ const editor = useEditor({
           editor.value
             ?.chain()
             .focus()
-            .setImage({ src: String(reader.result) })
+            .setImage({ src: String(reader.result), float: 'left' })
             .run()
         }
         reader.readAsDataURL(file)
@@ -400,7 +400,7 @@ function confirmImageUrl(url) {
   const currentEditor = editor.value
   if (!currentEditor || !url) return
 
-  currentEditor.chain().focus().setImage({ src: url }).run()
+  currentEditor.chain().focus().setImage({ src: url, float: 'left' }).run()
   emitContent(currentEditor)
   showImageUrlDialog.value = false
 }
@@ -468,7 +468,7 @@ async function handleImageFileSelected(event) {
   if (!file || !currentEditor) return
 
   const src = await blobToDataUrl(file)
-  currentEditor.chain().focus().setImage({ src }).run()
+  currentEditor.chain().focus().setImage({ src, float: 'left' }).run()
   emitContent(currentEditor)
   event.target.value = ''
 }
@@ -644,7 +644,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="editor-shell overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div class="editor-shell rounded-xl border border-slate-200 bg-white shadow-sm">
     <div
       v-if="editor"
       class="editor-toolbar"
@@ -818,14 +818,19 @@ defineExpose({
 
 <style scoped>
 .editor-toolbar {
+  position: sticky;
+  top: var(--title-bar-height, 36px);
+  z-index: var(--z-editor-toolbar, 70);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 36px;
+  height: var(--editor-toolbar-height, 36px);
   padding: 0 8px;
-  border-bottom: 1px solid var(--theme-border, #e2e8f0);
-  background: var(--theme-bg-subtle, #f8fafc);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border, #e2e8f0) 38%, transparent);
+  background: color-mix(in srgb, var(--theme-bg-subtle, #f8fafc) 52%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .editor-toolbar__primary {
@@ -927,6 +932,7 @@ defineExpose({
 
 .editor-drop-zone {
   position: relative;
+  flex: 1 1 auto;
   min-height: 280px;
 }
 
@@ -1068,26 +1074,54 @@ defineExpose({
 
 .editor-content :deep(.editor-image) {
   border-radius: 0.5rem;
-  display: block;
   height: auto;
-  margin: 0.75rem 0;
   max-width: 100%;
   cursor: pointer;
 }
 
-.editor-content :deep(.editor-image[data-align='left']) {
+.editor-content :deep(.editor-image[data-float='left']),
+.editor-content :deep(.editor-image[data-float='right']) {
+  display: inline-block;
+  max-width: min(100%, 420px);
+}
+
+.editor-content :deep(.editor-image[data-float='left']) {
+  float: left;
+  margin: 0 12px 8px 0;
+}
+
+.editor-content :deep(.editor-image[data-float='right']) {
+  float: right;
+  margin: 0 0 8px 12px;
+}
+
+.editor-content :deep(.editor-image[data-float='none']) {
+  display: block;
+  float: none;
+  clear: both;
+  margin: 0.75rem 0;
+  max-width: 100%;
+}
+
+.editor-content :deep(.editor-image[data-float='none'][data-align='center']) {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.editor-content :deep(.editor-image[data-float='none'][data-align='right']) {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.editor-content :deep(.editor-image[data-float='none'][data-align='left']) {
   margin-left: 0;
   margin-right: auto;
 }
 
-.editor-content :deep(.editor-image[data-align='center']) {
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.editor-content :deep(.editor-image[data-align='right']) {
-  margin-left: auto;
-  margin-right: 0;
+.editor-content :deep(.editor-prose)::after {
+  content: '';
+  display: block;
+  clear: both;
 }
 
 .editor-content :deep(.ProseMirror-selectednode.editor-image) {

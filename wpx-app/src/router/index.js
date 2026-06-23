@@ -3,6 +3,25 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import { isElectron } from '@/utils/electron'
 import { getLaunchSearchParams } from '@/utils/windowContext'
 
+/** Electron / file:// 加载时必须用 hash 模式，否则路由与资源解析失败 */
+function resolveRouterHistory() {
+  if (typeof window !== 'undefined') {
+    if (
+      window.__WPX_ELECTRON__ === true ||
+      window.electronAPI ||
+      window.location.protocol === 'file:'
+    ) {
+      return createWebHashHistory()
+    }
+  }
+
+  if (isElectron()) {
+    return createWebHashHistory()
+  }
+
+  return createWebHistory(import.meta.env.BASE_URL)
+}
+
 function buildEditorQuery() {
   const params = getLaunchSearchParams()
   const query = {}
@@ -21,10 +40,7 @@ function buildEditorQuery() {
 }
 
 const router = createRouter({
-  // Electron 用 file:// 加载，hash 模式且不要传 base: './'（会破坏路由解析）
-  history: isElectron()
-    ? createWebHashHistory()
-    : createWebHistory(import.meta.env.BASE_URL),
+  history: resolveRouterHistory(),
   routes: [
     {
       path: '/',
@@ -94,7 +110,7 @@ const router = createRouter({
               path: 'models',
               name: 'settings-models',
               component: () => import('@/views/settings/ModelSettings.vue'),
-              meta: { title: '模型配置' },
+              meta: { title: '我的模型' },
             },
             {
               path: 'fonts',
@@ -127,15 +143,14 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to, _from) => {
   if (to.name === 'editor' && !to.query.windowId && !to.query.docPath) {
     const launchQuery = buildEditorQuery()
     if (Object.keys(launchQuery).length > 0) {
-      next({ ...to, query: { ...launchQuery, ...to.query } })
-      return
+      return { ...to, query: { ...launchQuery, ...to.query } }
     }
   }
-  next()
+  return true
 })
 
 router.afterEach((to) => {

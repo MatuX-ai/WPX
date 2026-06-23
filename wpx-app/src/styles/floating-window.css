@@ -1,0 +1,34 @@
+/**
+ * 浮窗公用基类（vue3-draggable-resizable + TUI 包装层）
+ *
+ * 任何使用 <Vue3DraggableResizable> 的浮窗都应在宿主根节点上挂 `.floating-host`，
+ * 本文件集中定义拖拽容器、缩放手柄、拖动光标等通用规则，避免在每个组件重复：
+ *   - `.vdr-container`（拖拽容器）边框/阴影/圆角/裁剪
+ *   - `.vdr-handle`（缩放手柄）默认隐藏、hover/active 显形
+ *   - 拖动光标（仅在拖动手柄区生效，见各组件 dragHandle）
+ *
+ * 浮窗自身特殊的 box-shadow / border-radius / 背景 仍由各组件 scoped 块覆盖。
+ */
+
+.floating-host :deep(.vdr-container) {
+  pointer-events: auto;
+  border: none;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.floating-host :deep(.vdr-handle) {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.floating-host :deep(.vdr-container:hover .vdr-handle),
+.floating-host :deep(.vdr-container.active .vdr-handle) {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-host :deep(.vdr-handle) {
+    transition: none;
+  }
+}

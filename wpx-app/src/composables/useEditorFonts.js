@@ -231,7 +231,10 @@ export function useEditorFonts() {
       const installedIds = new Set(installed.map((font) => font.fontId))
       const installedNames = new Set(installed.map((font) => font.familyKey))
 
-      for (const font of installed.filter((item) => item.source === 'built-in' || item.source === 'free')) {
+      const installedBuiltIn = installed.filter(
+        (item) => item.source === 'built-in' || item.source === 'free',
+      )
+      for (const font of installedBuiltIn) {
         if (!isFontEnabled(font.id)) continue
 
         items.push({
@@ -316,6 +319,32 @@ export function useEditorFonts() {
         })
       }
 
+      // ── System fonts from backend scanning ──
+      const systemFromBackend = installed.filter((item) => item.source === 'system')
+      const hardcodedSystemCss = SYSTEM_FONTS.map((f) => normalizeName(f.cssFamily))
+
+      for (const font of systemFromBackend) {
+        const fontFamily = font.family || font.name
+        const normalizedFamily = normalizeName(fontFamily)
+
+        // Skip if already covered by a hardcoded system font
+        const alreadyCovered = hardcodedSystemCss.some((css) =>
+          css.includes(normalizedFamily),
+        )
+        if (alreadyCovered) continue
+
+        items.push({
+          id: font.id,
+          name: font.name,
+          group: 'system',
+          kind: 'system',
+          badge: '⚠️',
+          badgeTitle: '此字体可能不可商用',
+          cssFamily: `"${fontFamily}", sans-serif`,
+        })
+      }
+
+      // ── Hardcoded system fonts (always shown, reliable CSS names) ──
       for (const font of SYSTEM_FONTS) {
         items.push({
           id: font.id,
@@ -332,9 +361,19 @@ export function useEditorFonts() {
       fontGroups.value = buildGroups(items)
       markSystemFontsReady(items)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '加载字体列表失败')
-      fontItems.value = []
-      fontGroups.value = []
+      console.error('[useEditorFonts] loadFonts error:', error)
+      // Fallback: at least show hardcoded system fonts
+      fontItems.value = SYSTEM_FONTS.map((font) => ({
+        id: font.id,
+        name: font.name,
+        group: 'system',
+        kind: 'system',
+        badge: '⚠️',
+        badgeTitle: '此字体可能不可商用',
+        cssFamily: font.cssFamily,
+      }))
+      fontGroups.value = buildGroups(fontItems.value)
+      markSystemFontsReady(fontItems.value)
     } finally {
       loading.value = false
     }

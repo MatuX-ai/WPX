@@ -11,6 +11,7 @@ const {
   initFontPreferencesStore,
   getFontPreferencesStore,
 } = require('./services/font-preferences-store')
+const { RECOMMENDED_FREE_FONTS } = require('./services/recommended-fonts')
 
 const LOG_PREFIX = '[font-ipc]'
 const FONT_EXTENSIONS = new Set(['.ttf', '.otf', '.woff', '.woff2'])
@@ -242,6 +243,18 @@ function registerFontIpcHandlers() {
     } catch (error) {
       logError('font:get-built-in failed', error)
       return failure(error, 'FONT_LIST_FAILED')
+    }
+  })
+
+  ipcMain.handle('font:check-recommended', async (_event, payload = {}) => {
+    try {
+      const list = Array.isArray(payload?.recommended) ? payload.recommended : RECOMMENDED_FREE_FONTS
+      logInfo('font:check-recommended', { count: list.length })
+      const result = await fontService.checkRecommendedFonts(list)
+      return success(result)
+    } catch (error) {
+      logError('font:check-recommended failed', error)
+      return failure(error, 'FONT_RECOMMEND_CHECK_FAILED')
     }
   })
 

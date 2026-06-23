@@ -5,12 +5,6 @@ import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useModelSettingsStore } from '@/stores/modelSettings'
-import {
-  DEFAULT_GUEST_DAILY_LIMIT,
-  fetchGuestFreeQuota,
-  formatGuestQuotaLabel,
-  GUEST_FREE_MODEL_LABEL,
-} from '@/utils/freeModelQuota'
 import { testModelConnection } from '@/utils/modelApi'
 
 const toast = useToast()
@@ -22,14 +16,11 @@ const modelSettingsStore = useModelSettingsStore()
 const saving = ref(false)
 const testingText = ref(false)
 const testingVision = ref(false)
-const quotaLoading = ref(false)
-const guestQuota = ref({
-  limit: DEFAULT_GUEST_DAILY_LIMIT,
-  remaining: null,
-  used: null,
-})
 
-const guestQuotaLabel = computed(() => formatGuestQuotaLabel(guestQuota.value))
+/** @type {import('vue').Ref<{ ok: boolean, message?: string } | null>} */
+const textTestStatus = ref(null)
+/** @type {import('vue').Ref<{ ok: boolean, message?: string } | null>} */
+const visionTestStatus = ref(null)
 
 const form = reactive({
   textSource: 'platform',
@@ -55,6 +46,12 @@ const visionApiKeyPlaceholder = computed(() =>
   modelSettingsStore.hasStoredVisionApiKey ? '输入新 Key 以更新' : 'sk-...',
 )
 
+function enforceGuestSources() {
+  if (!isGuest.value) return
+  form.textSource = 'custom'
+  form.visionSource = 'custom'
+}
+
 function syncFormFromStore() {
   const settings = modelSettingsStore.data
   form.textSource = settings.text.source
@@ -68,9 +65,12 @@ function syncFormFromStore() {
   form.temperature = settings.parameters.temperature
   form.topP = settings.parameters.topP
   form.maxOutputTokens = settings.parameters.maxOutputTokens
+  enforceGuestSources()
 }
 
 function buildSavePayload() {
+  enforceGuestSources()
+
   return {
     text: {
       source: form.textSource,
@@ -112,6 +112,7 @@ async function handleSave() {
 
 async function handleTestTextConnection() {
   testingText.value = true
+  textTestStatus.value = null
 
   try {
     const result = await testModelConnection({
@@ -120,9 +121,12 @@ async function handleTestTextConnection() {
       apiKey: form.textApiKey.trim() || undefined,
       modelName: form.textModelName,
     })
-    toast.success(result.message)
+    textTestStatus.value = { ok: true, message: result.message || '连接成功' }
   } catch (error) {
-    toast.error(error?.message || '连接测试失败')
+    textTestStatus.value = {
+      ok: false,
+      message: error?.message || '连接测试失败',
+    }
   } finally {
     testingText.value = false
   }
@@ -130,6 +134,7 @@ async function handleTestTextConnection() {
 
 async function handleTestVisionConnection() {
   testingVision.value = true
+  visionTestStatus.value = null
 
   try {
     const result = await testModelConnection({
@@ -138,22 +143,14 @@ async function handleTestVisionConnection() {
       apiKey: form.visionApiKey.trim() || undefined,
       modelName: form.visionModelName,
     })
-    toast.success(result.message)
+    visionTestStatus.value = { ok: true, message: result.message || '连接成功' }
   } catch (error) {
-    toast.error(error?.message || '连接测试失败')
+    visionTestStatus.value = {
+      ok: false,
+      message: error?.message || '连接测试失败',
+    }
   } finally {
     testingVision.value = false
-  }
-}
-
-async function loadGuestQuota() {
-  if (!isGuest.value) return
-
-  quotaLoading.value = true
-  try {
-    guestQuota.value = await fetchGuestFreeQuota()
-  } finally {
-    quotaLoading.value = false
   }
 }
 
@@ -163,19 +160,44 @@ function handleGuestLogin() {
   })
 }
 
+function clearTextTestStatus() {
+  textTestStatus.value = null
+}
+
+function clearVisionTestStatus() {
+  visionTestStatus.value = null
+}
+
 onMounted(async () => {
   if (!modelSettingsStore.hydrated) {
     await modelSettingsStore.initFromLocalStorage()
   }
   syncFormFromStore()
-  await loadGuestQuota()
 })
 
-watch(isGuest, (guest) => {
-  if (guest) {
-    void loadGuestQuota()
-  }
+watch(isGuest, () => {
+  enforceGuestSources()
 })
+
+watch(
+  () => [
+    form.textEndpoint,
+    form.textApiKey,
+    form.textModelName,
+    form.textSource,
+  ],
+  clearTextTestStatus,
+)
+
+watch(
+  () => [
+    form.visionEndpoint,
+    form.visionApiKey,
+    form.visionModelName,
+    form.visionSource,
+  ],
+  clearVisionTestStatus,
+)
 
 watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
 </script>
@@ -183,40 +205,28 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
 <template>
   <section class="settings-panel model-settings">
     <header class="settings-panel__header">
-      <h2 class="settings-panel__title">模型配置</h2>
+      <h2 class="settings-panel__title">我的模型</h2>
       <p class="settings-panel__desc">
-        {{ isGuest ? '访客模式下可使用 WPX 免费公共大模型。' : '配置文本与图片识别模型来源、参数及连接信息。' }}
+        配置你自己的大模型 API，或使用 WPX 提供的公共模型
       </p>
     </header>
 
-    <section v-if="isGuest" class="settings-card model-settings__guest-card">
-      <h3 class="settings-card__title">当前模型</h3>
-      <p class="settings-card__desc model-settings__guest-model">{{ GUEST_FREE_MODEL_LABEL }}</p>
-
-      <div class="model-settings__guest-quota">
-        <span class="model-settings__guest-quota-label">今日剩余调用次数</span>
-        <span class="model-settings__guest-quota-value">
-          {{ quotaLoading ? '加载中…' : guestQuotaLabel }}
-        </span>
-      </div>
-
-      <p class="model-settings__guest-hint">
-        登录后可使用自己的大模型 API Key 或购买更多调用次数
+    <section v-if="isGuest" class="settings-card model-settings__guest-banner">
+      <p class="model-settings__guest-banner-text">
+        访客模式下请配置自己的大模型 API。注册后可使用 WPX 公共大模型（每天约 100M Token，轻度使用通常足够）。
       </p>
-
       <button
         type="button"
-        class="settings-btn-primary model-settings__guest-login"
+        class="settings-btn-secondary model-settings__guest-login"
         :disabled="isLoggingIn"
         @click="handleGuestLogin"
       >
-        {{ isLoggingIn ? '登录中…' : '登录' }}
+        {{ isLoggingIn ? '登录中…' : '注册 / 登录' }}
       </button>
     </section>
 
-    <template v-else>
     <div v-if="showPrivacyBanner" class="model-settings__privacy" role="note">
-      数据将发送到第三方服务器，WPX 不会存储您的 API Key（仅本地加密存储）
+      数据将发送到第三方模型服务，WPX 不会存储您的 API Key（仅本地加密存储）
     </div>
 
     <form class="model-settings__form" @submit.prevent="handleSave">
@@ -224,12 +234,12 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         <h3 class="settings-card__title">文本模型</h3>
         <p class="settings-card__desc">用于 AI 对话、续写、改写等文本生成能力。</p>
 
-        <fieldset class="settings-field settings-fieldset">
+        <fieldset v-if="!isGuest" class="settings-field settings-fieldset">
           <legend class="settings-label">模型来源</legend>
           <div class="radio-group">
             <label class="radio-option">
               <input v-model="form.textSource" type="radio" name="text-source" value="platform" />
-              <span>使用 WPX 平台模型（默认）</span>
+              <span>WPX 公共大模型（消耗 Token）</span>
             </label>
             <label class="radio-option">
               <input v-model="form.textSource" type="radio" name="text-source" value="custom" />
@@ -238,7 +248,7 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
           </div>
         </fieldset>
 
-        <div v-if="form.textSource === 'custom'" class="model-settings__custom-fields">
+        <div v-if="isGuest || form.textSource === 'custom'" class="model-settings__custom-fields">
           <div class="settings-field">
             <label class="settings-label" for="text-endpoint">API 地址（Endpoint）</label>
             <input
@@ -252,6 +262,9 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
 
           <div class="settings-field">
             <label class="settings-label" for="text-api-key">API Key</label>
+            <p class="settings-hint model-settings__key-hint">
+              你的 API Key 仅加密存储在本机，不会上传
+            </p>
             <p v-if="modelSettingsStore.hasStoredTextApiKey" class="settings-hint model-settings__masked-key">
               已保存：{{ modelSettingsStore.maskedTextApiKey }}
             </p>
@@ -276,14 +289,32 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
             />
           </div>
 
-          <button
-            type="button"
-            class="settings-btn-secondary"
-            :disabled="testingText"
-            @click="handleTestTextConnection"
-          >
-            {{ testingText ? '测试中…' : '测试连接' }}
-          </button>
+          <div class="model-settings__test-row">
+            <button
+              type="button"
+              class="settings-btn-secondary"
+              :disabled="testingText"
+              @click="handleTestTextConnection"
+            >
+              {{ testingText ? '测试中…' : '测试连接' }}
+            </button>
+            <p
+              v-if="textTestStatus?.ok"
+              class="model-settings__test-result model-settings__test-result--ok"
+              role="status"
+            >
+              <span class="model-settings__test-icon" aria-hidden="true">✓</span>
+              {{ textTestStatus.message }}
+            </p>
+            <p
+              v-else-if="textTestStatus"
+              class="model-settings__test-result model-settings__test-result--error"
+              role="alert"
+            >
+              <span class="model-settings__test-icon" aria-hidden="true">✕</span>
+              {{ textTestStatus.message }}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -291,12 +322,12 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         <h3 class="settings-card__title">图片识别模型</h3>
         <p class="settings-card__desc">用于识别图片内容、图表与截图中的文字信息。</p>
 
-        <fieldset class="settings-field settings-fieldset">
+        <fieldset v-if="!isGuest" class="settings-field settings-fieldset">
           <legend class="settings-label">模型来源</legend>
           <div class="radio-group">
             <label class="radio-option">
               <input v-model="form.visionSource" type="radio" name="vision-source" value="platform" />
-              <span>使用 WPX 平台模型（默认）</span>
+              <span>WPX 公共大模型（消耗 Token）</span>
             </label>
             <label class="radio-option">
               <input v-model="form.visionSource" type="radio" name="vision-source" value="custom" />
@@ -305,7 +336,7 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
           </div>
         </fieldset>
 
-        <div v-if="form.visionSource === 'custom'" class="model-settings__custom-fields">
+        <div v-if="isGuest || form.visionSource === 'custom'" class="model-settings__custom-fields">
           <div class="settings-field">
             <label class="settings-label" for="vision-endpoint">API 地址（Endpoint）</label>
             <input
@@ -319,6 +350,9 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
 
           <div class="settings-field">
             <label class="settings-label" for="vision-api-key">API Key</label>
+            <p class="settings-hint model-settings__key-hint">
+              你的 API Key 仅加密存储在本机，不会上传
+            </p>
             <p v-if="modelSettingsStore.hasStoredVisionApiKey" class="settings-hint model-settings__masked-key">
               已保存：{{ modelSettingsStore.maskedVisionApiKey }}
             </p>
@@ -343,14 +377,32 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
             />
           </div>
 
-          <button
-            type="button"
-            class="settings-btn-secondary"
-            :disabled="testingVision"
-            @click="handleTestVisionConnection"
-          >
-            {{ testingVision ? '测试中…' : '测试连接' }}
-          </button>
+          <div class="model-settings__test-row">
+            <button
+              type="button"
+              class="settings-btn-secondary"
+              :disabled="testingVision"
+              @click="handleTestVisionConnection"
+            >
+              {{ testingVision ? '测试中…' : '测试连接' }}
+            </button>
+            <p
+              v-if="visionTestStatus?.ok"
+              class="model-settings__test-result model-settings__test-result--ok"
+              role="status"
+            >
+              <span class="model-settings__test-icon" aria-hidden="true">✓</span>
+              {{ visionTestStatus.message }}
+            </p>
+            <p
+              v-else-if="visionTestStatus"
+              class="model-settings__test-result model-settings__test-result--error"
+              role="alert"
+            >
+              <span class="model-settings__test-icon" aria-hidden="true">✕</span>
+              {{ visionTestStatus.message }}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -406,7 +458,6 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         </button>
       </div>
     </form>
-    </template>
   </section>
 </template>
 
@@ -427,6 +478,30 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
   color: var(--theme-fg);
 }
 
+.model-settings__guest-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.model-settings__guest-banner-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--theme-fg-muted);
+}
+
+.model-settings__guest-login {
+  align-self: flex-start;
+}
+
+.model-settings__key-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--theme-fg-subtle);
+}
+
 .model-settings__masked-key {
   margin-bottom: 8px;
   font-family: var(--theme-font-mono);
@@ -444,6 +519,35 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
   flex-direction: column;
   gap: 16px;
   margin-top: 4px;
+}
+
+.model-settings__test-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-settings__test-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.model-settings__test-result--ok {
+  color: #16a34a;
+}
+
+.model-settings__test-result--error {
+  color: #dc2626;
+}
+
+.model-settings__test-icon {
+  flex-shrink: 0;
+  font-weight: 700;
 }
 
 .settings-fieldset {
@@ -480,52 +584,5 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.model-settings__guest-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.model-settings__guest-model {
-  margin-bottom: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--theme-fg);
-}
-
-.model-settings__guest-quota {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--theme-border);
-  border-radius: var(--theme-radius-sm, 6px);
-  background: var(--theme-bg-subtle);
-}
-
-.model-settings__guest-quota-label {
-  font-size: 13px;
-  color: var(--theme-fg-muted);
-}
-
-.model-settings__guest-quota-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--theme-accent);
-  font-variant-numeric: tabular-nums;
-}
-
-.model-settings__guest-hint {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--theme-fg-muted);
-}
-
-.model-settings__guest-login {
-  align-self: flex-start;
 }
 </style>

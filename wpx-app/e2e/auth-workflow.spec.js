@@ -24,8 +24,9 @@ import {
   typeInEditor,
 } from './helpers/editor.js'
 
-const FREE_QUOTA_MESSAGE = '今日免费次数已用完，请明天再试或登录获取更多次数'
-const GUEST_MODEL_LABEL = 'WPX 免费模型（由 ai.proclaw.cc 提供）'
+const GUEST_MISSING_API_MESSAGE = '您无需注册，但是需要配置自己的大模型 API 接口'
+const LOGGED_IN_QUOTA_CONFIGURE_MESSAGE =
+  '免费 Token 额度已用完。你可以配置自己的大模型 API（免费）继续使用 AI 能力。'
 
 test.describe('认证与访客工作流', () => {
   test.beforeEach(async ({ page }) => {
@@ -41,30 +42,29 @@ test.describe('认证与访客工作流', () => {
     await expect(page.getByRole('button', { name: /账户菜单$/ })).toHaveCount(0)
   })
 
-  test('2. 访客可使用编辑器，模型设置可见免费模型与剩余次数', async ({ page }) => {
+  test('2. 访客可打开模型设置并配置自定义 API', async ({ page }) => {
     await openEditor(page)
     await typeInEditor(page, '访客编辑测试')
     await expect(page.locator('.ProseMirror')).toContainText('访客编辑测试')
 
     await openSettings(page)
-    await page.getByRole('link', { name: '模型配置' }).click()
+    await page.getByRole('link', { name: '我的模型' }).click()
 
-    await expect(page.getByRole('button', { name: '登录后解锁' })).toBeVisible()
-    await expect(page.getByText(GUEST_MODEL_LABEL)).toBeAttached()
-    await expect.poll(async () => page.getByText(/剩余 .+\/50 次/).count()).toBeGreaterThan(0)
+    await expect(page.getByRole('button', { name: '登录后解锁' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: '我的模型', level: 2 })).toBeVisible()
+    await expect(page.getByLabel('API 地址（Endpoint）').first()).toBeVisible()
+    await expect(page.getByText('你的 API Key 仅加密存储在本机，不会上传').first()).toBeVisible()
+    await expect(page.getByRole('radio', { name: /WPX 公共大模型/ })).toHaveCount(0)
   })
 
-  test('3. 免费次数用尽后，AI 返回提示', async ({ page }) => {
-    await seedE2eSettings(page)
-    await setupE2eMocks(page, { aiReply: 'E2E AI 回复' })
-    await setupAuthE2eMocks(page, { quotaExhausted: true })
-
+  test('3. 访客未配置 API 时，AI 提示去配置', async ({ page }) => {
     await openEditor(page)
-    await typeInEditor(page, '测试免费额度')
+    await typeInEditor(page, '测试访客 AI')
     await openAiChat(page)
     await sendAiInstruction(page, '你好')
 
-    await expect(page.getByText(FREE_QUOTA_MESSAGE)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(GUEST_MISSING_API_MESSAGE)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: '去配置' })).toBeVisible()
   })
 
   test('4. 点击登录跳转 account.proclaw.cc（模拟）且回调后变为已登录', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe('认证与访客工作流', () => {
     await loginThroughTitleBar(page)
 
     await openSettings(page)
-    await page.getByRole('link', { name: '模型配置' }).click()
+    await page.getByRole('link', { name: '我的模型' }).click()
     await expect(page.getByRole('button', { name: '登录后解锁' })).toHaveCount(0)
 
     await page.getByRole('radio', { name: '使用自定义模型' }).first().check()
@@ -107,15 +107,16 @@ test.describe('认证与访客工作流', () => {
     await expect(page.getByText('连接成功，模型服务可用')).toBeVisible({ timeout: 10_000 })
   })
 
-  test('8. 退出登录后恢复访客状态，受限设置被遮罩', async ({ page }) => {
+  test('8. 退出登录后恢复访客状态，字体设置仍受限', async ({ page }) => {
     await openEditor(page)
     await loginThroughTitleBar(page)
     await logoutThroughTitleBar(page)
 
     await openSettings(page)
-    await page.getByRole('link', { name: '模型配置' }).click()
-    await expect(page.getByRole('button', { name: '登录后解锁' })).toBeVisible()
-    await expect(page.getByRole('radio', { name: '使用自定义模型' })).toHaveCount(0)
+    await page.getByRole('link', { name: '我的模型' }).click()
+    await expect(page.getByRole('button', { name: '登录后解锁' })).toHaveCount(0)
+    await expect(page.getByLabel('API 地址（Endpoint）').first()).toBeVisible()
+    await expect(page.getByRole('radio', { name: /WPX 公共大模型/ })).toHaveCount(0)
 
     await page.getByRole('link', { name: '字体与 Token' }).click()
     await expect(page.getByRole('button', { name: '登录后解锁' })).toBeVisible()
@@ -197,5 +198,17 @@ test.describe('登录后 Token 与商业字体导出', () => {
     })
     await expect(page.getByText('请先登录以充值和使用商业字体')).toHaveCount(0)
     await expect(page.getByRole('button', { name: '立即充值' })).toBeVisible()
+  })
+
+  test('11. 登录用户公共模型额度用尽且未配置自定义 Key 时提示去配置', async ({ page }) => {
+    await setupAuthE2eMocks(page, { quotaExhausted: true })
+    await openEditor(page)
+    await loginThroughTitleBar(page)
+    await typeInEditor(page, '测试额度用尽')
+    await openAiChat(page)
+    await sendAiInstruction(page, '你好')
+
+    await expect(page.getByText(LOGGED_IN_QUOTA_CONFIGURE_MESSAGE)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: '去配置' })).toBeVisible()
   })
 })

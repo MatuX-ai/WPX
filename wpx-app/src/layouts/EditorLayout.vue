@@ -1,10 +1,11 @@
 <script setup>
-import { defineAsyncComponent, inject, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, inject, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { Save } from '@lucide/vue'
 import { useAppStore } from '@/stores/app'
 import { useEditorStore } from '@/stores/editor'
 import { useTrayStore } from '@/stores/tray'
 import { useUserHabitsStore } from '@/stores/userHabits'
+import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { provideEditorOverlay } from '@/composables/useEditorOverlay'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useElectronFileOpen } from '@/composables/useElectronFileOpen'
@@ -25,6 +26,7 @@ import {
 } from '@/composables/useFloatingWindows'
 import EditorCore from '@/components/editor/EditorCore.vue'
 import ExportMenu from '@/components/export/ExportMenu.vue'
+import ExportTemplateIndicator from '@/components/export/ExportTemplateIndicator.vue'
 import PackMenu from '@/components/zip/PackMenu.vue'
 import KnowledgeTrigger from '@/components/knowledge/KnowledgeTrigger.vue'
 import AiAssistantPlaceholder from '@/components/layout/AiAssistantPlaceholder.vue'
@@ -44,10 +46,16 @@ const SaveDialog = defineAsyncComponent(() =>
   import('@/components/library/SaveDialog.vue')
 )
 import { extractTitleFromMarkdown } from '@/utils/libraryApi'
+import { markdownToHtml } from '@/utils/markdownToEditor'
+import { toEditorContent } from '@/utils/aiSelection'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import { zipFeatureAvailable } from '@/utils/zipApi'
 import { getDocPathFromUrl } from '@/utils/windowContext'
 import { useWindowStore } from '@/stores/window'
+import {
+  getPaperWidthPx,
+  isFocusModeApplicable,
+} from '@/constants/paperPreferences'
 import {
   cancelWindowClose,
   confirmWindowClose,
@@ -60,6 +68,7 @@ const editorStore = useEditorStore()
 const trayStore = useTrayStore()
 const habitsStore = useUserHabitsStore()
 const windowStore = useWindowStore()
+const userPreferencesStore = useUserPreferencesStore()
 const floatingWindows = useFloatingWindows()
 const overlay = provideEditorOverlay()
 const toast = useToast()
@@ -89,6 +98,18 @@ const closeFlowSaving = ref(false)
 const packing = ref(false)
 let closeCheckInProgress = false
 let unsubscribeAiChatToggle = null
+
+const focusModeActive = computed(() =>
+  isFocusModeApplicable(
+    userPreferencesStore.paper?.focusMode === true,
+    userPreferencesStore.paper?.paperSize,
+  ),
+)
+const focusModePaperWidthPx = computed(() => getPaperWidthPx(userPreferencesStore.paper?.paperSize))
+const editorContainerStyle = computed(() => ({
+  '--knowledge-panel-width': `${KNOWLEDGE_PANEL_WIDTH}px`,
+  '--wpx-paper-width': `${focusModePaperWidthPx.value}px`,
+}))
 
 const { scheduleAutoSave } = useAutoSave(() => ({
   content: getMarkdown(),
@@ -289,6 +310,7 @@ watch(() => windowStore.focusGeneration, () => {
 
 onMounted(() => {
   tryHandleNewDocument()
+  applyPendingKnowledgeImport()
   window.addEventListener('beforeunload', handleBeforeUnload)
 
   if (windowStore.isWindowFocused) {
@@ -341,6 +363,79 @@ async function waitForEditorInstance(maxAttempts = 20) {
   return null
 }
 
+function getKnowledgeDocumentTitle(title, content) {
+  const fromFilename = title?.replace(/\.[^.]+$/i, '').trim()
+  if (fromFilename) return fromFilename
+  return extractTitleFromMarkdown(content) || '未命名文档'
+}
+
+function buildKnowledgeInsertContent(content, type) {
+  if (type === 'markdown') {
+    return markdownToHtml(content)
+  }
+  return toEditorContent(content)
+}
+
+async function handleKnowledgeOpenAsDocument({ content, title, type }) {
+  appStore.openDocument()
+  await nextTick()
+  editorRef.value?.loadMarkdown(content || '')
+  editorOutput.value = {
+    html: '',
+    json: null,
+    markdown: content || '',
+  }
+  appStore.setDocumentTitle(getKnowledgeDocumentTitle(title, content))
+  appStore.clearDocumentSource()
+  appStore.markDocumentDirty()
+  closeKnowledgePanel()
+  toast.success('已作为新文档打开')
+}
+
+async function handleKnowledgeInsert({ content, type }) {
+  if (!appStore.hasOpenDocument) {
+    appStore.openDocument()
+    await nextTick()
+    editorRef.value?.loadMarkdown?.('')
+    editorOutput.value = { html: '', json: null, markdown: '' }
+  }
+
+  await nextTick()
+
+  const ed = await waitForEditorInstance()
+  if (!ed) {
+    toast.error('编辑器未就绪，无法插入内容')
+    return
+  }
+
+  ed.chain().focus().insertContent(buildKnowledgeInsertContent(content, type)).run()
+  editorOutput.value = {
+    html: ed.getHTML(),
+    json: ed.getJSON(),
+    markdown: editorRef.value?.getMarkdown() || '',
+  }
+  appStore.markDocumentDirty()
+  scheduleAutoSave()
+  toast.success('已插入编辑器')
+}
+
+async function applyPendingKnowledgeImport() {
+  const request = editorStore.pendingKnowledgeImport
+  if (!request) return
+
+  try {
+    if (request.mode === 'open') {
+      await handleKnowledgeOpenAsDocument(request)
+    } else {
+      await handleKnowledgeInsert(request)
+    }
+  } finally {
+    editorStore.clearPendingKnowledgeImport()
+  }
+}
+
+watch(() => editorStore.pendingKnowledgeImport, applyPendingKnowledgeImport, { flush: 'post' })
+
 watch(
   () => editorStore.pendingFontApply,
   async (request) => {
@@ -375,13 +470,18 @@ watch(
 <template>
   <div
     class="editor-layout"
-    :style="{ '--knowledge-panel-width': `${KNOWLEDGE_PANEL_WIDTH}px` }"
+    :style="editorContainerStyle"
+    :data-focus-mode="focusModeActive ? 'true' : 'false'"
+    :data-paper-size="userPreferencesStore.paper?.paperSize || 'none'"
   >
     <div class="editor-layout__workspace">
       <main class="editor-layout__main">
         <div
           class="editor-layout__editor"
-          :class="{ 'editor-layout__editor--empty': !appStore.hasOpenDocument }"
+          :class="{
+            'editor-layout__editor--empty': !appStore.hasOpenDocument,
+            'editor-layout__editor--focus': focusModeActive,
+          }"
           @mousedown="floatingWindows.handleEditorAreaClick()"
         >
           <EmptyState
@@ -434,6 +534,8 @@ watch(
 
       <AiAssistantPlaceholder />
 
+      <ExportTemplateIndicator />
+
       <Transition name="image-editor-pop">
         <ImageEditor
           v-if="imageEditSession"
@@ -468,8 +570,8 @@ watch(
 .editor-layout {
   display: flex;
   flex: 1;
-  min-height: 0;
-  height: 100%;
+  flex-direction: column;
+  min-height: 100%;
   position: relative;
   background: var(--theme-bg);
   color: var(--theme-fg);
@@ -488,7 +590,77 @@ watch(
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+}
+
+.editor-layout__editor {
+  flex: 1;
+  min-height: 0;
+  padding: 0 16px 24px;
+}
+
+.editor-layout__editor--empty {
+  display: flex;
+  padding: 0 16px 24px;
+  min-height: calc(100vh - var(--title-bar-height, 36px));
+}
+
+/* ── 焦点写作模式 ── */
+.editor-layout__editor--focus {
+  background: var(--wpx-focus-mode-bg, #f0f0f0);
+  padding: 24px 16px 32px;
+  transition: background-color 0.3s ease, padding 0.3s ease;
+}
+
+.editor-layout__editor--focus :deep(.editor-shell) {
+  margin: 0 auto;
+  max-width: var(--wpx-paper-width, 794px);
+  min-height: calc(100vh - var(--title-bar-height, 36px) - 64px);
+  box-shadow: var(--wpx-focus-mode-paper-shadow);
+  transition:
+    max-width 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.editor-layout__editor--focus :deep(.editor-toolbar) {
+  border-radius: 10px 10px 0 0;
+}
+
+.editor-layout__editor--focus :deep(.editor-drop-zone),
+.editor-layout__editor--focus :deep(.editor-content) {
+  background: var(--theme-surface, #fff);
+  border-radius: 0 0 10px 10px;
+}
+
+.editor-layout__editor--focus :deep(.editor-prose) {
+  max-width: var(--wpx-paper-width, 794px);
+  margin: 0 auto;
+  padding: 32px 40px;
+  transition: max-width 0.3s ease, padding 0.3s ease;
+}
+
+/* 图片、表格、代码块不设 max-width 约束，允许超出纸张宽度 */
+.editor-layout__editor--focus :deep(.editor-prose img),
+.editor-layout__editor--focus :deep(.editor-prose .editor-image),
+.editor-layout__editor--focus :deep(.editor-prose figure),
+.editor-layout__editor--focus :deep(.editor-prose .editor-table),
+.editor-layout__editor--focus :deep(.editor-prose table),
+.editor-layout__editor--focus :deep(.editor-prose pre) {
+  max-width: none;
+  width: auto;
+}
+
+.editor-layout__editor :deep(.editor-shell) {
+  min-height: calc(100vh - var(--title-bar-height, 36px));
+  display: flex;
+  flex-direction: column;
+  border-color: var(--theme-border);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.editor-layout__editor :deep(.editor-content) {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .editor-layout__save-btn {
@@ -518,34 +690,6 @@ watch(
   padding: 0;
 }
 
-.editor-layout__editor {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px 16px 16px;
-}
-
-.editor-layout__editor--empty {
-  display: flex;
-  padding: 0;
-  overflow: hidden;
-}
-
-.editor-layout__editor :deep(.editor-shell) {
-  height: 100%;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  border-color: var(--theme-border);
-  background: var(--theme-surface);
-  box-shadow: var(--theme-shadow-sm);
-}
-
-.editor-layout__editor :deep(.editor-content) {
-  flex: 1;
-  min-height: 0;
-}
-
 .editor-layout__overlays {
   position: fixed;
   inset: 0;
@@ -553,7 +697,5 @@ watch(
   z-index: 0;
 }
 
-.editor-layout__overlays > :deep(*) {
-  pointer-events: auto;
-}
+/* 勿对全部子节点启用 pointer-events：AI 对话窗/ImageEditor 宿主层为 inset:0，会拦截整页点击 */
 </style>

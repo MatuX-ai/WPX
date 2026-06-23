@@ -28,6 +28,7 @@ const appStore = useAppStore()
   top: 50%;
   left: 0;
   z-index: var(--z-knowledge-trigger);
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
