@@ -1,0 +1,34 @@
+---
+description: WPX Electron 主进程与 IPC 约定
+globs: electron/**/*
+alwaysApply: false
+---
+
+# Electron 约定
+
+## 入口
+
+- 开发：`electron/run-dev.js`（设置 `WPX_DEV_*` 环境变量后 spawn Electron）
+- 生产：`electron/main.js`
+
+## 多窗口
+
+- `window-manager.js` 管理窗口创建、聚焦、关闭
+- 每窗口加载 `VITE_DEV_SERVER_URL`（默认 `http://localhost:5173`）
+- 调试：`--multi`、`WPX_DEV_INITIAL_WINDOWS`
+
+## IPC
+
+- 主进程处理文件打开/保存、导出、系统对话框
+- 渲染进程通过 `preload` 或 `contextBridge` 暴露的安全 API 通信
+- 不在渲染进程直接 `require('fs')` 或 `electron`
+
+## 打包
+
+- `electron-builder` 配置在根 `package.json` → `build`
+- 产物输出 `release/`；Windows 用 NSIS
+
+## 与前端协作
+
+- 文件关联（.md、.txt、.wpx）在 builder `fileAssociations` 配置
+- 导出逻辑可能在主进程 `services/export-routes.js` 与 Node `export-service.js` 两处，改时核对两边

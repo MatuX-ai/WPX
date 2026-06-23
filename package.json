@@ -1,0 +1,145 @@
+{
+  "name": "wpx",
+  "version": "0.1.4",
+  "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
+  "author": {
+    "name": "WPX Team",
+    "email": "dev@wpx.app"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "npm --prefix wpx-app run dev",
+    "build": "npm --prefix wpx-app run build",
+    "electron:dev": "concurrently -k \"npm --prefix wpx-app run dev\" \"wait-on http://localhost:5173 && node electron/run-dev.js\"",
+    "electron:dev:multi": "concurrently -k \"npm --prefix wpx-app run dev\" \"wait-on http://localhost:5173 && node electron/run-dev.js --multi\"",
+    "electron:build": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder",
+    "electron:build:win": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win",
+    "electron:build:mac": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac",
+    "electron:build:linux": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --linux",
+    "electron:pack:win": "node scripts/bump-pack-version.mjs print && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/bump-pack-version.mjs bump",
+    "electron:pack": "npm run electron:pack:win",
+    "smoke:prod": "node scripts/smoke-prod-electron.mjs"
+  },
+  "build": {
+    "appId": "com.wpx.editor",
+    "productName": "WPX",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "wpx-app/dist/**/*",
+      "electron/**/*",
+      "resources/bin/**/*",
+      "package.json",
+      "!wpx-app/node_modules/**",
+      "!wpx-app/src/**",
+      "!wpx-app/e2e/**",
+      "!wpx-app/storybook-static/**",
+      "!wpx-app/.storybook/**",
+      "!wpx-app/playwright-report/**",
+      "!wpx-app/coverage/**",
+      "!**/{test,tests,__tests__}/**",
+      "!**/*.{test,spec}.{js,ts,mjs}",
+      "!**/node_modules/{@playwright,playwright,@storybook,storybook,vitest,@vitest,jsdom,@vue/test-utils}/**"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/fonts",
+        "to": "fonts"
+      }
+    ],
+    "npmRebuild": false,
+    "protocols": [
+      {
+        "name": "WPX Auth",
+        "schemes": [
+          "wpx"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown Document",
+        "description": "Markdown document",
+        "mimeType": "text/markdown",
+        "role": "Editor"
+      },
+      {
+        "ext": "txt",
+        "name": "Text Document",
+        "description": "Plain text document",
+        "mimeType": "text/plain",
+        "role": "Editor"
+      },
+      {
+        "ext": "wpx",
+        "name": "WPX Document",
+        "description": "WPX document",
+        "mimeType": "application/x-wpx",
+        "role": "Editor"
+      },
+      {
+        "ext": "7z",
+        "name": "7-Zip Archive",
+        "description": "7-Zip compressed archive",
+        "mimeType": "application/x-7z-compressed",
+        "role": "Viewer"
+      },
+      {
+        "ext": "zip",
+        "name": "ZIP Archive",
+        "description": "ZIP compressed archive",
+        "mimeType": "application/zip",
+        "role": "Viewer"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WPX",
+      "artifactName": "WPX-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "wpx-app/public/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "wpx-app/public/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "wpx-app/public/icon.png"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "sharp": "^0.35.2",
+    "wait-on": "^9.0.10"
+  },
+  "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
+    "cors": "^2.8.6",
+    "electron-is-dev": "^3.0.1",
+    "electron-store": "^11.0.2",
+    "express": "^5.2.1",
+    "fontkit": "^2.0.4",
+    "jszip": "^3.10.1",
+    "lowdb": "^7.0.1",
+    "mammoth": "^1.12.0",
+    "multer": "^2.2.0",
+    "pdf-parse": "^2.4.5",
+    "subset-font": "^2.5.0"
+  }
+}

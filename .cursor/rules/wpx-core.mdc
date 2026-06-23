@@ -1,0 +1,39 @@
+---
+description: WPX 项目核心约定（Electron + Vue3 AI 文档编辑器）
+alwaysApply: true
+---
+
+# WPX 核心约定
+
+## 语言与 UI
+
+- 用户界面文案为**中文**；测试选择器、aria-label 优先用中文可见文本
+- 代码注释可用中文，与周边文件风格一致
+
+## 目录边界
+
+- 前端改动在 `wpx-app/src/`，不在 `electron/` 写 Vue 组件
+- IPC、窗口、文件系统在 `electron/`
+- HTTP 微服务在 `wpx-app/src/server/`，经 Vite proxy 暴露
+
+## API 调用
+
+- 渲染进程通过 `/api/*` 代理访问本地服务，勿硬编码 `localhost:300x`
+- 新端口语义化路径，与现有 `/api/export`、`/api/ai` 等保持一致
+
+## Vue / Pinia
+
+- `useFloatingWindowState` 等返回的 Ref/computed 嵌在普通对象属性中时，传 props 前需 computed 解包
+- 路径别名 `@` → `wpx-app/src`
+
+## 开发环境
+
+- PowerShell 用 `;` 分隔命令
+- 完整开发：`npm run electron:dev`（根目录）
+- 需求变更前查阅 `docs/` 或 `wpx_list_docs` MCP
+
+## 代码风格
+
+- 最小化改动范围，不重构无关代码
+- 复用现有 composables、helpers、stores
+- 测试：Vitest 单元 + Playwright E2E，mock 外部 API

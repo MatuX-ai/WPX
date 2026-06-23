@@ -1,0 +1,10 @@
+{
+  "remoteDebugPort": 0,
+  "debugPortBase": 9222,
+  "debugPortSpan": 200,
+  "autoDevTools": true,
+  "logWindows": true,
+  "logIpc": true,
+  "initialWindows": 1,
+  "disableSingleInstance": false
+}

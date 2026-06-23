@@ -1,0 +1,559 @@
+<script setup>
+import { defineAsyncComponent, inject, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
+import { Save } from '@lucide/vue'
+import { useAppStore } from '@/stores/app'
+import { useEditorStore } from '@/stores/editor'
+import { useTrayStore } from '@/stores/tray'
+import { useUserHabitsStore } from '@/stores/userHabits'
+import { provideEditorOverlay } from '@/composables/useEditorOverlay'
+import { useAutoSave } from '@/composables/useAutoSave'
+import { useElectronFileOpen } from '@/composables/useElectronFileOpen'
+import { useLaunchDocument } from '@/composables/useLaunchDocument'
+import { useWindowCloseInterceptor } from '@/composables/useWindowCloseInterceptor'
+import {
+  refreshDocumentSaveStatusOnFocus,
+  syncDocumentSource,
+} from '@/composables/useDocumentFocusRefresh'
+import { useUserHabits } from '@/composables/useUserHabits'
+import { useEditorFonts } from '@/composables/useEditorFonts'
+import { shortcutTooltip, useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
+import { useWindowSize } from '@/composables/useWindowSize'
+import { useToast } from '@/composables/useToast'
+import {
+  FLOATING_WINDOW_ID,
+  useFloatingWindows,
+} from '@/composables/useFloatingWindows'
+import EditorCore from '@/components/editor/EditorCore.vue'
+import ExportMenu from '@/components/export/ExportMenu.vue'
+import PackMenu from '@/components/zip/PackMenu.vue'
+import KnowledgeTrigger from '@/components/knowledge/KnowledgeTrigger.vue'
+import AiAssistantPlaceholder from '@/components/layout/AiAssistantPlaceholder.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+
+// 异步加载重型组件（减少初始 chunk）
+const KnowledgePanel = defineAsyncComponent(() =>
+  import('@/components/knowledge/KnowledgePanel.vue')
+)
+const ImageEditor = defineAsyncComponent(() =>
+  import('@/components/image/ImageEditor.vue')
+)
+const CloseConfirmDialog = defineAsyncComponent(() =>
+  import('@/components/library/CloseConfirmDialog.vue')
+)
+const SaveDialog = defineAsyncComponent(() =>
+  import('@/components/library/SaveDialog.vue')
+)
+import { extractTitleFromMarkdown } from '@/utils/libraryApi'
+import { getElectronAPI, isElectron } from '@/utils/electron'
+import { zipFeatureAvailable } from '@/utils/zipApi'
+import { getDocPathFromUrl } from '@/utils/windowContext'
+import { useWindowStore } from '@/stores/window'
+import {
+  cancelWindowClose,
+  confirmWindowClose,
+} from '@/utils/windowControls'
+
+const KNOWLEDGE_PANEL_WIDTH = 320
+
+const appStore = useAppStore()
+const editorStore = useEditorStore()
+const trayStore = useTrayStore()
+const habitsStore = useUserHabitsStore()
+const windowStore = useWindowStore()
+const floatingWindows = useFloatingWindows()
+const overlay = provideEditorOverlay()
+const toast = useToast()
+const { applyFontToEditor } = useEditorFonts()
+const zipArchiveHost = inject('zipArchiveHost', ref(null))
+const { applyFormat } = useUserHabits()
+
+const {
+  knowledgePanelOpen,
+  imageEditSession,
+  closeKnowledgePanel,
+  closeImageEdit,
+  completeImageEdit,
+  toggleAiPanel,
+} = overlay
+
+const saveTooltip = shortcutTooltip('保存到文库', 'save')
+const windowSize = useWindowSize()
+const { isToolbarIconOnly } = windowSize
+
+const editorRef = ref(null)
+provide('editorHostRef', editorRef)
+const editorOutput = ref({ html: '', json: null, markdown: '' })
+const closeConfirmVisible = ref(false)
+const closeSaveDialogVisible = ref(false)
+const closeFlowSaving = ref(false)
+const packing = ref(false)
+let closeCheckInProgress = false
+let unsubscribeAiChatToggle = null
+
+const { scheduleAutoSave } = useAutoSave(() => ({
+  content: getMarkdown(),
+  title: getDefaultTitle(),
+}))
+
+function onEditorChange(payload) {
+  editorOutput.value = payload
+  appStore.setDocumentTitle(getDefaultTitle())
+  scheduleAutoSave()
+}
+
+function getMarkdown() {
+  return editorRef.value?.getMarkdown() || editorOutput.value.markdown || ''
+}
+
+function getFormatSnapshot() {
+  return editorRef.value?.getFormatSnapshot?.() || null
+}
+
+function getDefaultTitle() {
+  return extractTitleFromMarkdown(getMarkdown())
+}
+
+function openSaveDialog() {
+  appStore.openSaveDialog({
+    content: getMarkdown(),
+    defaultTitle: getDefaultTitle(),
+  })
+}
+
+async function handlePackDocument(payload) {
+  const host = zipArchiveHost.value
+  if (!host?.packDocument) return
+
+  packing.value = true
+  try {
+    await host.packDocument(payload)
+  } finally {
+    packing.value = false
+  }
+}
+
+function createNewDocument(template = null) {
+  appStore.openDocument()
+  nextTick(() => {
+    editorRef.value?.loadMarkdown('')
+    editorOutput.value = { html: '', json: null, markdown: '' }
+    appStore.resetDocumentState()
+    editorStore.clearPendingReplace()
+
+    if (template?.format) {
+      nextTick(() => applyFormat(template.format))
+    }
+
+    if (template?.documentType) {
+      habitsStore.setSessionDocumentType(template.documentType)
+    }
+  })
+}
+
+function handleEmptyStateCreate() {
+  createNewDocument()
+}
+
+function handleEmptyStateImport() {
+  overlay.openKnowledgePanel()
+}
+
+function handleTemplateCreate(template) {
+  createNewDocument(template)
+}
+
+function openExternalDocument(payload) {
+  appStore.openDocument()
+  nextTick(async () => {
+    editorRef.value?.loadMarkdown(payload.content || '')
+    editorOutput.value = {
+      html: '',
+      json: null,
+      markdown: payload.content || '',
+    }
+    if (payload.title) {
+      appStore.setDocumentTitle(payload.title)
+    }
+    appStore.markDocumentDirty()
+
+    const sourcePath = payload.path || getDocPathFromUrl()
+    if (sourcePath) {
+      await syncDocumentSource(sourcePath)
+    }
+  })
+}
+
+useElectronFileOpen(openExternalDocument)
+
+function hasUnsavedChanges() {
+  if (!appStore.hasOpenDocument) return false
+  if (appStore.documentSaveStatus === 'unsaved' || appStore.documentSaveStatus === 'saving') {
+    return true
+  }
+
+  const tiptapEditor = editorRef.value?.getEditor?.()
+  if (tiptapEditor?.storage?.collab?.isDirty === true) {
+    return true
+  }
+
+  return false
+}
+
+function resetCloseFlow() {
+  closeCheckInProgress = false
+  closeConfirmVisible.value = false
+  closeSaveDialogVisible.value = false
+  closeFlowSaving.value = false
+}
+
+function handleWindowCloseCheck() {
+  if (closeCheckInProgress) return
+  closeCheckInProgress = true
+
+  if (!hasUnsavedChanges()) {
+    resetCloseFlow()
+    confirmWindowClose()
+    return
+  }
+
+  closeConfirmVisible.value = true
+}
+
+function handleCloseConfirmDiscard() {
+  resetCloseFlow()
+  confirmWindowClose()
+}
+
+function handleCloseConfirmCancel() {
+  resetCloseFlow()
+  cancelWindowClose()
+}
+
+function handleCloseConfirmSave() {
+  closeConfirmVisible.value = false
+  closeSaveDialogVisible.value = true
+}
+
+function handleCloseSaveDialogSaved(item) {
+  appStore.notifyDocumentSaved(item)
+  trayStore.addRecentDocument(item)
+  resetCloseFlow()
+  confirmWindowClose()
+}
+
+function handleCloseSaveDialogClose() {
+  if (closeFlowSaving.value) return
+  closeSaveDialogVisible.value = false
+  closeCheckInProgress = false
+  cancelWindowClose()
+}
+
+function handleBeforeUnload(event) {
+  if (!isElectron() && hasUnsavedChanges()) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
+useWindowCloseInterceptor(handleWindowCloseCheck)
+
+useLaunchDocument({
+  onOpen: openExternalDocument,
+  onBlank: () => createNewDocument(),
+})
+
+useGlobalShortcuts({
+  onNewDocument: () => {
+    if (isElectron()) return
+    createNewDocument()
+  },
+  onSave: openSaveDialog,
+  onToggleAiChat: () => toggleAiPanel(),
+  onOpenImageEditor: () => editorRef.value?.openImageEditor?.(),
+  getEditor: () => editorRef.value?.getEditor?.(),
+})
+
+let handledNewDocumentTick = 0
+
+function tryHandleNewDocument(tick = appStore.newDocumentTick) {
+  if (tick <= handledNewDocumentTick) return
+  handledNewDocumentTick = tick
+  createNewDocument()
+}
+
+watch(() => appStore.newDocumentTick, tryHandleNewDocument)
+
+watch(() => windowStore.focusGeneration, () => {
+  refreshDocumentSaveStatusOnFocus()
+})
+
+onMounted(() => {
+  tryHandleNewDocument()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+
+  if (windowStore.isWindowFocused) {
+    refreshDocumentSaveStatusOnFocus()
+  }
+
+  if (isElectron()) {
+    const api = getElectronAPI()
+    if (typeof api?.onAiChatToggle === 'function') {
+      unsubscribeAiChatToggle = api.onAiChatToggle(() => {
+        toggleAiPanel()
+      })
+    }
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  unsubscribeAiChatToggle?.()
+  unsubscribeAiChatToggle = null
+})
+
+function handleImageEditorApply(blob) {
+  completeImageEdit(blob)
+}
+
+function handleImageEditorCancel() {
+  closeImageEdit()
+}
+
+watch(
+  () => editorStore.imageEditSession,
+  (session) => {
+    if (session) {
+      floatingWindows.openWindow(FLOATING_WINDOW_ID.IMAGE_EDITOR)
+      return
+    }
+    if (floatingWindows.isOpen(FLOATING_WINDOW_ID.IMAGE_EDITOR)) {
+      floatingWindows.closeWindow(FLOATING_WINDOW_ID.IMAGE_EDITOR)
+    }
+  },
+)
+
+async function waitForEditorInstance(maxAttempts = 20) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const editor = editorRef.value?.getEditor?.()
+    if (editor) return editor
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return null
+}
+
+watch(
+  () => editorStore.pendingFontApply,
+  async (request) => {
+    if (!request?.fontItem) return
+
+    if (!appStore.hasOpenDocument) {
+      appStore.openDocument()
+      await nextTick()
+      editorRef.value?.loadMarkdown?.('')
+      editorOutput.value = { html: '', json: null, markdown: '' }
+    }
+
+    await nextTick()
+
+    const editor = await waitForEditorInstance()
+    if (!editor) {
+      toast.error('编辑器未就绪，无法应用字体')
+      editorStore.clearPendingFontApply()
+      return
+    }
+
+    const applied = await applyFontToEditor(editor, request.fontItem)
+    editorStore.clearPendingFontApply()
+
+    if (!applied) {
+      toast.error('应用字体失败')
+    }
+  },
+)
+</script>
+
+<template>
+  <div
+    class="editor-layout"
+    :style="{ '--knowledge-panel-width': `${KNOWLEDGE_PANEL_WIDTH}px` }"
+  >
+    <div class="editor-layout__workspace">
+      <main class="editor-layout__main">
+        <div
+          class="editor-layout__editor"
+          :class="{ 'editor-layout__editor--empty': !appStore.hasOpenDocument }"
+          @mousedown="floatingWindows.handleEditorAreaClick()"
+        >
+          <EmptyState
+            v-if="!appStore.hasOpenDocument"
+            @create="handleEmptyStateCreate"
+            @import="handleEmptyStateImport"
+            @use-template="handleTemplateCreate"
+          />
+          <EditorCore v-else ref="editorRef" @change="onEditorChange">
+            <template #toolbar-actions>
+              <button
+                type="button"
+                class="editor-layout__save-btn wpx-btn"
+                :class="{ 'editor-layout__save-btn--icon-only': isToolbarIconOnly }"
+                :title="saveTooltip"
+                :aria-label="saveTooltip"
+                @click="openSaveDialog"
+              >
+                <Save v-if="isToolbarIconOnly" :size="16" aria-hidden="true" />
+                <span v-else>保存</span>
+              </button>
+              <ExportMenu
+                :get-markdown="getMarkdown"
+                :get-format-snapshot="getFormatSnapshot"
+                :get-editor="() => editorRef.value?.getEditor?.()"
+                :get-document-title="getDefaultTitle"
+                :icon-only="isToolbarIconOnly"
+                filename="document"
+              />
+              <PackMenu
+                v-if="isElectron() && zipFeatureAvailable()"
+                :get-markdown="getMarkdown"
+                :get-document-path="() => appStore.documentSourcePath || getDocPathFromUrl()"
+                :icon-only="isToolbarIconOnly"
+                :loading="packing"
+                @pack="handlePackDocument"
+              />
+            </template>
+          </EditorCore>
+        </div>
+      </main>
+    </div>
+
+    <div class="editor-layout__overlays" aria-hidden="false">
+      <KnowledgePanel
+        :open="knowledgePanelOpen"
+        @close="closeKnowledgePanel()"
+      />
+      <KnowledgeTrigger />
+
+      <AiAssistantPlaceholder />
+
+      <Transition name="image-editor-pop">
+        <ImageEditor
+          v-if="imageEditSession"
+          :image-url="imageEditSession.src"
+          :style="{ zIndex: floatingWindows.getZIndex(FLOATING_WINDOW_ID.IMAGE_EDITOR) }"
+          @apply="handleImageEditorApply"
+          @cancel="handleImageEditorCancel"
+          @mousedown="floatingWindows.handleWindowFocus(FLOATING_WINDOW_ID.IMAGE_EDITOR)"
+        />
+      </Transition>
+    </div>
+
+    <CloseConfirmDialog
+      :visible="closeConfirmVisible"
+      :saving="closeFlowSaving"
+      @save="handleCloseConfirmSave"
+      @discard="handleCloseConfirmDiscard"
+      @cancel="handleCloseConfirmCancel"
+    />
+
+    <SaveDialog
+      :visible="closeSaveDialogVisible"
+      :content="getMarkdown()"
+      :default-title="getDefaultTitle()"
+      @close="handleCloseSaveDialogClose"
+      @saved="handleCloseSaveDialogSaved"
+    />
+  </div>
+</template>
+
+<style scoped>
+.editor-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+  background: var(--theme-bg);
+  color: var(--theme-fg);
+}
+
+.editor-layout__workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-layout__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-layout__save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--theme-fg);
+  background: var(--theme-bg);
+  cursor: pointer;
+}
+
+.editor-layout__save-btn:hover {
+  background: var(--theme-bg-muted);
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.editor-layout__save-btn--icon-only {
+  width: 28px;
+  padding: 0;
+}
+
+.editor-layout__editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 16px;
+}
+
+.editor-layout__editor--empty {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.editor-layout__editor :deep(.editor-shell) {
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-color: var(--theme-border);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.editor-layout__editor :deep(.editor-content) {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-layout__overlays {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.editor-layout__overlays > :deep(*) {
+  pointer-events: auto;
+}
+</style>

@@ -1,0 +1,404 @@
+/**
+ * E2E 认证 / 访客 / 免费额度 mock（模拟 Electron preload API + account.proclaw.cc）
+ */
+import { expect } from '@playwright/test'
+
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {{
+ *   user?: { id: string, nickname: string, avatar?: string },
+ *   tokens?: { access: string, refresh: string },
+ *   guestQuota?: { limit?: number, used?: number, remaining?: number },
+ *   quotaExhausted?: boolean,
+ *   refreshValid?: boolean,
+ *   withFonts?: boolean,
+ * }} [options]
+ */
+export async function setupAuthE2eMocks(page, options = {}) {
+  await setupAuthInitScript(page, options)
+  await setupAuthAccountRoutes(page, options)
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {Parameters<typeof setupAuthE2eMocks>[1]} [options]
+ */
+async function setupAuthInitScript(page, options = {}) {
+  const user = options.user ?? {
+    id: 'e2e-user-1',
+    nickname: 'E2E 测试用户',
+    avatar: '',
+  }
+  const tokens = options.tokens ?? {
+    access: 'e2e-access-token',
+    refresh: 'e2e-refresh-token',
+  }
+  const guestQuota = {
+    limit: options.guestQuota?.limit ?? 50,
+    used: options.guestQuota?.used ?? 0,
+    remaining:
+      options.guestQuota?.remaining ??
+      Math.max(0, (options.guestQuota?.limit ?? 50) - (options.guestQuota?.used ?? 0)),
+  }
+  const quotaExhausted = Boolean(options.quotaExhausted)
+
+  await page.addInitScript(
+    ({ user, tokens, guestQuota, quotaExhausted, withFonts }) => {
+      /** @type {{ token: string, refreshToken: string } | null} */
+      let storedCredentials = null
+      const storageKey = 'wpx-e2e-auth-credentials'
+
+      try {
+        const raw = sessionStorage.getItem(storageKey)
+        if (raw) {
+          storedCredentials = JSON.parse(raw)
+        }
+      } catch {
+        storedCredentials = null
+      }
+
+      function persistCredentials() {
+        if (!storedCredentials) {
+          sessionStorage.removeItem(storageKey)
+          return
+        }
+        sessionStorage.setItem(storageKey, JSON.stringify(storedCredentials))
+      }
+
+      window.__WPX_E2E_AUTH__ = {
+        user,
+        tokens,
+        loginState: '',
+        loginUrl: '',
+      }
+
+      function buildGuestSubjectKey() {
+        let deviceId = localStorage.getItem('wpx-device-id') || ''
+        if (!deviceId) {
+          deviceId = crypto.randomUUID()
+          localStorage.setItem('wpx-device-id', deviceId)
+        }
+        return `guest:${deviceId}`
+      }
+
+      function readGuestUsage() {
+        const key = 'wpx-free-quota-web'
+        const subjectKey = buildGuestSubjectKey()
+        try {
+          const raw = localStorage.getItem(key)
+          const parsed = raw ? JSON.parse(raw) : {}
+          const row = parsed[subjectKey]
+          const today = new Date().toISOString().slice(0, 10)
+          if (!row || row.date !== today) return 0
+          return Number(row.count) || 0
+        } catch {
+          return 0
+        }
+      }
+
+      function writeGuestUsage(count) {
+        const key = 'wpx-free-quota-web'
+        const subjectKey = buildGuestSubjectKey()
+        const today = new Date().toISOString().slice(0, 10)
+        try {
+          const raw = localStorage.getItem(key)
+          const parsed = raw ? JSON.parse(raw) : {}
+          parsed[subjectKey] = { date: today, count }
+          localStorage.setItem(key, JSON.stringify(parsed))
+        } catch {
+          // ignore
+        }
+      }
+
+      const baseApi = window.electronAPI || {}
+
+      window.electronAPI = {
+        ...baseApi,
+        processType: 'renderer',
+        platform: 'win32',
+        localServer: {
+          getBaseUrl: () => Promise.resolve(window.location.origin),
+          ...(baseApi.localServer || {}),
+        },
+        auth: {
+          getToken: async () =>
+            storedCredentials
+              ? {
+                  token: storedCredentials.token,
+                  refreshToken: storedCredentials.refreshToken,
+                }
+              : { token: '', refreshToken: '' },
+          storeToken: async (payload) => {
+            storedCredentials = {
+              token: String(payload?.token || '').trim(),
+              refreshToken: String(payload?.refreshToken || '').trim(),
+            }
+            persistCredentials()
+            return { ok: true }
+          },
+          clearToken: async () => {
+            storedCredentials = null
+            persistCredentials()
+            return { ok: true }
+          },
+          startLogin: async ({ state }) => {
+            const loginState = String(state || '').trim()
+            window.__WPX_E2E_AUTH__.loginState = loginState
+            window.__WPX_E2E_AUTH__.loginUrl = `https://account.proclaw.cc/login?state=${encodeURIComponent(loginState)}`
+            return { ok: true, url: window.__WPX_E2E_AUTH__.loginUrl }
+          },
+          onCallback: (callback) => {
+            window.__WPX_E2E_AUTH_CALLBACK__ = callback
+            return () => {
+              window.__WPX_E2E_AUTH_CALLBACK__ = null
+            }
+          },
+        },
+        freeQuota: {
+          getStatus: async () => {
+            const used = quotaExhausted ? guestQuota.limit : readGuestUsage()
+            const remaining = Math.max(0, guestQuota.limit - used)
+            return {
+              ok: true,
+              isGuest: true,
+              limit: guestQuota.limit,
+              used,
+              remaining,
+              subjectKey: buildGuestSubjectKey(),
+            }
+          },
+          consume: async () => {
+            const used = readGuestUsage()
+            if (quotaExhausted || used >= guestQuota.limit) {
+              return {
+                ok: false,
+                code: 'FREE_QUOTA_EXHAUSTED',
+                isGuest: true,
+                limit: guestQuota.limit,
+                used,
+                remaining: 0,
+              }
+            }
+            const nextUsed = used + 1
+            writeGuestUsage(nextUsed)
+            return {
+              ok: true,
+              isGuest: true,
+              limit: guestQuota.limit,
+              used: nextUsed,
+              remaining: Math.max(0, guestQuota.limit - nextUsed),
+            }
+          },
+          resetDeviceId: async () => {
+            const oldDeviceId = localStorage.getItem('wpx-device-id') || ''
+            const newDeviceId = crypto.randomUUID()
+            if (oldDeviceId) {
+              try {
+                const raw = localStorage.getItem('wpx-free-quota-web')
+                const parsed = raw ? JSON.parse(raw) : {}
+                delete parsed[`guest:${oldDeviceId}`]
+                localStorage.setItem('wpx-free-quota-web', JSON.stringify(parsed))
+              } catch {
+                // ignore
+              }
+            }
+            localStorage.setItem('wpx-device-id', newDeviceId)
+            return { ok: true, deviceId: newDeviceId, previousDeviceId: oldDeviceId || null }
+          },
+        },
+        models: {
+          ...(baseApi.models || {}),
+          testConnection: async () => ({
+            ok: true,
+            message: '连接成功，模型服务可用',
+          }),
+        },
+      }
+
+      if (withFonts && !window.electronAPI.fonts) {
+        window.electronAPI.fonts = {
+          getAll: async () => ({ ok: true, fonts: [] }),
+          getCommercialList: async () => ({
+            ok: true,
+            fonts: [
+              {
+                id: 'founder-lanting-hei',
+                name: '方正兰亭黑',
+                category: '黑体',
+                vendor: '方正字库',
+                price_per_char: 1,
+              },
+            ],
+          }),
+          getPreferences: async () => ({ ok: true, disabledFontIds: [] }),
+          decryptPreview: async ({ fontId }) => ({
+            ok: true,
+            tempPath: `C:/WPX/temp/${fontId}.ttf`,
+          }),
+        }
+      }
+    },
+    { user, tokens, guestQuota, quotaExhausted, withFonts: Boolean(options.withFonts) },
+  )
+}
+
+/**
+ * 须在 setupE2eMocks 之后调用，避免被 `/api/**` 兜底路由覆盖。
+ * @param {import('@playwright/test').Page} page
+ * @param {Parameters<typeof setupAuthE2eMocks>[1]} [options]
+ */
+export async function setupAuthAccountRoutes(page, options = {}) {
+  const user = options.user ?? {
+    id: 'e2e-user-1',
+    nickname: 'E2E 测试用户',
+    avatar: '',
+  }
+  const tokens = options.tokens ?? {
+    access: 'e2e-access-token',
+    refresh: 'e2e-refresh-token',
+  }
+  const guestQuota = {
+    limit: options.guestQuota?.limit ?? 50,
+    used: options.guestQuota?.used ?? 0,
+    remaining:
+      options.guestQuota?.remaining ??
+      Math.max(0, (options.guestQuota?.limit ?? 50) - (options.guestQuota?.used ?? 0)),
+  }
+  const quotaExhausted = Boolean(options.quotaExhausted)
+  const refreshValid = options.refreshValid !== false
+
+  await page.route('**/account.proclaw.cc/**', async (route) => {
+    const url = route.request().url()
+    const method = route.request().method()
+
+    if (url.includes('/api/user/profile')) {
+      const authHeader = route.request().headers().authorization || ''
+      if (!authHeader.includes(tokens.access)) {
+        await route.fulfill({ status: 401, body: '{}' })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user }),
+      })
+      return
+    }
+
+    if (url.includes('/api/auth/refresh')) {
+      if (!refreshValid) {
+        await route.fulfill({ status: 401, contentType: 'application/json', body: '{}' })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          token: tokens.access,
+          refresh_token: tokens.refresh,
+        }),
+      })
+      return
+    }
+
+    if (url.includes('/api/auth/logout') && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    })
+  })
+
+  await page.route('**/ai.proclaw.cc/api/free/quota', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        limit: guestQuota.limit,
+        remaining: quotaExhausted ? 0 : guestQuota.remaining,
+        used: quotaExhausted ? guestQuota.limit : guestQuota.used,
+      }),
+    })
+  })
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ */
+export async function getSimulatedLoginUrl(page) {
+  return page.evaluate(() => window.__WPX_E2E_AUTH__?.loginUrl || '')
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ */
+export async function simulateAuthCallback(page) {
+  await page.evaluate(async () => {
+    const auth = window.__WPX_E2E_AUTH__
+    const callback = window.__WPX_E2E_AUTH_CALLBACK__
+    if (!auth || !callback || !auth.loginState) {
+      throw new Error('登录回调未就绪')
+    }
+
+    await callback({
+      state: auth.loginState,
+      token: auth.tokens.access,
+      refreshToken: auth.tokens.refresh,
+    })
+  })
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ */
+export async function clickTitleBarLogin(page) {
+  await page.locator('.title-bar').getByRole('button', { name: '登录', exact: true }).click()
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {{ nickname?: string }} [options]
+ */
+export async function loginThroughTitleBar(page, options = {}) {
+  const nickname = options.nickname ?? 'E2E 测试用户'
+
+  await clickTitleBarLogin(page)
+  await page.waitForFunction(() => Boolean(window.__WPX_E2E_AUTH__?.loginUrl))
+  await simulateAuthCallback(page)
+
+  await expectTitleBarLoggedIn(page, nickname)
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {string} nickname
+ */
+export async function expectTitleBarLoggedIn(page, nickname) {
+  await expect(page.getByRole('button', { name: `${nickname} 账户菜单` })).toBeVisible({
+    timeout: 15_000,
+  })
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ */
+export async function logoutThroughTitleBar(page) {
+  const userMenuButton = page.getByRole('button', { name: /账户菜单$/ })
+  await userMenuButton.click()
+  const logoutItem = page.getByRole('menuitem', { name: '退出登录' })
+  await expect(logoutItem).toBeVisible()
+  await logoutItem.click()
+  await expect(page.locator('.title-bar').getByRole('button', { name: '登录', exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+}

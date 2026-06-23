@@ -1,0 +1,43 @@
+# Dependencies & build output
+node_modules/
+wpx-app/node_modules/
+wpx-app/dist/
+release/
+release-build/
+
+# Logs & temp
+*.log
+build*.log
+build.err
+smoke-result.json
+test-write.txt
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Built-in fonts (large binaries — see README.md)
+resources/fonts/**/*.ttf
+resources/fonts/**/*.otf
+resources/fonts/**/*.woff
+resources/fonts/**/*.woff2
+resources/fonts/**/*.ttc
+resources/fonts/**/*.eot
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+
+# Test / storybook artifacts
+wpx-app/playwright-report/
+wpx-app/coverage/
+wpx-app/storybook-static/
+wpx-app/src/server/data/
+
+# Local screenshots (debug)
+step*.png
+browser_screenshot_*.png

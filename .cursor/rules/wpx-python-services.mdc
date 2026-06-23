@@ -1,0 +1,35 @@
+---
+description: WPX Python FastAPI 本地微服务约定
+globs: wpx-app/src/server/**/*.py
+alwaysApply: false
+---
+
+# Python 微服务约定
+
+## 服务列表
+
+| 文件 | 端口 env | 默认 |
+|------|----------|------|
+| `knowledge-service.py` | `KNOWLEDGE_SERVICE_PORT` | 3003 |
+| `library-service.py` | `LIBRARY_SERVICE_PORT` | 3004 |
+| `remove-bg-service.py` | `REMOVE_BG_SERVICE_PORT` | 3002 |
+
+## 框架
+
+- FastAPI + uvicorn，`if __name__ == "__main__"` 启动
+- 健康检查路由：`/api/<service>/health`（与 Vite proxy 前缀一致）
+
+## 依赖
+
+- `requirements.txt` 在 `wpx-app/src/server/`
+- 可选 embedding：`KNOWLEDGE_USE_SENTENCE_TRANSFORMERS=1` + torch
+
+## 约定
+
+- 端口从环境变量读取，打印启动日志含 `http://localhost:{PORT}`
+- 大文件/图片用 `python-multipart`
+- 错误返回 JSON，`detail` 字段含可读信息
+
+## 验收脚本
+
+- `wpx-app/scripts/acceptance-knowledge.py` 等可作 API 冒烟测试参考

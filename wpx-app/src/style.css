@@ -1,0 +1,149 @@
+@config "../tailwind.config.js";
+
+@import 'tailwindcss';
+@import './styles/theme.css';
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@theme {
+  --color-bg: var(--theme-bg);
+  --color-bg-subtle: var(--theme-bg-subtle);
+  --color-bg-muted: var(--theme-bg-muted);
+  --color-fg: var(--theme-fg);
+  --color-fg-muted: var(--theme-fg-muted);
+  --color-fg-subtle: var(--theme-fg-subtle);
+  --color-accent: var(--theme-accent);
+  --color-accent-hover: var(--theme-accent-hover);
+  --color-accent-muted: var(--theme-accent-muted);
+  --color-border: var(--theme-border);
+  --color-surface: var(--theme-surface);
+
+  --font-sans: var(--theme-font-sans);
+  --font-mono: var(--theme-font-mono);
+
+  --radius-sm: var(--theme-radius-sm);
+  --radius-md: var(--theme-radius-md);
+  --radius-lg: var(--theme-radius-lg);
+  --radius-xl: var(--theme-radius-xl);
+
+  --shadow-sm: var(--theme-shadow-sm);
+  --shadow-md: var(--theme-shadow-md);
+  --shadow-lg: var(--theme-shadow-lg);
+
+  --animate-save-blink: save-blink 1s ease-in-out infinite;
+  --animate-ai-ring: ai-ring-spin 2s linear infinite;
+}
+
+@keyframes save-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes ai-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-shadow {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 12px rgba(15, 23, 42, 0.15),
+      0 0 0 0 color-mix(in srgb, var(--theme-accent) 0%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 6px 20px rgba(15, 23, 42, 0.2),
+      0 0 0 6px color-mix(in srgb, var(--theme-accent) 22%, transparent);
+  }
+}
+
+html,
+body,
+#app {
+  min-width: 900px;
+  min-height: 600px;
+}
+
+@layer components {
+  .wpx-input {
+    @apply border border-border bg-bg text-fg outline-none;
+    @apply transition-[border-color,box-shadow] duration-200 ease-out;
+    @apply focus:border-accent focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--theme-accent)_12%,transparent)];
+    @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+    @apply motion-reduce:transition-none;
+  }
+
+  .wpx-btn {
+    @apply transition-all duration-200 ease-out;
+    @apply enabled:hover:-translate-y-px enabled:hover:shadow-md;
+    @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+    @apply motion-reduce:transform-none motion-reduce:transition-none;
+  }
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+html {
+  font-family: var(--theme-font-sans);
+  background-color: var(--theme-bg);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+body {
+  margin: 0;
+  font-family: var(--theme-font-sans);
+  background-color: var(--theme-bg);
+  color: var(--theme-fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+#app {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body,
+  #app {
+    transition: none;
+  }
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--theme-font-mono);
+}
+
+:root {
+  --z-knowledge-trigger: 30;
+  --z-knowledge-backdrop: 40;
+  --z-knowledge-panel: 50;
+  --z-ai-avatar: 1000;
+  --z-ai-chat: 1001;
+  --z-image-editor: 1002;
+  --z-toast: 1050;
+  --z-modal: 1100;
+}

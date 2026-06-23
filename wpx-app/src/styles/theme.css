@@ -1,0 +1,85 @@
+/**
+ * WPX 双主题设计令牌
+ * 浅色默认；深色通过 [data-theme="dark"] 或 prefers-color-scheme 生效
+ */
+
+/* ── 浅色主题 ── */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* 颜色 */
+  --theme-bg: #ffffff;
+  --theme-bg-subtle: #f8fafc;
+  --theme-bg-muted: #f1f5f9;
+  --theme-fg: #1a1a1a;
+  --theme-fg-muted: #475569;
+  --theme-fg-subtle: #64748b;
+  --theme-accent: #7c3aed;
+  --theme-accent-hover: #6d28d9;
+  --theme-accent-muted: #ede9fe;
+  --theme-border: #e2e8f0;
+  --theme-surface: #ffffff;
+
+  /* 阴影 */
+  --theme-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --theme-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.1);
+  --theme-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.14);
+
+  /* 圆角 */
+  --theme-radius-sm: 6px;
+  --theme-radius-md: 10px;
+  --theme-radius-lg: 16px;
+  --theme-radius-xl: 20px;
+
+  /* 字体 */
+  --theme-font-sans: Inter, system-ui, sans-serif;
+  --theme-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* 编辑器正文字号（通用设置可覆盖） */
+  --wpx-editor-base-font-size: 16px;
+}
+
+/* ── 深色主题 ── */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --theme-bg: #1e1e1e;
+  --theme-bg-subtle: #252525;
+  --theme-bg-muted: #2d2d2d;
+  --theme-fg: #e0e0e0;
+  --theme-fg-muted: #a3a3a3;
+  --theme-fg-subtle: #737373;
+  --theme-accent: #3b82f6;
+  --theme-accent-hover: #60a5fa;
+  --theme-accent-muted: #1e3a5f;
+  --theme-border: #404040;
+  --theme-surface: #252525;
+
+  --theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --theme-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --theme-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* 跟随系统：JS 未加载前的兜底（默认 system） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --theme-bg: #1e1e1e;
+    --theme-bg-subtle: #252525;
+    --theme-bg-muted: #2d2d2d;
+    --theme-fg: #e0e0e0;
+    --theme-fg-muted: #a3a3a3;
+    --theme-fg-subtle: #737373;
+    --theme-accent: #3b82f6;
+    --theme-accent-hover: #60a5fa;
+    --theme-accent-muted: #1e3a5f;
+    --theme-border: #404040;
+    --theme-surface: #252525;
+
+    --theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --theme-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --theme-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}

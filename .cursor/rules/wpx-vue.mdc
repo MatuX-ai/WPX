@@ -1,0 +1,38 @@
+---
+description: WPX Vue 3 前端组件与 composable 约定
+globs: wpx-app/src/**/*.{vue,js,ts}
+alwaysApply: false
+---
+
+# Vue 前端约定
+
+## 组件组织
+
+- `components/editor/` — TipTap 编辑器与扩展
+- `components/ai/` — AI 头像、对话窗、浮动窗
+- `components/layout/` — 页面布局与占位
+- `composables/` — 可复用逻辑（如 `useFloatingWindowState`）
+
+## TipTap
+
+- 编辑器实例生命周期由 `EditorCore` 管理；测试结束须 `destroy()`
+- 表格、图片等通过 TipTap extension + 自定义 Vue node view
+
+## 状态
+
+- 全局 UI 状态用 Pinia；多窗口间不共享 store（每窗口独立实例）
+- 浮动窗 visible/pinned/zIndex 通过 computed 解包后传子组件
+
+## 样式
+
+- Tailwind 4 + 项目 UI 规范（见 `docs/WPX桌面端 UIUX 设计规范 V1.0.md`）
+- 避免内联硬编码色值，优先 design token / Tailwind class
+
+## 第三方包
+
+- `vue3-draggable-resizable` 经 `src/shims/` ESM shim 引入；改 alias 时勿破坏 CSS 子路径导入
+
+## 测试
+
+- 组件测试放同目录 `__tests__/*.spec.js`
+- mock Pinia、AI API；TipTap 用 jsdom + setup polyfill

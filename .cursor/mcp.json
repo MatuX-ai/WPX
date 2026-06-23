@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "wpx-dev": {
+      "command": "node",
+      "args": [".cursor/mcp/wpx-dev-server.mjs"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--isolated",
+        "--allowed-origins=http://localhost:5173;http://127.0.0.1:5173"
+      ]
+    }
+  }
+}
