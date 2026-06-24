@@ -1,0 +1,42 @@
+# WPX · Vercel 部署忽略规则
+# 用于在 Vercel 构建时跳过与前端无关的子项目，避免无谓的 npm install 和上传体积
+
+# Electron 桌面端（与 Vercel 无关）
+electron/
+electron/**/*
+wpx-app/
+wpx-app/**/*
+
+# Express 后端（部署到 Render/Railway，不上 Vercel）
+server/
+server/**/*
+
+# 打包产物 / 资源
+release/
+resources/
+
+# Vercel 不需要 Electron 依赖
+package.json
+package-lock.json
+
+# Vite/Vitest 缓存
+.vite/
+*.tsbuildinfo
+
+# 测试报告
+playwright-report/
+test-results/
+coverage/
+
+# 编辑器 / 系统文件
+.DS_Store
+Thumbs.db
+*.log
+build-*.log
+smoke-result.json
+plan.md
+test-write.txt
+
+# Storybook / E2E 临时产物
+wpx-app/storybook-static/
+wpx-app/tex2pdf.*/
