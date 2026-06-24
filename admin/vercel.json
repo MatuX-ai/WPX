@@ -8,7 +8,6 @@
   "framework": "vite",
   "cleanUrls": true,
   "trailingSlash": false,
-  "//": "部署到 https://prowpx.com/admin（SPA base=/admin/）；Vercel 项目名 wpx-admin-prowpx",
 
   "headers": [
     {
