@@ -1,12 +1,14 @@
 # WPX · Vercel 部署忽略规则
 # 用于在 Vercel 构建时跳过与前端无关的子项目，避免无谓的 npm install 和上传体积
 #
-# 重要：build-frontend.js 会把 landing + admin 的 dist 产物直接复制到项目根，
-#       所以这里要把源码目录也排除，避免重复上传 + 干扰 Vercel 部署源识别
+# 重要：landing/src/ 和 admin/src/ 不能排除！Vite 需要它们进行构建，
+#       index.html 引用了 src/entry-client.js / src/main.js 作为入口。
+#       构建产物的项目根文件（index.html, assets/, wp-admin/, api/proxy.js）
+#       由 build-frontend.js 从 landing/dist/ + admin/dist/ + admin/api/proxy.js 合并而来。
 #
 # ⚠️ 必须保留的构建依赖文件（不能整目录排除）：
-#   - landing/package.json, vite.config.js, tailwind.config.js, postcss.config.js
-#   - admin/package.json, vite.config.js, tailwind.config.js, postcss.config.js, api/proxy.js
+#   - landing/package.json, index.html, vite.config.js, tailwind.config.js, postcss.config.js
+#   - admin/package.json, index.html, vite.config.js, tailwind.config.js, postcss.config.js, api/proxy.js
 #   - scripts/build-frontend.js
 #   缺少任何一个都会导致 installCommand / buildCommand 失败。
 
@@ -14,15 +16,15 @@
 /package.json
 /package-lock.json
 
-# === landing 子项目：排除源码和 IDE/文档，保留构建配置 ===
-landing/src/**
+# === landing 子项目：排除 IDE/文档/配置文件，保留 src/（Vite 构建需要） ===
+# 注：landing/src/ 必须保留，因为 vite.config.js 和 index.html 都引用 src/ 下的文件
+#     landing/public/ 排除可接受（Vite 对缺失 public/ 仅告警不报错）
 landing/.vscode/**
 /landing/.env.production.example
 landing/public/**
 /landing/README.md
 
-# === admin 子项目：排除源码、Cloudflare Functions、IDE/文档，保留构建配置 ===
-admin/src/**
+# === admin 子项目：排除 IDE/文档/CF Functions/配置文件，保留 src/（Vite 构建需要） ===
 admin/.vscode/**
 /admin/.env.example
 /admin/ADMIN_INIT.md
