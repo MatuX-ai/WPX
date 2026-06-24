@@ -32,9 +32,12 @@ const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   // 公开外网域名（用于生成绝对 URL / 跨域）
   publicHost: process.env.PUBLIC_HOST || `http://localhost:${int(process.env.PORT, 3000)}`,
-  apiDomain: process.env.API_DOMAIN || 'api.proclaw.cc',
-  // CDN 前缀（如 https://cdn.proclaw.cc），可空
+  // API 网关主域名（用于日志/响应头标识）
+  apiDomain: process.env.API_DOMAIN || 'api.prowpx.com',
+  // CDN 前缀（如 https://cdn.prowpx.com），可空
   cdnBase: (process.env.CDN_BASE || '').replace(/\/$/, ''),
+  // 邮件中链接的公共 Web URL（用于生成验证 / 重置链接）
+  publicWebBase: process.env.PUBLIC_WEB_BASE || 'https://prowpx.com',
   // 信任的反向代理跳数（默认 1，配合 Nginx / Aliyun SLB）
   trustProxyHops: int(process.env.TRUST_PROXY_HOPS, 1),
 
@@ -69,10 +72,22 @@ const config = {
   auth: {
     secret: process.env.ACCOUNT_JWT_SECRET || '',
     algorithm: process.env.ACCOUNT_JWT_ALG || 'HS256',
-    issuer: process.env.ACCOUNT_JWT_ISSUER || 'account.proclaw.cc',
+    // prowpx.com 自托管邮箱认证签发的 JWT
+    issuer: process.env.ACCOUNT_JWT_ISSUER || 'prowpx.com',
     audience: process.env.ACCOUNT_JWT_AUDIENCE || 'wpx-server',
+    accessTokenTtl: process.env.ACCOUNT_ACCESS_TOKEN_TTL || '2h',
+    refreshTokenTtl: process.env.ACCOUNT_REFRESH_TOKEN_TTL || '30d',
     bypass: bool(process.env.AUTH_BYPASS, false),
     bypassRoles: list(process.env.AUTH_BYPASS_ROLES, ['dev'])
+  },
+
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: int(process.env.SMTP_PORT, 587),
+    secure: bool(process.env.SMTP_SECURE, false),
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'WPX <noreply@prowpx.com>'
   }
 };
 

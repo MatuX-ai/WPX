@@ -282,6 +282,20 @@ function retrySkillCall({ skillId, params }) {
   retrySkill(skillId, params)
 }
 
+/**
+ * 接收来自 AiChatWindow 的 PPT 工作流最后一页插入请求，
+ * 将幻灯片数据转发到 editorStore，EditorLayout 会监听并实际插入。
+ * @param {{ slides: Array, theme?: 'light'|'dark', title?: string }} payload
+ */
+function handleInsertSlideDeck(payload) {
+  if (!payload || !Array.isArray(payload.slides) || payload.slides.length === 0) return
+  editorStore.requestSlideDeckInsert({
+    slides: payload.slides,
+    theme: payload.theme === 'dark' ? 'dark' : 'light',
+    title: payload.title || '',
+  })
+}
+
 function handleClose() {
   aiChat.close()
   editorStore.setChatInputActive(false)
@@ -360,6 +374,7 @@ watch(
     @input-blur="handleInputBlur"
     @onboarding-complete="handleOnboardingComplete"
     @regenerate="retrySkillCall"
+    @insert-slide-deck="handleInsertSlideDeck"
   />
 
   <AiAvatar

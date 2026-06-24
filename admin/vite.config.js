@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
       port: 4175
     },
 
+    // 管理后台统一挂在 prowpx.com/admin 路径下，构建时所有静态资源走 /admin/
+    base: '/admin/',
+
     build: {
       outDir: 'dist',
       emptyOutDir: true,
@@ -55,8 +58,9 @@ export default defineConfig(({ mode }) => {
       __APP_INFO__: JSON.stringify({
         title: env.VITE_APP_TITLE || 'WPX 管理后台',
         shortName: env.VITE_APP_SHORT_NAME || 'WPX Admin',
-        accountBaseUrl: env.VITE_ACCOUNT_BASE_URL || 'https://account.proclaw.cc',
-        apiBaseUrl: env.VITE_API_BASE_URL || 'https://api.proclaw.cc/admin',
+        // WPX 自托管邮箱认证，主域名 prowpx.com
+        accountBaseUrl: env.VITE_ACCOUNT_BASE_URL || 'https://prowpx.com',
+        apiBaseUrl: env.VITE_API_BASE_URL || 'https://api.prowpx.com/admin',
         themeColor: env.VITE_THEME_COLOR || '#4F46E5'
       })
     }

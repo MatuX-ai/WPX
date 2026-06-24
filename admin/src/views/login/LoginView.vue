@@ -51,7 +51,7 @@
 
         <h2 class="text-2xl font-bold text-gray-900">登录管理后台</h2>
         <p class="text-sm text-gray-500 mt-1 mb-6">
-          使用 account.proclaw.cc 账号登录
+          使用 WPX 邮箱账号登录（自托管认证）
         </p>
 
         <form
@@ -67,7 +67,7 @@
               type="email"
               autocomplete="username"
               required
-              placeholder="admin@proclaw.cc"
+              placeholder="admin@prowpx.com"
               class="wpx-input"
             >
           </div>
@@ -106,13 +106,13 @@
           <p class="text-xs text-gray-400 text-center pt-2">
             登录即代表同意
             <a
-              href="https://proclaw.cc/terms"
+              href="https://prowpx.com/terms"
               target="_blank"
               class="text-primary-600 hover:underline"
             >服务条款</a>
             与
             <a
-              href="https://proclaw.cc/privacy"
+              href="https://prowpx.com/privacy"
               target="_blank"
               class="text-primary-600 hover:underline"
             >隐私政策</a>

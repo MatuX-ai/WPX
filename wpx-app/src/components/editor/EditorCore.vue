@@ -20,6 +20,7 @@ import {
   Italic,
   Link2,
   Minus,
+  Presentation,
   Redo2,
   Search,
   Table2,
@@ -44,6 +45,7 @@ import {
 } from '@/utils/editorFindReplace'
 import { EditorImage } from '@/extensions/EditorImage'
 import { FontFamily, FontSize, LineHeight } from '@/extensions/DocumentFormat'
+import { SlideDeckNode } from '@/extensions/SlideDeckNode'
 import TableInsertDialog from '@/components/editor/TableInsertDialog.vue'
 import TableBubbleMenu from '@/components/editor/TableBubbleMenu.vue'
 import ImageBubbleMenu from '@/components/editor/ImageBubbleMenu.vue'
@@ -186,6 +188,7 @@ const editor = useEditor({
     TableRow,
     TableHeader,
     TableCell,
+    SlideDeckNode,
   ],
   editorProps: {
     attributes: {
@@ -449,6 +452,21 @@ function openTableDialog() {
   showTableDialog.value = true
 }
 
+/**
+ * 在当前光标位置插入一个 SlideDeck 节点。
+ * 该命令由 SlideDeckNode 扩展通过 addCommands 注册。
+ */
+function insertSlideDeck() {
+  const currentEditor = editor.value
+  if (!currentEditor) return
+  const ok = currentEditor.chain().focus().insertSlideDeck().run()
+  if (ok) {
+    toast.success('已插入演示文稿节点')
+  } else {
+    toast.error('插入失败')
+  }
+}
+
 function closeContextMenu() {
   contextMenu.value.open = false
 }
@@ -593,6 +611,15 @@ const toolbarItems = computed(() => {
       active: false,
       disabled: false,
       action: openImageUrlDialog,
+    },
+    {
+      key: 'insertSlideDeck',
+      icon: Presentation,
+      title: '插入演示文稿',
+      ariaLabel: '插入演示文稿',
+      active: false,
+      disabled: false,
+      action: insertSlideDeck,
     },
     {
       key: 'horizontalRule',

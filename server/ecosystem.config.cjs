@@ -54,7 +54,7 @@ module.exports = {
   deploy: {
     production: {
       user: 'deploy',
-      host: 'api.proclaw.cc',
+      host: 'api.prowpx.com',
       ref: 'origin/main',
       repo: 'git@github.com:proclaw-team/wpx.git',
       path: '/var/www/wpx-server',

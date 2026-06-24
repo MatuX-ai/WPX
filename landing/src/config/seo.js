@@ -28,8 +28,8 @@ export const siteConfig = {
   ],
   author: 'WPX Team',
   // 默认站点 URL：构建时会被 env.VITE_SITE_URL 覆盖
-  // 生产部署：wpx.proclaw.cc；本地开发：localhost:5174
-  url: 'https://wpx.proclaw.cc',
+  // 生产部署：prowpx.com；本地开发：localhost:5174
+  url: 'https://prowpx.com',
   // OG 图片：使用 SVG（矢量，体积小，所有平台支持）
   ogImage: '/og-image.svg',
   ogImagePng: '/og-image.svg', // 兼容旧客户端

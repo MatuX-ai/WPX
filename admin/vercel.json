@@ -1,13 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "name": "wpx-admin",
+  "name": "wpx-admin-prowpx",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
   "cleanUrls": true,
   "trailingSlash": false,
+  "//": "部署到 https://prowpx.com/admin（SPA base=/admin/）；Vercel 项目名 wpx-admin-prowpx",
 
   "headers": [
     {
@@ -28,7 +29,8 @@
   ],
 
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/admin/api/(.*)", "destination": "/api/proxy?path=$1" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/(.*)", "destination": "/index.html" }
   ]
 }

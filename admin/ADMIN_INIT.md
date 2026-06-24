@@ -2,13 +2,13 @@
 
 ## 概述
 
-WPX 管理后台的账号体系与普通用户账号**完全隔离**。普通用户登录走 `account.proclaw.cc`，管理员账号在 WPX 后端数据库中独立管理。
+WPX 管理后台的账号体系与普通用户账号**完全隔离**。普通用户登录走 `https://prowpx.com/api/auth/*`（自托管邮箱+密码），管理员账号在 WPX 后端数据库中独立管理。
 
 ## 初始超级管理员
 
 | 字段 | 值 |
 |------|-----|
-| **邮箱** | `super@proclaw.cc` |
+| **邮箱** | `super@prowpx.com` |
 | **角色** | `super_admin`（超级管理员） |
 | **状态** | `active`（启用） |
 | **初始密码** | `Wpx@2026!Init` |
@@ -28,7 +28,7 @@ WPX 管理后台的账号体系与普通用户账号**完全隔离**。普通用
 INSERT INTO admins (id, email, name, password_hash, role, status, created_at, updated_at)
 VALUES (
   'admin-001',
-  'super@proclaw.cc',
+  'super@prowpx.com',
   '超级管理员',
   '$2b$10$REPLACE_WITH_BCRYPT_HASH',
   'super_admin',
@@ -47,11 +47,11 @@ SET password_hash = EXCLUDED.password_hash,
 ## 通过 API 创建（如后端提供 admin 接口）
 
 ```bash
-curl -X POST https://api.proclaw.cc/admin/admins \
+curl -X POST https://api.prowpx.com/admin/admins \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <bootstrap-token>" \
   -d '{
-    "email": "super@proclaw.cc",
+    "email": "super@prowpx.com",
     "name": "超级管理员",
     "role": "super_admin",
     "password": "Wpx@2026!Init"

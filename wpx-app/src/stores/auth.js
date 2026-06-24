@@ -2,7 +2,9 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 
-const ACCOUNT_BASE_URL = 'https://account.proclaw.cc'
+// WPX 自托管认证：统一走主域名 https://prowpx.com
+// 旧版 account.proclaw.cc 已下线，所有认证接口由本项目后端提供
+const ACCOUNT_BASE_URL = 'https://prowpx.com'
 const WEB_CREDENTIALS_KEY = 'wpx-auth-credentials-web'
 const AUTH_FETCH_TIMEOUT_MS = 8000
 
@@ -134,7 +136,7 @@ async function fetchUserProfile(token) {
   const value = String(token || '').trim()
   if (!value) return null
 
-  const response = await fetchWithTimeout(`${ACCOUNT_BASE_URL}/api/user/profile`, {
+  const response = await fetchWithTimeout(`${ACCOUNT_BASE_URL}/api/auth/me`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${value}`,

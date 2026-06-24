@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { hasPermission } from '@/utils/roles'
 
+// 管理后台统一挂在 prowpx.com/admin 下，路由使用 vite base 注入的 /admin/
+// 这样所有内部路由（/dashboard /users 等）实际呈现为 /admin/dashboard /admin/users
+const ROUTER_BASE = import.meta.env.BASE_URL || '/admin/'
+
 // ============ 路由表 ============
 const routes = [
   {
@@ -204,7 +208,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(ROUTER_BASE),
   routes,
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) return savedPosition

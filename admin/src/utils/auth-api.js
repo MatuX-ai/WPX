@@ -1,11 +1,15 @@
 /**
- * account.proclaw.cc 认证 API
+ * WPX 自托管邮箱认证 API（prowpx.com）
  *
- * 接口约定（与 account 服务对齐；如服务端字段不同，请在 .env 中调整）：
- *  - POST /api/auth/login        { email, password }  -> { code, data: { token, user } }
- *  - POST /api/auth/logout                                -> { code: 0 }
- *  - GET  /api/auth/me                                   -> { code, data: user }
- *  - POST /api/auth/refresh                               -> { code, data: { token } }
+ * 接口约定（与本项目后端 server/controllers/auth.controller.js 对齐）：
+ *  - POST /api/auth/register          { email, password, nickname? }  -> { token, refreshToken, user }
+ *  - POST /api/auth/login             { email, password }            -> { token, refreshToken, user }
+ *  - POST /api/auth/refresh                                       -> { token, refreshToken }
+ *  - POST /api/auth/logout                                          -> { ok: true }
+ *  - POST /api/auth/forgot-password    { email }                    -> { ok: true }
+ *  - POST /api/auth/reset-password     { token, password }          -> { ok: true }
+ *  - GET  /api/auth/verify-email?token=...                          -> { ok: true }
+ *  - GET  /api/auth/me                                             -> { user, profile }
  *
  * 失败容错：当后端暂时不可用时，本模块抛出包含可读 message 的 Error，
  * 由调用方（auth store / 登录页）决定如何提示管理员。

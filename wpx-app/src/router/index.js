@@ -64,6 +64,27 @@ const router = createRouter({
           component: () => import('@/layouts/EditorLayout.vue'),
           meta: { title: '文档' },
         },
+        // ===== 应用内嵌认证配套页面（Web 端） =====
+        // 邮件中的验证链接 / 重置链接会落到这里。
+        // 客户端路由走 hash 模式时也会被这些 path 匹配，但 Web 端是主要场景。
+        {
+          path: 'auth/verify-email',
+          name: 'auth-verify-email',
+          component: () => import('@/views/auth/VerifyEmailView.vue'),
+          meta: { title: '验证邮箱 · WPX', webOnly: true, public: true }
+        },
+        {
+          path: 'auth/forgot-password',
+          name: 'auth-forgot-password',
+          component: () => import('@/views/auth/ForgotPasswordView.vue'),
+          meta: { title: '找回密码 · WPX', webOnly: true, public: true }
+        },
+        {
+          path: 'auth/reset-password',
+          name: 'auth-reset-password',
+          component: () => import('@/views/auth/ResetPasswordView.vue'),
+          meta: { title: '重置密码 · WPX', webOnly: true, public: true }
+        },
         {
           path: 'library',
           name: 'library',

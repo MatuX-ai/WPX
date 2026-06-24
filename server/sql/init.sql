@@ -2,6 +2,56 @@
 -- 执行: psql -U postgres -d wpx -f sql/init.sql
 
 -- =========================
+-- WPX 自托管邮箱认证用户表
+-- 字段:
+--   id                       UUID 主键
+--   email                    唯一邮箱（不区分大小写，存小写）
+--   password_hash            bcrypt 哈希
+--   nickname                 昵称（可选）
+--   avatar                   头像 URL（可选）
+--   roles                    角色数组（如 ['user','admin','super_admin']）
+--   status                   active / disabled / banned
+--   email_verified           是否完成邮箱验证
+--   email_verify_token       验证令牌（一次性）
+--   email_verify_expires_at  验证令牌过期时间
+--   password_reset_token     重置密码令牌（一次性）
+--   password_reset_expires_at 重置密码令牌过期时间
+--   last_login_at            最近登录时间
+--   created_at / updated_at
+-- =========================
+CREATE TABLE IF NOT EXISTS users (
+  id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email                       TEXT NOT NULL UNIQUE,
+  password_hash               TEXT NOT NULL,
+  nickname                    TEXT,
+  avatar                      TEXT,
+  roles                       TEXT[] NOT NULL DEFAULT ARRAY['user']::TEXT[],
+  status                      TEXT NOT NULL DEFAULT 'active'
+                              CHECK (status IN ('active', 'disabled', 'banned')),
+  email_verified              BOOLEAN NOT NULL DEFAULT FALSE,
+  email_verify_token          TEXT,
+  email_verify_expires_at     TIMESTAMPTZ,
+  password_reset_token        TEXT,
+  password_reset_expires_at   TIMESTAMPTZ,
+  last_login_at               TIMESTAMPTZ,
+  meta                        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email           ON users (LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_status          ON users (status);
+CREATE INDEX IF NOT EXISTS idx_users_verify_token    ON users (email_verify_token) WHERE email_verify_token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_reset_token     ON users (password_reset_token) WHERE password_reset_token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_created         ON users (created_at);
+
+DROP TRIGGER IF EXISTS users_set_updated_at ON users;
+CREATE TRIGGER users_set_updated_at
+BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION trg_set_updated_at();
+
+-- =========================
 -- 用户本地画像
 -- =========================
 CREATE TABLE IF NOT EXISTS user_profiles (

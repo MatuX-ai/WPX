@@ -1,11 +1,13 @@
 // Vercel Serverless Function: API 反向代理
-// 路由：/api/*  ->  https://api.proclaw.cc/admin/*
-// 用途：避免浏览器跨域（CORS），让 admin.proclaw.cc 与业务 API 同源
+// 路由：/api/*  ->  https://api.prowpx.com/admin/*
+// 用途：避免浏览器跨域（CORS），让 prowpx.com 与业务 API 同源
+// 管理后台部署在 https://prowpx.com/admin 下，前端 /api/* 请求
+// 由本 Serverless Function 反代到后端 https://api.prowpx.com/admin/*
 //
 // 环境变量（在 Vercel 控制台配置）：
-//   API_TARGET = https://api.proclaw.cc/admin   （默认）
+//   API_TARGET = https://api.prowpx.com/admin   （默认）
 
-const TARGET = process.env.API_TARGET || 'https://api.proclaw.cc/admin'
+const TARGET = process.env.API_TARGET || 'https://api.prowpx.com/admin'
 
 // 不透传的请求头（hop-by-hop + 主机头）
 const HOP_BY_HOP = new Set([

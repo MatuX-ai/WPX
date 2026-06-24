@@ -16,7 +16,9 @@ import { getElectronAPI, isElectron } from '@/utils/electron'
 /** 合并所有内置 Skill（通用 13 + 教师 16 + 大学生 16） */
 const LOCAL_BUILT_IN_SKILLS = [...CORE_SKILLS, ...EDUCATION_SKILLS]
 
-const SKILLHUB_URL = 'https://skillhub.proclaw.cc/api/skills'
+// WPX 在线 Skills 中心：https://skillhub.prowpx.com
+// 旧版 skillhub.proclaw.cc 已下线
+const SKILLHUB_URL = 'https://skillhub.prowpx.com/api/skills'
 
 const DISABLED_STORAGE_KEY = 'wpx-skills-disabled'
 const LEGACY_ENABLED_KEY = 'wpx-skills-enabled'
@@ -204,7 +206,7 @@ export const useSkillsStore = defineStore('skills', () => {
 
   // ── 在线 Skills ──
 
-  /** 从 skillhub.proclaw.cc 拉取在线 Skills，失败时静默回退 */
+  /** 从 skillhub.prowpx.com 拉取在线 Skills，失败时静默回退 */
   async function loadOnlineSkills () {
     try {
       const res = await fetch(SKILLHUB_URL)

@@ -12,7 +12,7 @@ RUN npm ci --omit=dev
 
 # ---- 运行阶段 ----
 FROM node:20-alpine AS runtime
-LABEL maintainer="WPX Team <ops@proclaw.cc>"
+LABEL maintainer="WPX Team <ops@prowpx.com>"
 
 # 基础工具（用于健康检查）
 RUN apk add --no-cache curl tini

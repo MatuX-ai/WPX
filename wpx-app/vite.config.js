@@ -45,6 +45,7 @@ function prerenderHookPlugin({ enabled }) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const knowledgePort = env.KNOWLEDGE_SERVICE_PORT || process.env.KNOWLEDGE_SERVICE_PORT || '3003'
+    const copilotkitPort = env.COPILOTKIT_PORT || process.env.COPILOTKIT_PORT || '3006'
 
   // 是否启用预渲染
   // - 显式 WPX_PRERENDER=0 关闭
@@ -65,6 +66,10 @@ export default defineConfig(({ mode }) => {
       electronBuildHtmlPlugin(),
       prerenderHookPlugin({ enabled: prerenderEnabled }),
     ],
+    optimizeDeps: {
+      // CopilotKit npm 包在本环境下可能未安装；测试环境跳过预构建与解析
+      exclude: ['@copilotkit/vue/v2', '@copilotkit/vue', '@copilotkit/runtime', '@copilotkit/agent'],
+    },
     build: {
       outDir: 'dist',
       chunkSizeWarningLimit: 800,
@@ -72,6 +77,7 @@ export default defineConfig(({ mode }) => {
       target: 'es2020',
       // Rolldown/Vite 8.0.14+ 会破坏 Vue init_* 辅助函数；wpx-app 锁定 vite@8.0.10
       rollupOptions: {
+        external: ['@copilotkit/vue/v2', '@copilotkit/vue', '@copilotkit/runtime', '@copilotkit/agent'],
         output: {
           // 手动分包：把大型第三方依赖拆分为独立 chunk，缩短首屏加载时间
           manualChunks(id) {
@@ -102,6 +108,14 @@ export default defineConfig(({ mode }) => {
               id.includes('node_modules/@ai-sdk')
             ) {
               return 'vendor-ai'
+            }
+
+            // CopilotKit（前后端 SDK + zod）
+            if (
+              id.includes('node_modules/@copilotkit') ||
+              id.includes('node_modules/zod/')
+            ) {
+              return 'vendor-copilotkit'
             }
 
             // UI 工具（floating-ui / focus-trap / lucide / vueuse）
@@ -164,6 +178,7 @@ export default defineConfig(({ mode }) => {
         '/api/knowledge': `http://localhost:${knowledgePort}`,
         '/api/library': 'http://localhost:3004',
         '/api/ai': 'http://localhost:3005',
+        '/api/ck': `http://localhost:${copilotkitPort}`,
       },
     },
   }

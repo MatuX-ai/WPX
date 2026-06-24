@@ -38,7 +38,6 @@ const { initModelIpc } = require('./model-ipc')
 const { initAuthStore } = require('./auth-store')
 const { initFreeQuotaIpc } = require('./free-quota-ipc')
 const {
-  initAuthProtocol,
   handleAuthCallbackUrl,
   extractProtocolUrlsFromArgv,
 } = require('./auth-protocol')
@@ -914,7 +913,7 @@ app.whenReady().then(async () => {
   await initModelIpc()
   await initAuthStore()
   await initFreeQuotaIpc()
-  initAuthProtocol()
+  // initAuthProtocol 已重构为 noop：WPX 改为应用内嵌 AuthModal 登录，不再打开外部浏览器
   await initKnowledgeService()
   await initMemoryService()
 

@@ -11,7 +11,7 @@
                  │   Cloudflare    │  ← DNS / WAF / HTTPS 终结
                  └────────┬────────┘
                           │
-              api.proclaw.cc ──► Nginx (443) ──► 127.0.0.1:3000 (PM2)
+              api.prowpx.com ──► Nginx (443) ──► 127.0.0.1:3000 (PM2)
                                                       │
                                               ┌───────┴───────┐
                                               ▼               ▼
@@ -23,11 +23,11 @@
 
 | 域名 | 用途 | 部署目标 |
 | --- | --- | --- |
-| `landing.proclaw.cc` | 营销站 | Cloudflare Pages / Vercel |
-| `admin.proclaw.cc` | 管理后台前端 | Cloudflare Pages / Vercel |
-| `api.proclaw.cc` | **本服务（Node.js API）** | Nginx + PM2 / Docker |
-| `account.proclaw.cc` | 账户中心（外部） | 已有 |
-| `skillhub.proclaw.cc` | 在线 Skills 数据源 | 已有 |
+| `prowpx.com` | 营销站 | Cloudflare Pages / Vercel |
+| `prowpx.com/admin` | 管理后台前端 | Cloudflare Pages / Vercel（SPA `base=/admin/`） |
+| `api.prowpx.com` | **本服务（Node.js API）** | Nginx + PM2 / Docker |
+| `prowpx.com/api/auth/*` | **自托管认证入口**（同本服务） | 同上 |
+| `skillhub.prowpx.com` | 在线 Skills 数据源 | Cloudflare Pages / Vercel |
 
 ---
 
@@ -58,18 +58,21 @@ vi .env
 | --- | --- | --- |
 | `NODE_ENV` | `production` | `production` |
 | `PORT` | 监听端口（默认 3000） | `3000` |
-| `PUBLIC_HOST` | 进程对外 URL | `https://api.proclaw.cc` |
-| `API_DOMAIN` | API 主域 | `api.proclaw.cc` |
+| `PUBLIC_HOST` | 进程对外 URL | `https://api.prowpx.com` |
+| `API_DOMAIN` | API 主域 | `api.prowpx.com` |
 | `TRUST_PROXY_HOPS` | 信任的反代层数 | `1`（仅 Nginx）/ `2`（SLB+Nginx） |
 | `PG_HOST` / `PG_PORT` / `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` | PG 连接 | — |
 | `PG_SSL` | 云 PG 需开启 | `true` |
 | `REDIS_URL` | Redis 连接 | `rediss://default:xxx@host:6379` |
-| `ACCOUNT_JWT_SECRET` | 共享密钥（与 `account.proclaw.cc` 一致） | — |
-| `ACCOUNT_JWT_ALG` / `ISSUER` / `AUDIENCE` | 默认 `HS256` / `account.proclaw.cc` / `wpx-server` | — |
+| `ACCOUNT_JWT_SECRET` | 自托管认证共享密钥 | — |
+| `ACCOUNT_JWT_ALG` / `ISSUER` / `AUDIENCE` | 默认 `HS256` / `prowpx.com` / `wpx-server` | — |
 | `AUTH_BYPASS` | **生产必须 `false`** | `false` |
-| `CORS_ORIGIN` | 逗号分隔白名单 | `https://landing.proclaw.cc,https://admin.proclaw.cc` |
+| `CORS_ORIGIN` | 逗号分隔白名单 | `https://prowpx.com,https://www.prowpx.com,https://api.prowpx.com,http://localhost:5174,http://localhost:5175` |
 | `CORS_CREDENTIALS` | 是否带 cookie | `true` |
-| `CDN_BASE` | 可选 CDN 域名 | `https://cdn.proclaw.cc` |
+| `CDN_BASE` | 可选 CDN 域名 | `https://cdn.prowpx.com` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | 邮件发送（SMTP） | 留空时使用 log 模式（开发环境） |
+| `BCRYPT_COST` | bcryptjs 哈希强度（默认 12） | `12` |
+| `PUBLIC_WEB_BASE` | 邮件中的验证/重置链接前缀 | `https://prowpx.com` |
 | `LOG_LEVEL` | `info` / `warn` | `info` |
 | `BODY_LIMIT` | 请求体上限 | `2mb` |
 
@@ -136,10 +139,10 @@ pm2 restart wpx-api
 
 ```bash
 # 复制配置
-sudo cp nginx/api.proclaw.cc.conf /etc/nginx/conf.d/
+sudo cp nginx/api.prowpx.com.conf /etc/nginx/conf.d/
 
 # 申请证书（acme.sh 或 certbot 任选）
-sudo certbot --nginx -d api.proclaw.cc
+sudo certbot --nginx -d api.prowpx.com
 
 # 校验并重载
 sudo nginx -t
@@ -225,7 +228,7 @@ spec:
 2. 添加 Postgres 与 Redis 插件 → 复制连接字符串到 `.env`。
 3. 设置环境变量：`NODE_ENV=production`、JWT、CORS 等。
 4. Health Check Path 设为 `/healthz`。
-5. 自定义域名：在 Railway 控制台添加 `api.proclaw.cc`，CNAME 指向 Railway 提供的目标。
+5. 自定义域名：在 Railway 控制台添加 `api.prowpx.com`，CNAME 指向 Railway 提供的目标。
 
 ### 6.2 Render
 
@@ -234,7 +237,7 @@ spec:
 3. Start Command：`node server.js`
 4. Health Check Path：`/healthz`
 5. 添加 Render PostgreSQL / Redis，URL 注入到环境变量。
-6. Custom Domains → `api.proclaw.cc` → 按提示配 CNAME。
+6. Custom Domains → `api.prowpx.com` → 按提示配 CNAME。
 
 > Railway/Render 默认在反代后面 → 设置 `TRUST_PROXY_HOPS=2`，确保 `req.ip` 拿到真实客户端 IP。
 
@@ -272,14 +275,16 @@ psql "$PG_URL" -v ON_ERROR_STOP=1 -f sql/init.sql
 推荐生产配置：
 
 ```env
-CORS_ORIGIN=https://proclaw.cc,https://www.proclaw.cc,https://landing.proclaw.cc,https://admin.proclaw.cc
+CORS_ORIGIN=https://prowpx.com,https://www.prowpx.com,https://api.prowpx.com,http://localhost:5174,http://localhost:5175
 CORS_CREDENTIALS=true
 ```
 
-> 营销站与后台**不需要直接调用**本服务的 `api.proclaw.cc`，它们各自走 `/api/*` 反代（同源）；`api.proclaw.cc` 主要服务：
+> 营销站与后台**不需要直接调用**本服务的 `api.prowpx.com`，它们各自走 `/api/*` 反代（同源）；`api.prowpx.com` 主要服务：
 > - 桌面端（Electron / Native Fetch）
 > - 移动端 App
 > - 第三方开放接口
+> 
+> **自托管认证**接口 `POST /api/auth/login`、`GET /api/auth/me` 等直接挂在 `prowpx.com/api/auth/*`（由 `api.prowpx.com` 反代），无需单独子域。
 
 ---
 
@@ -287,16 +292,16 @@ CORS_CREDENTIALS=true
 
 ```bash
 # 健康检查（不走认证）
-curl -i https://api.proclaw.cc/healthz
+curl -i https://api.prowpx.com/healthz
 
 # 就绪探针（探测 PG/Redis）
-curl -i https://api.proclaw.cc/readyz
+curl -i https://api.prowpx.com/readyz
 
 # 服务信息
-curl -s https://api.proclaw.cc/ | jq
+curl -s https://api.prowpx.com/ | jq
 
 # 鉴权检查（无 token 应 401）
-curl -i https://api.proclaw.cc/api/admin/skills
+curl -i https://api.prowpx.com/api/admin/skills
 ```
 
 预期：
@@ -338,7 +343,7 @@ pm2 reload ecosystem.config.cjs --env production
 | 问题 | 排查 |
 | --- | --- |
 | CORS 跨域报错 | 检查 `.env` 的 `CORS_ORIGIN` 是否包含前端完整 origin（含 `https://`，无尾斜杠） |
-| JWT 验证失败 | 确认 `ACCOUNT_JWT_SECRET` 与 `account.proclaw.cc` 一致；`iss` / `aud` 匹配 |
+| JWT 验证失败 | 确认 `ACCOUNT_JWT_SECRET` 在所有环境一致；`iss` / `aud` 匹配（默认 `prowpx.com` / `wpx-server`） |
 | `req.ip` 一直是 `127.0.0.1` | 设置 `TRUST_PROXY_HOPS` = 反代层数（SLB+Nginx 通常为 2） |
 | `/readyz` 返回 503 | 检查 PG/Redis 连通性；阿里云安全组是否放通 5432/6379 |
 | 文件上传 413 | 调大 Nginx `client_max_body_size` 与 `BODY_LIMIT` |

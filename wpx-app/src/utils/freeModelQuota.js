@@ -1,5 +1,7 @@
-const AI_BASE_URL = 'https://ai.proclaw.cc'
-export const GUEST_FREE_MODEL_LABEL = 'WPX 免费模型（由 ai.proclaw.cc 提供）'
+// WPX 自托管 AI 子域：https://ai.prowpx.com
+// 旧版 ai.proclaw.cc 已下线
+const AI_BASE_URL = 'https://ai.prowpx.com'
+export const GUEST_FREE_MODEL_LABEL = 'WPX 免费模型（由 ai.prowpx.com 提供）'
 export const DEFAULT_GUEST_DAILY_LIMIT = 50
 
 /**

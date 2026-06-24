@@ -1,11 +1,13 @@
 // Cloudflare Pages Functions: API 反向代理
-// 路由：/api/*  ->  https://api.proclaw.cc/admin/*
-// 用途：让 admin.proclaw.cc 与业务 API 同源，避免浏览器 CORS
+// 路由：/api/*  ->  https://api.prowpx.com/admin/*
+// 用途：让 prowpx.com 与业务 API 同源，避免浏览器 CORS
+// 管理后台部署在 https://prowpx.com/admin 下，前端 /api/* 请求
+// 由本 Functions 反代到后端 https://api.prowpx.com/admin/*
 //
 // 环境变量（在 Cloudflare Pages 控制台 -> Settings -> Environment variables 配置）：
-//   API_TARGET = https://api.proclaw.cc/admin   （默认）
+//   API_TARGET = https://api.prowpx.com/admin   （默认）
 
-const TARGET = 'https://api.proclaw.cc/admin'
+const TARGET = 'https://api.prowpx.com/admin'
 
 // 不透传的 hop-by-hop 请求头
 const HOP_BY_HOP = new Set([

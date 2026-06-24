@@ -32,9 +32,9 @@ const ROOT = path.resolve(__dirname, '..')
 const DIST = path.join(ROOT, 'dist')
 
 // ========== 配置 ==========
-// 生产环境：wpx.proclaw.cc
+// 生产环境：https://prowpx.com
 // 可以通过环境变量 VITE_SITE_URL 覆盖（Vite 与此脚本都读取该变量）
-const SITE_URL = process.env.VITE_SITE_URL || 'https://wpx.proclaw.cc'
+const SITE_URL = process.env.VITE_SITE_URL || 'https://prowpx.com'
 const PRERENDER_ROUTES = [
   { path: '/', outFile: 'index.html', priority: '1.0', changefreq: 'weekly' },
   { path: '/blog', outFile: 'blog/index.html', priority: '0.7', changefreq: 'weekly' },

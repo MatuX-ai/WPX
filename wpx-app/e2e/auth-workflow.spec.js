@@ -1,12 +1,15 @@
 import { test, expect } from '@playwright/test'
 import { setupE2eMocks } from './helpers/mocks.js'
 import {
-  getSimulatedLoginUrl,
+  clickTitleBarLogin,
+  expectAuthModal,
+  expectTitleBarLoggedIn,
   loginThroughTitleBar,
   logoutThroughTitleBar,
   setupAuthE2eMocks,
-  simulateAuthCallback,
-  clickTitleBarLogin,
+  dismissAuthModal,
+  switchAuthModalToRegister,
+  registerThroughAuthModal,
 } from './helpers/auth-mocks.js'
 import {
   applyFontToEditorSelection,
@@ -67,27 +70,69 @@ test.describe('认证与访客工作流', () => {
     await expect(page.getByRole('button', { name: '去配置' })).toBeVisible()
   })
 
-  test('4. 点击登录跳转 account.proclaw.cc（模拟）且回调后变为已登录', async ({ page }) => {
+  test('4. 点击登录弹出嵌入式 AuthModal，提交后变为已登录', async ({ page }) => {
     await openEditor(page)
 
     await clickTitleBarLogin(page)
+    await expectAuthModal(page)
+    // 嵌入式表单直接出现在应用内，不再跳转外部浏览器
+    await expect(page.locator('.auth-modal input[type="email"]')).toBeVisible()
+    await expect(page.locator('.auth-modal input[type="password"]')).toBeVisible()
 
-    await expect.poll(() => getSimulatedLoginUrl(page)).toContain('https://account.proclaw.cc/login')
-    await simulateAuthCallback(page)
+    await page.locator('.auth-modal input[type="email"]').fill('e2e@prowpx.com')
+    await page.locator('.auth-modal input[type="password"]').fill('e2e-password')
+    await page
+      .locator('.auth-modal')
+      .getByRole('button', { name: '登录', exact: true })
+      .click()
 
-    await expect(page.getByRole('button', { name: 'E2E 测试用户 账户菜单' })).toBeVisible({
-      timeout: 15_000,
+    await expectTitleBarLoggedIn(page, 'E2E 测试用户')
+    await expect(
+      page.locator('.title-bar').getByRole('button', { name: '登录', exact: true }),
+    ).toHaveCount(0)
+    // 提交后 AuthModal 应自动关闭
+    await expect(page.locator('.auth-modal')).toHaveCount(0, { timeout: 5_000 })
+  })
+
+  test('4b. 点击登录后取消（关闭 AuthModal）保持访客', async ({ page }) => {
+    await openEditor(page)
+
+    await clickTitleBarLogin(page)
+    await expectAuthModal(page)
+    await dismissAuthModal(page)
+
+    await expect(page.getByRole('button', { name: '登录', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /账户菜单$/ })).toHaveCount(0)
+  })
+
+  test('4c. 可在 AuthModal 中切换到「注册」并提交', async ({ page }) => {
+    await openEditor(page)
+
+    await clickTitleBarLogin(page)
+    await expectAuthModal(page)
+    await switchAuthModalToRegister(page)
+
+    // 注册表单应出现昵称字段
+    await expect(page.locator('.auth-modal input[autocomplete="nickname"]')).toBeVisible()
+
+    await registerThroughAuthModal(page, {
+      email: 'new-user@prowpx.com',
+      password: 'new-password-123',
+      nickname: 'E2E 注册用户',
     })
-    await expect(page.locator('.title-bar').getByRole('button', { name: '登录', exact: true })).toHaveCount(0)
+
+    await expectTitleBarLoggedIn(page, 'E2E 注册用户')
   })
 
   test('5. 登录后 TitleBar 显示头像和昵称，点击可退出', async ({ page }) => {
     await openEditor(page)
     await loginThroughTitleBar(page)
 
-    await expect(page.getByRole('button', { name: 'E2E 测试用户 账户菜单' })).toBeVisible()
+    await expectTitleBarLoggedIn(page, 'E2E 测试用户')
     await logoutThroughTitleBar(page)
-    await expect(page.locator('.title-bar').getByRole('button', { name: '登录', exact: true })).toBeVisible()
+    await expect(
+      page.locator('.title-bar').getByRole('button', { name: '登录', exact: true }),
+    ).toBeVisible()
   })
 
   test('6. 登录后可添加自定义 API Key 并测试连接', async ({ page }) => {
@@ -135,9 +180,7 @@ test.describe('认证会话持久化', () => {
 
     await page.reload()
     await expect(page.getByText('正在加载…')).toBeHidden({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: 'E2E 测试用户 账户菜单' })).toBeVisible({
-      timeout: 20_000,
-    })
+    await expectTitleBarLoggedIn(page, 'E2E 测试用户')
   })
 
   test('10. JWT 刷新失败后恢复访客模式', async ({ page }) => {
@@ -159,9 +202,9 @@ test.describe('认证会话持久化', () => {
     await page.goto('/editor')
 
     await expect(page.getByText('正在加载…')).toBeHidden({ timeout: 15_000 })
-    await expect(page.locator('.title-bar').getByRole('button', { name: '登录', exact: true })).toBeVisible({
-      timeout: 20_000,
-    })
+    await expect(
+      page.locator('.title-bar').getByRole('button', { name: '登录', exact: true }),
+    ).toBeVisible({ timeout: 20_000 })
     await expect(page.getByRole('button', { name: /账户菜单$/ })).toHaveCount(0)
   })
 })

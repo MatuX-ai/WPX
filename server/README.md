@@ -1,6 +1,6 @@
 # WPX Server
 
-WPX 后端服务，基于 Node.js + Express，对接账户中心 `account.proclaw.cc` 的 JWT 鉴权。
+WPX 后端服务，基于 Node.js + Express，对接自托管 JWT 鉴权（`prowpx.com` 体系，应用内嵌 AuthModal 登录）。
 
 ## 技术栈
 
@@ -101,7 +101,7 @@ docker build -t wpx-server:1.0.0 . # 生产镜像
 | `PORT` | 监听端口 | `3000` |
 | `NODE_ENV` | 运行环境 | `development` |
 | `PUBLIC_HOST` | 进程对外 URL | `http://localhost:3000` |
-| `API_DOMAIN` | API 主域 | `api.proclaw.cc` |
+| `API_DOMAIN` | API 主域 | `api.prowpx.com` |
 | `TRUST_PROXY_HOPS` | 信任的反代跳数 | `1` |
 | `CORS_ORIGIN` | 跨域白名单（逗号分隔，`*` 或显式 origin 列表） | `*` |
 | `CORS_CREDENTIALS` | 是否带 cookie | `true` |
@@ -115,14 +115,14 @@ docker build -t wpx-server:1.0.0 . # 生产镜像
 | `REDIS_PASSWORD` / `REDIS_DB` | Redis 认证/库号 | - |
 | `ACCOUNT_JWT_SECRET` | 账户中心 JWT 共享密钥/公钥 | - |
 | `ACCOUNT_JWT_ALG` | 签名算法 | `HS256` |
-| `ACCOUNT_JWT_ISSUER` | 期望的签发者 | `account.proclaw.cc` |
+| `ACCOUNT_JWT_ISSUER` | 期望的签发者 | `prowpx.com` |
 | `ACCOUNT_JWT_AUDIENCE` | 期望的受众 | `wpx-server` |
 | `AUTH_BYPASS` | `true` 时跳过 JWT 校验（**仅本地开发**） | `false` |
 | `AUTH_BYPASS_ROLES` | bypass 时使用的角色 | `dev` |
 
 ## 鉴权
 
-所有受保护接口都使用 `Authorization: Bearer <token>` 头，token 由 `account.proclaw.cc` 颁发。
+所有受保护接口都使用 `Authorization: Bearer <token>` 头，token 由 `prowpx.com` 自托管认证服务（`/api/auth/login`）颁发。
 
 中间件会校验：
 - 签名算法与共享密钥（`ACCOUNT_JWT_SECRET`）

@@ -18,7 +18,13 @@ import { useWindowSize } from '@/composables/useWindowSize'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useEscapeKey } from '@/composables/useEscapeKey'
 import { useThemeStore } from '@/stores/theme'
+import { useToast } from '@/composables/useToast'
 import { fetchKnowledgeList, fetchKnowledgePreview } from '@/utils/knowledgeApi'
+import { usePPTWorkflow, PPT_STEP } from '@/composables/usePPTWorkflow'
+import {
+  downloadSlidesAsHtml,
+  downloadSlidesAsPptx,
+} from '@/utils/slideExport'
 
 const props = defineProps({
   visible: {
@@ -56,6 +62,7 @@ const emit = defineEmits([
   'input-blur',
   'onboarding-complete',
   'regenerate',
+  'insert-slide-deck',
 ])
 
 const router = useRouter()
@@ -314,12 +321,63 @@ function removeMentionQueryFromInput() {
   })
 }
 
+/* ── PPT 意图识别：决定是否启动 usePPTWorkflow ── */
+// 匹配“生成 PPT”、“帮我做一份演示”、“写个幻灯片”、“帮我做一个 presentation”等表达。
+// 中间的 (.*) 抓取主题，使用 lazy 限定以避免吞下后续句子。
+const PPT_TRIGGER_PREFIX =
+  '(?:帮我|帮我弄|请|麻烦|能|可以|能不能|想|要)?\\s*(?:生成|做|写|弄|画|设计|出|创建)'
+const PPT_TYPE_WORDS =
+  '(?:PPT|ppt|幻灯片|演示稿|演示文稿|演讲稿|讲稿|片子|slides?|deck|presentation)'
+const PPT_INTENT_REGEX = new RegExp(
+  `(?:${PPT_TRIGGER_PREFIX})\\s*(?:一份|一个|下|个|篇|a|an)?\\s*([\\s\\S]*?)\\s*(?:${PPT_TYPE_WORDS})`,
+  'i',
+)
+// 仅在用户明确提到英文关键词 "presentation" 时（无中文动词）才走独立命中分支，
+// 避免 "write a slides" 这类普通英文短句被误识别为 PPT 生成意图。
+const PPT_PRESENTATION_ONLY_REGEX = new RegExp(
+  `\\b(presentation)\\b`,
+  'i',
+)
+
+function extractPptIntent(message) {
+  if (!message || typeof message !== 'string') return { matched: false, topic: '' }
+  const match = message.match(PPT_INTENT_REGEX)
+  if (match) {
+    const raw = (match[1] || '').trim()
+    // 清洗残留标点与残留量词
+    const topic = raw
+      .replace(/^(?:一份|一个|下|个|篇|a|an)\s*/, '')
+      .replace(/^(?:about|on|regarding|of|for)\s+/i, '')
+      .replace(/^[\s，,。:：！!？?]+/, '')
+      .replace(/[\s，,。:：！!？?]+$/, '')
+      .trim()
+    return { matched: true, topic: topic || message.trim() }
+  }
+  // 后备：只要消息里出现 "presentation" 关键词（用户明确列出的英文关键词），也视为 PPT 意图
+  if (PPT_PRESENTATION_ONLY_REGEX.test(message)) {
+    return { matched: true, topic: message.trim() }
+  }
+  return { matched: false, topic: '' }
+}
+
+defineExpose({
+  workflow: () => usePPTWorkflow(),
+  pptSteps: PPT_STEP,
+})
+
 function handleSend() {
   if (isOffline.value || mentionOpen.value) return
 
   const message = inputValue.value.trim()
   const hasReferences = referencedItems.value.length > 0
   if (!message && !hasReferences) return
+
+  // ── PPT 工作流钩入：检测用户是否表达了“生成 PPT”意图 ──
+  const pptWorkflow = usePPTWorkflow()
+  const pptIntent = extractPptIntent(message)
+  if (pptIntent.topic) {
+    pptWorkflow.startWorkflow(pptIntent.topic)
+  }
 
   emit('send', {
     text: message,
@@ -418,6 +476,166 @@ async function handleOnboardingLogin() {
     console.warn('[AiChatWindow] login failed:', error)
   }
 }
+
+/* ───────── PPT 工作流面板（按步骤展示不同 UI） ───────── */
+const toast = useToast()
+const pptWorkflow = usePPTWorkflow()
+
+// 是否处于活动工作流（topic 非空视为已启动）
+const wfIsActive = computed(() => Boolean(pptWorkflow.state.topic))
+const wfTopic = computed(() => pptWorkflow.state.topic || '')
+const wfStep = computed(() => pptWorkflow.currentStep.value)
+const wfStepIndex = computed(() => pptWorkflow.stepIndex.value)
+const wfProgress = computed(() => pptWorkflow.progress.value)
+const wfOutline = computed(() => pptWorkflow.state.outline || '')
+const wfSlidesCount = computed(() => (Array.isArray(pptWorkflow.state.slides) ? pptWorkflow.state.slides.length : 0))
+const wfHasSlides = computed(() => pptWorkflow.hasSlides.value)
+const wfLastMessage = computed(() => pptWorkflow.state.lastMessage || '')
+const wfLastError = computed(() => pptWorkflow.state.lastError || '')
+
+// 步骤定义，供模板渲染进度条
+const WF_STEP_DEFS = [
+  { key: PPT_STEP.OUTLINE, label: '生成大纲' },
+  { key: PPT_STEP.TEMPLATE, label: '选择模板' },
+  { key: PPT_STEP.GENERATE, label: '生成幻灯片' },
+  { key: PPT_STEP.EDITING, label: '编辑中' },
+]
+
+// 模板选项（与 slides store SLIDE_TEMPLATES 对齐）
+const TEMPLATE_OPTIONS = [
+  { id: 'business', label: '商务简约风', desc: '白底蓝调，适合正式场合', theme: 'light' },
+  { id: 'tech', label: '科技感风', desc: '深色背景，发光元素，适合发布会', theme: 'dark' },
+  { id: 'fresh', label: '清新自然风', desc: '浅绿配色，适合教育/公益', theme: 'light' },
+  { id: 'custom', label: '自定义', desc: '请描述你想要的风格', theme: 'light' },
+]
+
+const customTemplateDesc = ref('')
+const outlineEdit = ref('')
+
+/**
+ * 进入 STEP_EDITING 时，自动把生成的 slides 派发给编辑器插入。
+ * 仅在 GENERATE → EDITING 这一跳时触发；后续若被业务流反复来回，
+ * 仍会触发（设计上视为一次新工作流结果），如果不要重复插入可在 AiAssistantPlaceholder 侧去重。
+ */
+function emitSlideDeckInsert() {
+  if (!wfHasSlides.value) return
+  const slides = pptWorkflow.state.slides || []
+  const theme = wfTheme.value
+  const title = deriveWorkflowTitle()
+  emit('insert-slide-deck', { slides, theme, title })
+}
+
+const wfTheme = computed(() => {
+  // 模板可携带 theme（business/fresh→light, tech→dark），优先用 workflow 状态
+  const tplId = pptWorkflow.state.templateId
+  if (tplId === 'tech') return 'dark'
+  return 'light'
+})
+
+function deriveWorkflowTitle() {
+  const outline = pptWorkflow.state.outline || ''
+  if (outline) {
+    const firstHeading = outline.split(/\r?\n/).find((line) => /^#\s+/.test(line))
+    if (firstHeading) return firstHeading.replace(/^#\s+/, '').trim()
+  }
+  return pptWorkflow.state.topic || 'WPX 演示文稿'
+}
+
+// 同步：每进入 STEP_EDITING 都触发自动插入
+pptWorkflow.onStepChange((next, prev) => {
+  if (next === PPT_STEP.EDITING && prev !== PPT_STEP.EDITING) {
+    // 等 nextTick 让状态完全落定
+    nextTick(() => emitSlideDeckInsert())
+  }
+})
+
+function handleConfirmOutline() {
+  const draft = outlineEdit.value.trim() || wfOutline.value
+  const topic = pptWorkflow.state.topic || ''
+  const fallback = `# ${topic}\n- 要点一\n- 要点二\n- 要点三`
+  const ok = pptWorkflow.confirmOutline(draft || fallback)
+  if (ok) {
+    toast.success('大纲已确认')
+  } else {
+    toast.error('确认大纲失败：' + (pptWorkflow.state.lastError || ''))
+  }
+}
+
+function handleModifyOutline() {
+  const topic = pptWorkflow.state.topic || ''
+  emit('send', {
+    text: `请帮我修改大纲：${wfOutline.value || '（暂无）'}\n（主题：${topic}）`,
+    references: [],
+  })
+}
+
+function handleSelectTemplate(tplId) {
+  if (tplId === 'custom' && !customTemplateDesc.value.trim()) {
+    toast.warning('请先描述自定义模板风格')
+    return
+  }
+  const ok = pptWorkflow.selectTemplate(tplId, tplId === 'custom' ? customTemplateDesc.value : '')
+  if (ok) {
+    toast.success('模板已选择')
+    customTemplateDesc.value = ''
+  } else {
+    toast.error('选择模板失败：' + (pptWorkflow.state.lastError || ''))
+  }
+}
+
+function handleExportHtml() {
+  if (!wfHasSlides.value) {
+    toast.warning('当前没有可导出的幻灯片')
+    return
+  }
+  try {
+    const result = downloadSlidesAsHtml(pptWorkflow.state.slides, {
+      theme: wfTheme.value,
+      title: deriveWorkflowTitle(),
+    })
+    if (result?.ok) {
+      toast.success(`已导出网页：${result.filename}`)
+    }
+  } catch (e) {
+    console.error('[AiChatWindow] 导出网页失败：', e)
+    toast.error('导出网页失败：' + (e?.message || String(e)))
+  }
+}
+
+async function handleExportPptx() {
+  if (!wfHasSlides.value) {
+    toast.warning('当前没有可导出的幻灯片')
+    return
+  }
+  try {
+    const result = await downloadSlidesAsPptx(pptWorkflow.state.slides, {
+      theme: wfTheme.value,
+      title: deriveWorkflowTitle(),
+    })
+    if (result?.ok) {
+      toast.success(`已导出 PPTX：${result.filename}`)
+    }
+  } catch (e) {
+    console.error('[AiChatWindow] 导出 PPTX 失败：', e)
+    toast.error('导出 PPTX 失败：' + (e?.message || String(e)))
+  }
+}
+
+function handleContinueEdit() {
+  pptWorkflow.resetWorkflow()
+  toast.info('已重置工作流，可继续修改')
+}
+
+// 当大纲进入 workflow state 时，把内容同步到本地编辑框（避免覆盖用户已输入内容）
+watch(
+  () => pptWorkflow.state.outline,
+  (next) => {
+    if (next && !outlineEdit.value) {
+      outlineEdit.value = next
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () => windowH.value,
@@ -713,6 +931,183 @@ watch(
               暂无消息，输入内容开始对话
             </p>
           </div>
+
+          <!-- ── PPT 工作流面板：按 step 展示不同 UI ── -->
+          <section
+            v-if="wfIsActive"
+            class="ai-chat-window__workflow"
+            data-testid="ai-chat-workflow-panel"
+            :data-step="wfStep"
+            @mousedown.stop
+          >
+            <header class="ai-chat-window__workflow-header">
+              <span class="ai-chat-window__workflow-title">PPT 工作流</span>
+              <span class="ai-chat-window__workflow-progress">
+                第 {{ wfStepIndex + 1 }} 步 / 共 4 步
+              </span>
+              <button
+                type="button"
+                class="ai-chat-window__workflow-close"
+                title="重置并关闭工作流面板"
+                aria-label="重置工作流"
+                @click="handleContinueEdit"
+              >
+                ↺
+              </button>
+            </header>
+
+            <!-- 步骤进度 -->
+            <ol class="ai-chat-window__workflow-steps">
+              <li
+                v-for="(stepDef, idx) in WF_STEP_DEFS"
+                :key="stepDef.key"
+                class="ai-chat-window__workflow-step"
+                :class="{
+                  'is-active': stepDef.key === wfStep,
+                  'is-done': wfStepIndex > idx,
+                }"
+              >
+                <span class="ai-chat-window__workflow-step-dot" />
+                <span class="ai-chat-window__workflow-step-label">{{ stepDef.label }}</span>
+              </li>
+            </ol>
+
+            <p v-if="wfLastMessage" class="ai-chat-window__workflow-message">
+              {{ wfLastMessage }}
+            </p>
+            <p v-if="wfLastError" class="ai-chat-window__workflow-error" role="alert">
+              {{ wfLastError }}
+            </p>
+
+            <!-- STEP_OUTLINE：展示大纲，底部“确认/修改”按钮 -->
+            <div
+              v-if="wfStep === PPT_STEP.OUTLINE"
+              class="ai-chat-window__workflow-body"
+            >
+              <p class="ai-chat-window__workflow-topic">
+                <span class="ai-chat-window__workflow-topic-label">主题：</span>
+                <strong>{{ wfTopic }}</strong>
+              </p>
+              <textarea
+                v-model="outlineEdit"
+                class="ai-chat-window__workflow-outline"
+                rows="6"
+                placeholder="AI 生成大纲后将自动填入此处；你也可以手动编辑，或直接点击“确认大纲”使用主题作为骨架。"
+              />
+              <div class="ai-chat-window__workflow-actions">
+                <button
+                  type="button"
+                  class="ai-chat-window__workflow-btn ai-chat-window__workflow-btn--primary wpx-btn"
+                  @click="handleConfirmOutline"
+                >
+                  确认大纲
+                </button>
+                <button
+                  type="button"
+                  class="ai-chat-window__workflow-btn wpx-btn"
+                  @click="handleModifyOutline"
+                >
+                  修改大纲
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP_TEMPLATE：展示模板卡片选择器 -->
+            <div
+              v-else-if="wfStep === PPT_STEP.TEMPLATE"
+              class="ai-chat-window__workflow-body"
+            >
+              <p class="ai-chat-window__workflow-topic">
+                请选择演示文稿模板：
+              </p>
+              <div class="ai-chat-window__template-grid">
+                <button
+                  v-for="tpl in TEMPLATE_OPTIONS"
+                  :key="tpl.id"
+                  type="button"
+                  class="ai-chat-window__template-card"
+                  :class="{ 'is-dark': tpl.theme === 'dark' }"
+                  :data-theme="tpl.theme"
+                  :title="tpl.desc"
+                  @click="handleSelectTemplate(tpl.id)"
+                >
+                  <span class="ai-chat-window__template-card-label">{{ tpl.label }}</span>
+                  <span class="ai-chat-window__template-card-desc">{{ tpl.desc }}</span>
+                </button>
+              </div>
+              <textarea
+                v-if="true"
+                v-model="customTemplateDesc"
+                class="ai-chat-window__custom-desc"
+                rows="2"
+                placeholder="选中「自定义」时，请先在此描述你想要的风格（如：莫兰迪配色，圆润字体，公众号风格）"
+              />
+            </div>
+
+            <!-- STEP_GENERATE：展示进度条 -->
+            <div
+              v-else-if="wfStep === PPT_STEP.GENERATE"
+              class="ai-chat-window__workflow-body"
+            >
+              <p class="ai-chat-window__workflow-topic">
+                正在生成幻灯片…
+              </p>
+              <div
+                class="ai-chat-window__progress"
+                role="progressbar"
+                :aria-valuenow="Math.round(wfProgress * 100)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div
+                  class="ai-chat-window__progress-fill"
+                  :style="{ width: `${Math.round(wfProgress * 100)}%` }"
+                />
+              </div>
+              <p class="ai-chat-window__progress-tip">
+                AI 正在根据大纲与模板生成每张幻灯片内容，完成后将自动插入编辑器。
+              </p>
+            </div>
+
+            <!-- STEP_EDITING：展示“导出网页/PPTX/继续修改”按钮 -->
+            <div
+              v-else-if="wfStep === PPT_STEP.EDITING"
+              class="ai-chat-window__workflow-body"
+            >
+              <p class="ai-chat-window__workflow-topic">
+                已生成
+                <strong>{{ wfSlidesCount }}</strong>
+                页幻灯片，并自动插入编辑器。
+              </p>
+              <div class="ai-chat-window__workflow-actions">
+                <button
+                  type="button"
+                  class="ai-chat-window__workflow-btn wpx-btn"
+                  @click="handleExportHtml"
+                >
+                  导出网页
+                </button>
+                <button
+                  type="button"
+                  class="ai-chat-window__workflow-btn wpx-btn"
+                  @click="handleExportPptx"
+                >
+                  导出 PPTX
+                </button>
+                <button
+                  type="button"
+                  class="ai-chat-window__workflow-btn ai-chat-window__workflow-btn--primary wpx-btn"
+                  @click="handleContinueEdit"
+                >
+                  继续修改
+                </button>
+              </div>
+              <p class="ai-chat-window__progress-tip">
+                插入后可在编辑器选中 SlideDeck 节点进行翻页、全屏、复制或删除；
+                也可继续在下方对话要求 AI 添加 / 修改 / 删除某一页。
+              </p>
+            </div>
+          </section>
 
           <footer class="ai-chat-window__footer" @mousedown.stop>
             <div v-if="selectionContext" class="ai-chat-window__context">
@@ -1338,5 +1733,268 @@ watch(
 
 .ai-chat-window-host--dark .ai-chat-window__skill-retry-btn:hover {
   background: #333;
+}
+
+/* ── PPT 工作流面板 ── */
+.ai-chat-window__workflow {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--theme-border, #e2e8f0);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-accent, #7c3aed) 6%, transparent), transparent 60%), var(--theme-bg, #ffffff);
+}
+
+.ai-chat-window-host--dark .ai-chat-window__workflow {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-accent, #7c3aed) 12%, transparent), transparent 60%), var(--theme-bg, #1a1a1a);
+}
+
+.ai-chat-window__workflow-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-chat-window__workflow-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--theme-accent, #7c3aed);
+}
+
+.ai-chat-window__workflow-progress {
+  font-size: 11px;
+  color: var(--theme-fg-muted, #64748b);
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-chat-window__workflow-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--theme-fg-muted, #64748b);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ai-chat-window__workflow-close:hover {
+  background: var(--theme-bg-muted, #e2e8f0);
+  color: var(--theme-fg, #0f172a);
+}
+
+.ai-chat-window__workflow-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--theme-fg-muted, #64748b);
+}
+
+.ai-chat-window__workflow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-chat-window__workflow-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--theme-border, #e2e8f0);
+  flex-shrink: 0;
+}
+
+.ai-chat-window__workflow-step.is-done .ai-chat-window__workflow-step-dot {
+  background: var(--theme-accent, #7c3aed);
+}
+.ai-chat-window__workflow-step.is-active .ai-chat-window__workflow-step-dot {
+  background: var(--theme-accent, #7c3aed);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--theme-accent, #7c3aed) 22%, transparent);
+}
+.ai-chat-window__workflow-step.is-active .ai-chat-window__workflow-step-label {
+  color: var(--theme-fg, #0f172a);
+  font-weight: 600;
+}
+
+.ai-chat-window__workflow-step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-chat-window__workflow-message {
+  margin: 0;
+  font-size: 11px;
+  color: var(--theme-fg-muted, #475569);
+  line-height: 1.5;
+}
+
+.ai-chat-window__workflow-error {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ai-chat-window-host--dark .ai-chat-window__workflow-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fecaca;
+}
+
+.ai-chat-window__workflow-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-chat-window__workflow-topic {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--theme-fg, #1a1a1a);
+}
+
+.ai-chat-window__workflow-topic-label {
+  color: var(--theme-fg-muted, #64748b);
+}
+
+.ai-chat-window__workflow-outline,
+.ai-chat-window__custom-desc {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--theme-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  background: var(--theme-bg, #ffffff);
+  color: var(--theme-fg, #1a1a1a);
+  box-sizing: border-box;
+}
+
+.ai-chat-window-host--dark .ai-chat-window__workflow-outline,
+.ai-chat-window-host--dark .ai-chat-window__custom-desc {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+.ai-chat-window__workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-chat-window__workflow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border: 1px solid var(--theme-border, #e2e8f0);
+  border-radius: 999px;
+  background: var(--theme-bg, #ffffff);
+  color: var(--theme-fg, #1a1a1a);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.ai-chat-window__workflow-btn:hover {
+  background: var(--theme-bg-muted, #f1f5f9);
+  border-color: var(--theme-accent, #7c3aed);
+  color: var(--theme-accent, #7c3aed);
+}
+.ai-chat-window__workflow-btn--primary {
+  background: var(--theme-accent, #7c3aed);
+  border-color: var(--theme-accent, #7c3aed);
+  color: #ffffff;
+}
+.ai-chat-window__workflow-btn--primary:hover {
+  background: color-mix(in srgb, var(--theme-accent, #7c3aed) 88%, #000 12%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+/* ── 模板卡片选择器 ── */
+.ai-chat-window__template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-chat-window__template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--theme-border, #e2e8f0);
+  border-radius: 10px;
+  background: var(--theme-bg, #ffffff);
+  color: var(--theme-fg, #1a1a1a);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+.ai-chat-window__template-card:hover {
+  border-color: var(--theme-accent, #7c3aed);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--theme-accent, #7c3aed) 20%, transparent);
+  transform: translateY(-1px);
+}
+.ai-chat-window__template-card[data-theme="dark"] {
+  background: #0f172a;
+  color: #f1f5f9;
+  border-color: #1e293b;
+}
+.ai-chat-window__template-card[data-theme="dark"]:hover {
+  border-color: var(--theme-accent, #7c3aed);
+}
+.ai-chat-window__template-card-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.ai-chat-window__template-card-desc {
+  font-size: 11px;
+  color: var(--theme-fg-muted, #64748b);
+  line-height: 1.45;
+}
+.ai-chat-window__template-card[data-theme="dark"] .ai-chat-window__template-card-desc {
+  color: #94a3b8;
+}
+
+/* ── 进度条 ── */
+.ai-chat-window__progress {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--theme-bg-muted, #e2e8f0);
+  overflow: hidden;
+}
+.ai-chat-window__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--theme-accent, #7c3aed), #ec4899);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+.ai-chat-window__progress-tip {
+  margin: 0;
+  font-size: 11px;
+  color: var(--theme-fg-muted, #64748b);
+  line-height: 1.5;
 }
 </style>

@@ -2,10 +2,13 @@
  * Axios 实例配置
  *
  * 包含两个实例：
- *  - httpAccount：对 account.proclaw.cc 的认证接口
- *  - httpApi   ：对 WPX 后端 API 的业务接口
+ *  - httpAccount：WPX 自托管邮箱认证（主域 prowpx.com）
+ *  - httpApi   ：对 WPX 后端 API 的业务接口（api.prowpx.com）
  *
  * 两者都通过 localStorage 中的 JWT 进行 Bearer 认证。
+ *
+ * 管理后台统一挂在 https://prowpx.com/admin 下，默认走 /api/* 同源反代
+ * 避免浏览器 CORS；如需直连后端，可通过 VITE_API_BASE_URL / VITE_ACCOUNT_BASE_URL 覆盖。
  */
 import axios from 'axios'
 
@@ -14,8 +17,10 @@ const APP_INFO =
   typeof __APP_INFO__ !== 'undefined'
     ? __APP_INFO__
     : {
-        accountBaseUrl: 'https://account.proclaw.cc',
-        apiBaseUrl: 'https://api.proclaw.cc/admin'
+        // WPX 自托管邮箱认证主域
+        accountBaseUrl: 'https://prowpx.com',
+        // 后端 API
+        apiBaseUrl: 'https://api.prowpx.com/admin'
       }
 
 export const ACCOUNT_BASE_URL = APP_INFO.accountBaseUrl
@@ -103,10 +108,10 @@ function createInstance(baseURL) {
   return instance
 }
 
-// account.proclaw.cc 认证服务实例
+// WPX 自托管认证实例（prowpx.com）
 export const httpAccount = createInstance(ACCOUNT_BASE_URL)
 
-// WPX 后端 API 实例
+// WPX 后端 API 实例（api.prowpx.com）
 export const httpApi = createInstance(API_BASE_URL)
 
 export default httpApi

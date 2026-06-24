@@ -117,6 +117,29 @@ export const useEditorStore = defineStore('editor', () => {
     pendingKnowledgeImport.value = null
   }
 
+  /**
+   * 待插入的 SlideDeck 节点请求（来自 PPT 工作流的最后一步）。
+   * EditorLayout 监听此 ref，调用 editor.insertSlideDeck() 将幻灯片节点插入文档。
+   * @type {import('vue').Ref<{ slides: Array<{ component: string, props: object }>, theme?: 'light'|'dark', title?: string, ts: number } | null>}
+   */
+  const pendingSlideDeckInsert = ref(null)
+
+  function requestSlideDeckInsert(payload) {
+    if (!payload || !Array.isArray(payload.slides)) {
+      return
+    }
+    pendingSlideDeckInsert.value = {
+      slides: payload.slides.slice(),
+      theme: payload.theme === 'dark' ? 'dark' : 'light',
+      title: payload.title || '',
+      ts: Date.now(),
+    }
+  }
+
+  function clearPendingSlideDeckInsert() {
+    pendingSlideDeckInsert.value = null
+  }
+
   return {
     selection,
     frozenSelection,
@@ -142,5 +165,8 @@ export const useEditorStore = defineStore('editor', () => {
     pendingKnowledgeImport,
     requestKnowledgeImport,
     clearPendingKnowledgeImport,
+    pendingSlideDeckInsert,
+    requestSlideDeckInsert,
+    clearPendingSlideDeckInsert,
   }
 })

@@ -598,9 +598,9 @@ async function saveSystem() {
 
 // ============ CDN 配置 ============
 const DEFAULT_CDN = {
-  fonts: 'https://cdn.proclaw.cc/fonts',
-  skills: 'https://cdn.proclaw.cc/skills',
-  install: 'https://cdn.proclaw.cc/wpx'
+  fonts: 'https://cdn.prowpx.com/fonts',
+  skills: 'https://cdn.prowpx.com/skills',
+  install: 'https://cdn.prowpx.com/wpx'
 }
 
 const cdnForm = reactive({ ...DEFAULT_CDN })
@@ -722,7 +722,7 @@ function demoAdmins() {
   return [
     {
       id: 'a1',
-      email: 'super@proclaw.cc',
+      email: 'super@prowpx.com',
       name: '超级管理员',
       role: 'super_admin',
       status: 'active',
@@ -731,7 +731,7 @@ function demoAdmins() {
     },
     {
       id: 'a2',
-      email: 'op@proclaw.cc',
+      email: 'op@prowpx.com',
       name: '运营小王',
       role: 'operation_admin',
       status: 'active',
@@ -740,7 +740,7 @@ function demoAdmins() {
     },
     {
       id: 'a3',
-      email: 'editor@proclaw.cc',
+      email: 'editor@prowpx.com',
       name: '内容编辑小李',
       role: 'content_editor',
       status: 'active',
@@ -749,7 +749,7 @@ function demoAdmins() {
     },
     {
       id: 'a4',
-      email: 'old@proclaw.cc',
+      email: 'old@prowpx.com',
       name: '前运营',
       role: 'operation_admin',
       status: 'disabled',

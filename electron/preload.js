@@ -64,11 +64,13 @@ const electronAPI = {
     onChanged: (callback) => onChannel('data:preferences:changed', callback),
   },
   auth: {
+    // 凭据持久化：仍由 Electron 主进程的 auth-store.js 加密保存到本地磁盘
     storeToken: (payload) => ipcRenderer.invoke('auth:store-token', payload),
     getToken: () => ipcRenderer.invoke('auth:get-token'),
-    clearToken: () => ipcRenderer.invoke('auth:clear-token'),
-    startLogin: (payload) => ipcRenderer.invoke('auth:start-login', payload),
-    onCallback: (callback) => onChannel('auth:callback', callback),
+    clearToken: () => ipcRenderer.invoke('auth:clear-token')
+    // 注意：旧的 auth.startLogin / auth.onCallback 已移除。
+    // WPX 改为应用内嵌 AuthModal 登录（POST prowpx.com/api/auth/login），
+    // 不再走外部浏览器回调。
   },
   freeQuota: {
     getStatus: (payload) => ipcRenderer.invoke('free-quota:get-status', payload),

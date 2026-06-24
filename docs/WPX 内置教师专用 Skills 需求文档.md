@@ -73,7 +73,7 @@ WPX Skills 系统
 │   ├── 通用 Skills（续写、改写、翻译等）
 │   └── 教师专用 Skills（16款）
 │
-└── skillhub 在线 Skills（从 skillhub.proclaw.cc 获取）
+└── skillhub 在线 Skills（从 skillhub.prowpx.com 获取）
     ├── 更多免费 Skills
     └── 未来社区贡献的 Skills
 ```

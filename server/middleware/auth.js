@@ -1,12 +1,12 @@
 /**
  * JWT 鉴权中间件
- * 校验由 account.proclaw.cc 颁发的访问令牌
- * 校验成功后挂载 req.user = { id, accountId, roles, raw }
+ * 校验由 prowpx.com 自托管邮箱认证服务颁发的访问令牌
+ * 校验成功后挂载 req.user = { id, accountId, email, nickname, roles, raw }
  *
  * 配置：
  *  - ACCOUNT_JWT_SECRET   共享密钥（HS256） 或 PEM 公钥（RS256）
  *  - ACCOUNT_JWT_ALG      签名算法，默认 HS256
- *  - ACCOUNT_JWT_ISSUER   期望的签发者，默认 account.proclaw.cc
+ *  - ACCOUNT_JWT_ISSUER   期望的签发者，默认 prowpx.com
  *  - ACCOUNT_JWT_AUDIENCE 期望的受众，默认 wpx-server
  *  - AUTH_BYPASS          true 时跳过校验（仅本地开发）
  */
@@ -34,7 +34,8 @@ function verifyToken(token) {
 }
 
 function normalizeUser(payload) {
-  // account.proclaw.cc 颁发的 token 通常包含：sub/accountId/email/roles/exp 等
+  // prowpx.com 自托管认证 token 包含：sub/email/nickname/roles/exp 等
+  // 兼容老 token（account.proclaw.cc 颁发，payload.accountId）
   return {
     id: payload.sub || payload.accountId || payload.userId,
     accountId: payload.accountId || payload.sub,

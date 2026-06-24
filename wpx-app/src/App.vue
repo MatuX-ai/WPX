@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterView } from 'vue-router'
 import LoginGuide from '@/components/auth/LoginGuide.vue'
+import AuthModal from '@/components/auth/AuthModal.vue'
 import FontRecommendationDialog from '@/components/font/FontRecommendationDialog.vue'
 import { useAuth } from '@/composables/useAuth'
 import { provideLoginGuide } from '@/composables/useLoginGuide'
@@ -23,7 +24,7 @@ import {
 const authStore = useAuthStore()
 const { sessionRestored } = storeToRefs(authStore)
 
-// 尽早订阅 wpx://auth 协议回调
+// 初始化认证 composable（开启应用内嵌认证 + 恢复会话）
 useAuth()
 provideLoginGuide()
 const preferencesStore = usePreferencesStore()
@@ -148,6 +149,8 @@ onUnmounted(() => {
   <div class="app-root">
     <RouterView v-if="sessionRestored" />
     <LoginGuide v-if="sessionRestored" />
+    <!-- 应用内嵌认证模态框：全局唯一，任何需要登录的位置都可调出 -->
+    <AuthModal v-if="sessionRestored" />
 
     <FontRecommendationDialog
       :visible="fontRecommendationDialog.visible.value"

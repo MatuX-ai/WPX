@@ -1,10 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "name": "wpx-landing",
+  "name": "wpx-landing-prowpx",
   "public": true,
   "cleanUrls": true,
   "trailingSlash": false,
+  "//": "部署域名：https://prowpx.com（营销站）",
   "github": {
     "silent": true
   },

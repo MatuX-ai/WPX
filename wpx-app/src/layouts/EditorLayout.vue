@@ -31,6 +31,7 @@ import PackMenu from '@/components/zip/PackMenu.vue'
 import KnowledgeTrigger from '@/components/knowledge/KnowledgeTrigger.vue'
 import AiAssistantPlaceholder from '@/components/layout/AiAssistantPlaceholder.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import SlideCopilotActionsHost from '@/components/slides/SlideCopilotActionsHost.vue'
 
 // 异步加载重型组件（减少初始 chunk）
 const KnowledgePanel = defineAsyncComponent(() =>
@@ -436,6 +437,60 @@ async function applyPendingKnowledgeImport() {
 
 watch(() => editorStore.pendingKnowledgeImport, applyPendingKnowledgeImport, { flush: 'post' })
 
+/**
+ * 监听来自 PPT 工作流最后一页的“插入 SlideDeck”请求。
+ * 调用 SlideDeckNode 扩展提供的 insertSlideDeck 命令，在当前光标处插入幻灯片节点。
+ */
+async function applyPendingSlideDeckInsert() {
+  const request = editorStore.pendingSlideDeckInsert
+  if (!request || !Array.isArray(request.slides) || request.slides.length === 0) {
+    return
+  }
+
+  try {
+    if (!appStore.hasOpenDocument) {
+      appStore.openDocument()
+      await nextTick()
+      editorRef.value?.loadMarkdown?.('')
+      editorOutput.value = { html: '', json: null, markdown: '' }
+    }
+
+    await nextTick()
+    const ed = await waitForEditorInstance()
+    if (!ed) {
+      toast.error('编辑器未就绪，无法插入幻灯片')
+      return
+    }
+
+    const inserted = ed.chain()
+      .focus()
+      .insertSlideDeck({
+        slides: JSON.stringify(request.slides),
+        theme: request.theme || 'light',
+      })
+      .run()
+
+    if (!inserted) {
+      toast.error('插入幻灯片失败：当前编辑器不支持 SlideDeck 节点')
+      return
+    }
+
+    editorOutput.value = {
+      html: ed.getHTML(),
+      json: ed.getJSON(),
+      markdown: editorRef.value?.getMarkdown() || '',
+    }
+    appStore.markDocumentDirty()
+    scheduleAutoSave()
+    const total = request.slides.length
+    toast.success(`已插入 ${total} 页幻灯片到编辑器`)
+  } finally {
+    editorStore.clearPendingSlideDeckInsert()
+  }
+}
+
+watch(() => editorStore.pendingSlideDeckInsert, applyPendingSlideDeckInsert, { flush: 'post' })
+
 watch(
   () => editorStore.pendingFontApply,
   async (request) => {
@@ -531,9 +586,11 @@ watch(
         @close="closeKnowledgePanel()"
       />
       <KnowledgeTrigger />
-
+      
       <AiAssistantPlaceholder />
-
+      
+      <SlideCopilotActionsHost />
+      
       <ExportTemplateIndicator />
 
       <Transition name="image-editor-pop">

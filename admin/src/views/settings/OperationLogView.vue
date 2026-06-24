@@ -391,7 +391,7 @@ function demoList() {
   const now = Date.now()
   const types = typeOptions.map((t) => t.value)
   const names = ['超级管理员', '运营小王', '内容编辑小李', '运营小张']
-  const emails = ['super@proclaw.cc', 'op@proclaw.cc', 'editor@proclaw.cc', 'zhang@proclaw.cc']
+  const emails = ['super@prowpx.com', 'op@prowpx.com', 'editor@prowpx.com', 'zhang@prowpx.com']
   const list = []
   for (let i = 0; i < 76; i++) {
     const t = now - i * 1800 * 1000 - Math.floor(Math.random() * 600000)
