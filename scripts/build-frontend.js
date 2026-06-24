@@ -58,7 +58,7 @@ const STALE_PATHS = [
   'favicon.svg', 'browserconfig.xml', 'og-image.svg',
   'robots.txt', 'sitemap.xml',
   'assets', 'blog', 'about',
-  'admin', 'api',
+  'admin', 'admin.html', 'api',
 ];
 
 function log(...args) {
@@ -192,9 +192,19 @@ function main() {
     }
   }
 
-  // admin/dist/* → public/admin/*
+  // admin/dist/* → public/admin/*（SPA 入口，/admin/ 时触发 directory index）
   log('  - 复制 admin/dist → public/admin/');
   copyDir(ADMIN_DIST, path.join(PUBLIC_DIR, 'admin'));
+
+  // 额外复制 admin/index.html → public/admin.html，让 /admin（无斜杠）也能直接访问
+  // 因为 vercel.json 的 rewrite 规则在当前项目中未生效，
+  // 需要依靠 cleanUrls 自动匹配 /admin → /admin.html
+  const adminHtmlSrc = path.join(ADMIN_DIST, 'index.html');
+  const adminHtmlDest = path.join(PUBLIC_DIR, 'admin.html');
+  if (fs.existsSync(adminHtmlSrc)) {
+    fs.copyFileSync(adminHtmlSrc, adminHtmlDest);
+    log('  ↳ 额外复制 admin/index.html → public/admin.html（备用）');
+  }
 
   // admin/api/proxy.js → public/api/proxy.js（Vercel Serverless Function）
   // Vercel 自动从 outputDirectory/api/ 检测 Serverless Function
