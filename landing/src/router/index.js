@@ -56,6 +56,97 @@ export const routes = [
     }
   },
   {
+    path: '/changelog',
+    name: 'changelog',
+    component: () => import('../views/ChangelogView.vue'),
+    meta: {
+      title: '更新日志 · WPX',
+      description:
+        'WPX 的每一次小步快跑 —— 新功能、性能优化、Bug 修复，一目了然。',
+      keywords: 'WPX 更新日志,版本历史,Changelog,发布说明',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
+    path: '/docs',
+    name: 'docs',
+    component: () => import('../views/DocsView.vue'),
+    meta: {
+      title: '文档 · WPX',
+      description:
+        '从安装到高级定制，WPX 的完整使用文档。包含快速上手、核心功能、API 参考与最佳实践。',
+      keywords: 'WPX 文档,使用指南,API,教程,快速上手',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
+    path: '/skills',
+    name: 'skills',
+    component: () => import('../views/SkillsView.vue'),
+    meta: {
+      title: 'Skills 市场 · WPX',
+      description:
+        '把 WPX 变成最懂你的工作台 —— 学生专用、教师专用、通用 Skills 一应俱全，按需启用。',
+      keywords: 'WPX Skills,AI 技能,学生 Skill,教师 Skill,Skills 市场',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
+    path: '/fonts',
+    name: 'fonts',
+    component: () => import('../views/FontsView.vue'),
+    meta: {
+      title: '字体商店 · WPX',
+      description:
+        '8 款免费开源字体即装即用，在线字体按需下载，商业字体按字付费。好看、合法、不打扰。',
+      keywords: 'WPX 字体,免费字体,开源字体,商业字体,思源黑体,霞鹜文楷',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
+    path: '/legal/privacy',
+    name: 'legal-privacy',
+    component: () => import('../views/PrivacyView.vue'),
+    meta: {
+      title: '隐私政策 · WPX',
+      description:
+        'WPX 致力于把数据留在本地。本政策详解我们收集、使用、存储和保护你信息的方式。',
+      keywords: 'WPX 隐私政策,数据保护,本地优先,个人信息',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
+    path: '/legal/terms',
+    name: 'legal-terms',
+    component: () => import('../views/TermsView.vue'),
+    meta: {
+      title: '用户协议 · WPX',
+      description:
+        'WPX 用户协议：使用许可、用户行为规范、知识产权与免责声明的完整说明。',
+      keywords: 'WPX 用户协议,服务条款,免责声明,知识产权',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
+    path: '/legal/licenses',
+    name: 'legal-licenses',
+    component: () => import('../views/LicensesView.vue'),
+    meta: {
+      title: '开源许可证 · WPX',
+      description:
+        'WPX 站在开源的肩膀上 —— 内置字体、核心依赖的许可证清单与致谢。',
+      keywords: 'WPX 开源,许可证,MIT,OFL,字体版权,依赖致谢',
+      image: siteConfig.ogImage,
+      type: 'website'
+    }
+  },
+  {
     // 兼容带 hash 的旧链接（如 /#/blog）
     path: '/:pathMatch(.*)*',
     name: 'not-found',
