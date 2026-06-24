@@ -5,6 +5,7 @@
   "framework": null,
   "installCommand": "npm install --prefix landing --no-audit --no-fund && npm install --prefix admin --no-audit --no-fund",
   "buildCommand": "node scripts/build-frontend.js",
+  "outputDirectory": "public",
   "cleanUrls": true,
   "trailingSlash": false,
   "regions": ["hkg1"],
