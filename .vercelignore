@@ -2,38 +2,57 @@
 # 用于在 Vercel 构建时跳过与前端无关的子项目，避免无谓的 npm install 和上传体积
 #
 # 重要：build-frontend.js 会把 landing + admin 的 dist 产物直接复制到项目根，
-#       所以这里要把源码目录也排除（landing/dist 和 admin/dist 同样排除），
-#       避免重复上传 + 干扰 Vercel 部署源识别
+#       所以这里要把源码目录也排除，避免重复上传 + 干扰 Vercel 部署源识别
+#
+# ⚠️ 必须保留的构建依赖文件（不能整目录排除）：
+#   - landing/package.json, vite.config.js, tailwind.config.js, postcss.config.js
+#   - admin/package.json, vite.config.js, tailwind.config.js, postcss.config.js, api/proxy.js
+#   - scripts/build-frontend.js
+#   缺少任何一个都会导致 installCommand / buildCommand 失败。
 
-# === 源码子项目（Vercel 不需要源码本身，只要 dist 产物） ===
-landing/
-landing/**/*
-admin/
-admin/**/*
-scripts/
-scripts/**/*
+# === 项目根：只排除项目根的 package.json（子项目的 package.json 必须保留）===
+/package.json
+/package-lock.json
 
-# Electron 桌面端（与 Vercel 无关）
-electron/
-electron/**/*
-wpx-app/
-wpx-app/**/*
+# === landing 子项目：排除源码和 IDE/文档，保留构建配置 ===
+landing/src/**
+landing/.vscode/**
+/landing/.env.production.example
+landing/public/**
+/landing/README.md
 
-# Express 后端（部署到 Render/Railway，不上 Vercel）
-server/
-server/**/*
+# === admin 子项目：排除源码、Cloudflare Functions、IDE/文档，保留构建配置 ===
+admin/src/**
+admin/.vscode/**
+/admin/.env.example
+/admin/ADMIN_INIT.md
+/admin/DEPLOY.md
+/admin/vercel.json
+# admin/functions/ 是 Cloudflare Pages Functions，不是 Vercel Function
+admin/functions/**/*
+admin/public/**
 
-# 打包产物 / 资源
-release/
-resources/
+# === scripts：保留 build-frontend.js（Vercel buildCommand 需要），排除其他 ===
+/scripts/build-electron.ps1
+/scripts/bump-pack-version.mjs
+/scripts/force-build.mjs
+/scripts/generate-icons.mjs
+/scripts/run-build.mjs
+/scripts/smoke-prod-electron.mjs
+/scripts/smoke-prod-runner.cjs
 
-# Vercel 不需要项目根的 package.json（它的 installCommand 已指定前缀）
-# 但 vercel.json 必须保留（Vercel 配置）
-package.json
-package-lock.json
+# === Electron 桌面端（与 Vercel 无关） ===
+electron/**
+wpx-app/**
+
+# === Express 后端（部署到 Render/Railway，不上 Vercel） ===
+server/**
+
+# === 打包产物 / 资源 ===
+release/**
+resources/**
 
 # 依赖相关
-node_modules/
 **/node_modules/
 
 # Vite/Vitest 缓存
@@ -41,9 +60,9 @@ node_modules/
 *.tsbuildinfo
 
 # 测试报告
-playwright-report/
-test-results/
-coverage/
+playwright-report/**
+test-results/**
+coverage/**
 
 # 编辑器 / 系统文件
 .DS_Store
@@ -55,12 +74,12 @@ plan.md
 test-write.txt
 
 # Storybook / E2E 临时产物
-wpx-app/storybook-static/
+wpx-app/storybook-static/**
 wpx-app/tex2pdf.*/
 
 # 文档
-docs/
+docs/**
 
 # CI 配置
-.cursor/
-.github/
+.cursor/**
+.github/**
