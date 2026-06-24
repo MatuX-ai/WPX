@@ -5,6 +5,29 @@ wpx-app/dist/
 release/
 release-build/
 
+# === 前端构建产物（由 scripts/build-frontend.js 在 Vercel 上重新生成） ===
+# 不要把这些提交到 git：它们是 build-frontend.js 的输出，
+# Vercel 部署时会在自己的服务器上重新跑 buildCommand 生成。
+# 提交这些会导致 PR diff 噪音 + 仓库体积膨胀 + 误以为部署源。
+public/
+landing/dist/
+admin/dist/
+index.html
+index.html.br
+index.html.gz
+about/
+blog/
+assets/
+api/
+wp-admin/
+favicon.svg
+og-image.svg
+browserconfig.xml
+robots.txt
+sitemap.xml
+_redirects
+_headers
+
 # Logs & temp
 *.log
 build*.log

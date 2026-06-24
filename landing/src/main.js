@@ -13,6 +13,11 @@ import { createSSRApp } from 'vue'
 import App from './App.vue'
 import { createRouter } from './router'
 
+// 全局样式：Tailwind base/components/utilities + WPX 自定义样式
+// 必须显式 import，否则 Vite 不会把 style.css 纳入打包流水线，
+// 导致 Tailwind PostCSS 不被处理，最终产物体积极小（仅含 scoped 样式）。
+import './style.css'
+
 export function createApp(opts = {}) {
   const app = createSSRApp(App)
   const router = createRouter({ ssr: !!opts.ssr, initialUrl: opts.initialUrl || '/' })
