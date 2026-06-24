@@ -117,3 +117,11 @@ module.exports = async (req, res) => {
     })
   }
 }
+
+// Vercel Function 运行时配置
+// 绕过 vercel.json 中 `functions` 字段的 glob 模式匹配问题
+// (CLI 54.10.2 回归 bug + 自定义 Root Directory 项目)
+module.exports.config = {
+  memory: 256,
+  maxDuration: 10
+}

@@ -54,13 +54,6 @@
     }
   ],
 
-  "functions": {
-    "api/**": {
-      "memory": 256,
-      "maxDuration": 10
-    }
-  },
-
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
     { "source": "/admin/assets/(.*)", "destination": "/wp-admin/assets/$1" },
