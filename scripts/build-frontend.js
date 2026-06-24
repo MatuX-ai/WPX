@@ -53,13 +53,12 @@ const SKIP_INSTALL = process.env.WPX_SKIP_INSTALL === '1';
 
 // 每次构建前要清掉的 public/ 下旧产物（避免上次构建残留）
 // 注意：不能写 'admin'！会误删源码 admin/ 目录
-// 构建产物放在 public/wp-admin/ 下，vercel.json rewrites 负责 /admin 映射
 const STALE_PATHS = [
   'index.html', 'index.html.gz', 'index.html.br',
   'favicon.svg', 'browserconfig.xml', 'og-image.svg',
   'robots.txt', 'sitemap.xml',
   'assets', 'blog', 'about',
-  'wp-admin', 'api',
+  'admin', 'api',
 ];
 
 function log(...args) {
@@ -193,9 +192,9 @@ function main() {
     }
   }
 
-  // admin/dist/* → public/wp-admin/*（避免与源码 admin/ 同名冲突）
-  log('  - 复制 admin/dist → public/wp-admin/');
-  copyDir(ADMIN_DIST, path.join(PUBLIC_DIR, 'wp-admin'));
+  // admin/dist/* → public/admin/*
+  log('  - 复制 admin/dist → public/admin/');
+  copyDir(ADMIN_DIST, path.join(PUBLIC_DIR, 'admin'));
 
   // admin/api/proxy.js → public/api/proxy.js（Vercel Serverless Function）
   // Vercel 自动从 outputDirectory/api/ 检测 Serverless Function
@@ -213,7 +212,7 @@ function main() {
       log(`  ${p}${stat.isDirectory() ? '/' : ''}`);
     }
   }
-  log('可访问路径：');
+  log(' 可访问路径：');
   log('  - /                       ← landing 首页');
   log('  - /blog  /about           ← landing 路由');
   log('  - /admin                  ← admin 登录');

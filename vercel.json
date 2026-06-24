@@ -57,9 +57,6 @@
 
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
-    { "source": "/admin/assets/(.*)", "destination": "/wp-admin/assets/$1" },
-    { "source": "/admin", "destination": "/wp-admin/index.html" },
-    { "source": "/admin/(.*)", "destination": "/wp-admin/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
