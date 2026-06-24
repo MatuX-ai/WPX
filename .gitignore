@@ -40,6 +40,10 @@ test-write.txt
 .env.*
 !.env.example
 
+# Push artifacts
+push.*
+!push.bat
+
 # Built-in fonts (large binaries — see README.md)
 resources/fonts/**/*.ttf
 resources/fonts/**/*.otf
