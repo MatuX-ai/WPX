@@ -7,24 +7,26 @@
  *   - admin/dist/          管理后台（base='/admin/'）
  *   - admin/api/proxy.js   Vercel Serverless Function（API 反代）
  *
- * 输出（Vercel 部署目录）：
- *   - public/
- *       ├── index.html, blog.html, about.html ...   ← landing 全部产物
- *       ├── assets/, favicon.svg ...                ← landing 静态资源
- *       └── admin/
- *           ├── index.html                          ← admin SPA 入口
- *           └── assets/...                          ← admin 静态资源
- *   - api/
- *       └── proxy.js                                ← Vercel 自动识别为函数
+ * 输出（直接放到项目根，作为 Vercel 部署源）：
+ *   - 项目根/
+ *       ├── index.html
+ *       ├── blog/index.html
+ *       ├── about/index.html
+ *       ├── assets/...
+ *       ├── admin/index.html
+ *       ├── admin/assets/...
+ *       ├── favicon.svg, robots.txt, sitemap.xml ...
+ *       └── api/proxy.js                              ← Vercel Serverless Function
+ *
+ * 关键点：
+ *   - 不用 public/ 作为 outputDirectory，原因：
+ *     1. Vercel 设了 outputDirectory 后，部署源就锁死在 outputDirectory 内
+ *     2. outputDirectory 内的 .js 文件被 Vercel 当静态资源，不是函数
+ *     3. outputDirectory 外的文件（哪怕是 api/proxy.js 在项目根）Vercel 看不见
+ *   - 所以产物直接放项目根，配合 .vercelignore 排除源文件
  *
  * 调用方式：
  *   node scripts/build-frontend.js
- *
- * 行为：
- *   1. 安装 landing + admin 子项目依赖（Vercel installCommand 已设，这里跳过）
- *   2. 串行执行两个子项目 npm run build
- *   3. 把 dist 产物复制到仓库根的 public/ + api/
- *   4. 清理目标目录，避免上次构建残留
  */
 
 'use strict';
@@ -34,8 +36,6 @@ const path = require('node:path');
 const { execSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const PUBLIC_DIR = path.join(ROOT, 'public');
-const API_DIR = path.join(ROOT, 'api');
 
 const LANDING_DIR = path.join(ROOT, 'landing');
 const ADMIN_DIR = path.join(ROOT, 'admin');
@@ -45,6 +45,18 @@ const ADMIN_DIST = path.join(ADMIN_DIR, 'dist');
 const ADMIN_PROXY_SRC = path.join(ADMIN_DIR, 'api', 'proxy.js');
 
 const SKIP_INSTALL = process.env.WPX_SKIP_INSTALL === '1';
+
+// 每次构建前要清掉的项目根文件/目录（避免上次构建残留）
+// 重要：不能写 'admin'！会误删源码 admin/ 目录
+// 原因：源码 admin/ 与我们要部署的 admin 构建产物同名，会冲突
+// 解决：admin 部署在项目根的 wp-admin/ 下，vercel.json rewrites 负责 /admin 映射
+const STALE_PATHS = [
+  'index.html', 'index.html.gz', 'index.html.br',
+  'favicon.svg', 'browserconfig.xml', 'og-image.svg',
+  'robots.txt', 'sitemap.xml',
+  'assets', 'blog', 'about',
+  'wp-admin', 'api',
+];
 
 function log(...args) {
   console.log('[build-frontend]', ...args);
@@ -59,7 +71,6 @@ function copyDir(src, dest, options = {}) {
   const { skip = [] } = options;
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    // 跳过指定名称的子目录（如 landing 的 server/ SSR 产物）
     if (skip.includes(entry.name)) {
       const what = entry.isDirectory() ? '子目录' : entry.isSymbolicLink() ? '符号链接' : '文件';
       log(`  ↳ 跳过${what}：${path.join(src, entry.name)}`);
@@ -70,7 +81,6 @@ function copyDir(src, dest, options = {}) {
     if (entry.isDirectory()) {
       copyDir(s, d, options);
     } else if (entry.isFile()) {
-      // .map 源文件如果 landing 产出了 sourcemap 一并复制（debug 用）
       fs.copyFileSync(s, d);
     } else if (entry.isSymbolicLink()) {
       const real = fs.realpathSync(s);
@@ -104,11 +114,22 @@ function countFiles(dir) {
   return n;
 }
 
+function cleanStale() {
+  log('清理上次构建的产物（项目根）');
+  for (const p of STALE_PATHS) {
+    const full = path.join(ROOT, p);
+    if (fs.existsSync(full)) {
+      rmrf(full);
+      log(`  ↳ 已删除：${p}`);
+    }
+  }
+}
+
 function main() {
   log('========== WPX 前端合并构建开始 ==========');
   log(`仓库根：${ROOT}`);
 
-  // 1. 安装子项目依赖（通常 Vercel installCommand 已做过；这里兜底）
+  // 1. 安装子项目依赖
   if (!SKIP_INSTALL) {
     log('步骤 1/4：安装子项目依赖（installCommand 已执行则可跳过）');
     try {
@@ -144,52 +165,46 @@ function main() {
   assertExists(ADMIN_DIST, 'admin/dist');
   assertExists(ADMIN_PROXY_SRC, 'admin/api/proxy.js');
 
-  // 4. 合并产物
-  log('步骤 4/4：合并构建产物到 public/ + api/');
+  // 4. 合并产物到项目根
+  log('步骤 4/4：合并构建产物到项目根（Vercel 部署源）');
 
-  rmrf(PUBLIC_DIR);
-  rmrf(API_DIR);
-  fs.mkdirSync(PUBLIC_DIR, { recursive: true });
-  fs.mkdirSync(API_DIR, { recursive: true });
+  cleanStale();
 
-  // landing/dist/* → public/*
-  // 注意：排除 dist/server/ 这个 SSR 服务端构建产物。
-  //       - Vercel 静态托管根本不需要 SSR bundle
-  //       - Vercel 会把 public/server/entry-server.js 误识别成 Serverless Function
-  //         （报 “No exported handler found” 或 “Could not parse Function”）
-  log('  - 复制 landing/dist → public/  (跳过 server/ SSR 产物)');
-  copyDir(LANDING_DIST, PUBLIC_DIR, { skip: ['server'] });
+  // landing/dist/* → 项目根/*
+  // 排除 dist/server/（Vite SSR 产物，Vercel 静态部署不需要）
+  log('  - 复制 landing/dist → 项目根  (跳过 server/ SSR 产物)');
+  copyDir(LANDING_DIST, ROOT, { skip: ['server'] });
 
-  // 删除 Netlify/Cloudflare 专属文件，避免 Vercel 解析报错
-  // - public/_redirects：Vercel 走 vercel.json 的 rewrites，此文件里 `/*` 通配符会报错
-  // - public/_headers：跟 vercel.json 的 headers 重复，有冲突风险
+  // 删除 Netlify/Cloudflare 专属文件
   for (const f of ['_redirects', '_headers']) {
-    const p = path.join(PUBLIC_DIR, f);
+    const p = path.join(ROOT, f);
     if (fs.existsSync(p)) {
       fs.unlinkSync(p);
-      log(`  ↳ 删除 Netlify/Cloudflare 专用文件：public/${f}`);
+      log(`  ↳ 删除 Netlify/Cloudflare 专用文件：${f}`);
     }
   }
 
-  // admin/dist/* → public/admin/*
-  log('  - 复制 admin/dist → public/admin/');
-  copyDir(ADMIN_DIST, path.join(PUBLIC_DIR, 'admin'));
+  // admin/dist/* → 项目根/wp-admin/*（避免与源码 admin/ 同名冲突）
+  log('  - 复制 admin/dist → 项目根/wp-admin/');
+  copyDir(ADMIN_DIST, path.join(ROOT, 'wp-admin'));
 
-  // admin/api/proxy.js → public/api/proxy.js（Vercel Serverless Function）
-  // 重要：因为 vercel.json 里 outputDirectory = "public"，
-  //       Vercel 只部署 public/ 里的东西，所以函数必须放在 public/api/ 下，
-  //       放在仓库根的 api/ 会被 Vercel 忽略，报错
-  //       "The pattern api/proxy.js doesn't match any Serverless Functions"
-  log('  - 复制 admin/api/proxy.js → public/api/proxy.js');
-  const PUBLIC_API_DIR = path.join(PUBLIC_DIR, 'api');
-  fs.mkdirSync(PUBLIC_API_DIR, { recursive: true });
-  fs.copyFileSync(ADMIN_PROXY_SRC, path.join(PUBLIC_API_DIR, 'proxy.js'));
+  // admin/api/proxy.js → 项目根/api/proxy.js（Vercel Serverless Function）
+  // 不再放 public/api/，原因：设了 outputDirectory 会与函数检测冲突
+  // 这里直接放项目根，配合 vercel.json 去掉 outputDirectory
+  log('  - 复制 admin/api/proxy.js → 项目根/api/proxy.js');
+  const ROOT_API_DIR = path.join(ROOT, 'api');
+  fs.mkdirSync(ROOT_API_DIR, { recursive: true });
+  fs.copyFileSync(ADMIN_PROXY_SRC, path.join(ROOT_API_DIR, 'proxy.js'));
 
   // 5. 打印统计
-  const publicFiles = countFiles(PUBLIC_DIR);
   log('========== ✅ 构建完成 ==========');
-  log(`public/  共 ${publicFiles} 个文件（含 landing + admin）`);
-  log(`api/proxy.js 已就位（Vercel Serverless Function）`);
+  log('项目根产物：');
+  for (const p of STALE_PATHS) {
+    if (fs.existsSync(path.join(ROOT, p))) {
+      const stat = fs.statSync(path.join(ROOT, p));
+      log(`  ${p}${stat.isDirectory() ? '/' : ''}`);
+    }
+  }
   log('可访问路径：');
   log('  - /                       ← landing 首页');
   log('  - /blog  /about           ← landing 路由');

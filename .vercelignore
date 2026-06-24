@@ -1,5 +1,17 @@
 # WPX · Vercel 部署忽略规则
 # 用于在 Vercel 构建时跳过与前端无关的子项目，避免无谓的 npm install 和上传体积
+#
+# 重要：build-frontend.js 会把 landing + admin 的 dist 产物直接复制到项目根，
+#       所以这里要把源码目录也排除（landing/dist 和 admin/dist 同样排除），
+#       避免重复上传 + 干扰 Vercel 部署源识别
+
+# === 源码子项目（Vercel 不需要源码本身，只要 dist 产物） ===
+landing/
+landing/**/*
+admin/
+admin/**/*
+scripts/
+scripts/**/*
 
 # Electron 桌面端（与 Vercel 无关）
 electron/
@@ -15,9 +27,14 @@ server/**/*
 release/
 resources/
 
-# Vercel 不需要 Electron 依赖
+# Vercel 不需要项目根的 package.json（它的 installCommand 已指定前缀）
+# 但 vercel.json 必须保留（Vercel 配置）
 package.json
 package-lock.json
+
+# 依赖相关
+node_modules/
+**/node_modules/
 
 # Vite/Vitest 缓存
 .vite/
@@ -40,3 +57,10 @@ test-write.txt
 # Storybook / E2E 临时产物
 wpx-app/storybook-static/
 wpx-app/tex2pdf.*/
+
+# 文档
+docs/
+
+# CI 配置
+.cursor/
+.github/

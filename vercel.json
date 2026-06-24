@@ -5,7 +5,6 @@
   "framework": null,
   "installCommand": "npm install --prefix landing --no-audit --no-fund && npm install --prefix admin --no-audit --no-fund",
   "buildCommand": "node scripts/build-frontend.js",
-  "outputDirectory": "public",
   "cleanUrls": true,
   "trailingSlash": false,
   "regions": ["hkg1"],
@@ -20,7 +19,7 @@
       ]
     },
     {
-      "source": "/admin/assets/(.*)",
+      "source": "/wp-admin/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
@@ -57,8 +56,9 @@
 
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
-    { "source": "/admin", "destination": "/admin/index.html" },
-    { "source": "/admin/(.*)", "destination": "/admin/index.html" },
+    { "source": "/admin/assets/(.*)", "destination": "/wp-admin/assets/$1" },
+    { "source": "/admin", "destination": "/wp-admin/index.html" },
+    { "source": "/admin/(.*)", "destination": "/wp-admin/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
 
