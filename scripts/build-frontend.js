@@ -55,13 +55,20 @@ function rmrf(target) {
   fs.rmSync(target, { recursive: true, force: true });
 }
 
-function copyDir(src, dest) {
+function copyDir(src, dest, options = {}) {
+  const { skip = [] } = options;
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    // 跳过指定名称的子目录（如 landing 的 server/ SSR 产物）
+    if (skip.includes(entry.name)) {
+      const what = entry.isDirectory() ? '子目录' : entry.isSymbolicLink() ? '符号链接' : '文件';
+      log(`  ↳ 跳过${what}：${path.join(src, entry.name)}`);
+      continue;
+    }
     const s = path.join(src, entry.name);
     const d = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      copyDir(s, d);
+      copyDir(s, d, options);
     } else if (entry.isFile()) {
       // .map 源文件如果 landing 产出了 sourcemap 一并复制（debug 用）
       fs.copyFileSync(s, d);
@@ -146,8 +153,23 @@ function main() {
   fs.mkdirSync(API_DIR, { recursive: true });
 
   // landing/dist/* → public/*
-  log('  - 复制 landing/dist → public/');
-  copyDir(LANDING_DIST, PUBLIC_DIR);
+  // 注意：排除 dist/server/ 这个 SSR 服务端构建产物。
+  //       - Vercel 静态托管根本不需要 SSR bundle
+  //       - Vercel 会把 public/server/entry-server.js 误识别成 Serverless Function
+  //         （报 “No exported handler found” 或 “Could not parse Function”）
+  log('  - 复制 landing/dist → public/  (跳过 server/ SSR 产物)');
+  copyDir(LANDING_DIST, PUBLIC_DIR, { skip: ['server'] });
+
+  // 删除 Netlify/Cloudflare 专属文件，避免 Vercel 解析报错
+  // - public/_redirects：Vercel 走 vercel.json 的 rewrites，此文件里 `/*` 通配符会报错
+  // - public/_headers：跟 vercel.json 的 headers 重复，有冲突风险
+  for (const f of ['_redirects', '_headers']) {
+    const p = path.join(PUBLIC_DIR, f);
+    if (fs.existsSync(p)) {
+      fs.unlinkSync(p);
+      log(`  ↳ 删除 Netlify/Cloudflare 专用文件：public/${f}`);
+    }
+  }
 
   // admin/dist/* → public/admin/*
   log('  - 复制 admin/dist → public/admin/');
