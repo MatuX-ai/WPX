@@ -1,0 +1,42 @@
+# ---- Node ----
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm/
+
+# ---- 环境与密钥 ----
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ---- 日志 ----
+logs/
+*.log
+pm2.*.log
+
+# ---- 构建产物 ----
+dist/
+build/
+coverage/
+.nyc_output/
+
+# ---- 工具 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- 测试与文档（构建无关）----
+__tests__/
+test/
+playwright-report/
+test-results/
+.vitest/
+.cache/
+
+# ---- Git ----
+.git/
+.gitignore
+.github/

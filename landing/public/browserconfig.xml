@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WPX 浏览器配置（Windows / IE 磁贴）
+  https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/dn320426(v=vs.85)
+-->
+<browserconfig>
+  <msapplication>
+    <tile>
+      <square70x70logo src="/favicon.svg"/>
+      <square150x150logo src="/favicon.svg"/>
+      <wide310x150logo src="/favicon.svg"/>
+      <TileColor>#4F46E5</TileColor>
+    </tile>
+  </msapplication>
+</browserconfig>

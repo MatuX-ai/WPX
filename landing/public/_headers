@@ -1,0 +1,94 @@
+# Cloudflare Pages / Netlify 通用缓存与安全头配置
+# 当使用 Vercel 时，vercel.json 优先；本文件作为 Cloudflare Pages 部署兜底。
+
+# === HTML 短缓存（1小时 CDN 缓存，浏览器即时刷新） ===
+/*.html
+  Cache-Control: public, max-age=0, s-maxage=3600, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/
+  Cache-Control: public, max-age=0, s-maxage=3600, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/blog
+  Cache-Control: public, max-age=0, s-maxage=3600, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/about
+  Cache-Control: public, max-age=0, s-maxage=3600, must-revalidate
+  X-Content-Type-Options: nosniff
+
+# === 静态资源：JS / CSS / 图片 / 字体 1 年长缓存（文件 hash 由 Vite 自动处理） ===
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.svg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.png
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpeg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.gif
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ico
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.otf
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.map
+  Cache-Control: public, max-age=31536000, immutable
+
+# === SEO 文件：robots / sitemap 中等缓存 ===
+/robots.txt
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
+/sitemap.xml
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
+/browserconfig.xml
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
+# === 预渲染的 HTML 页面（/blog/index.html 等）===
+/blog/*
+  Cache-Control: public, max-age=0, s-maxage=3600, must-revalidate
+
+/about/*
+  Cache-Control: public, max-age=0, s-maxage=3600, must-revalidate
+
+# === 全局安全响应头（所有路径） ===
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  # CSP 允许 Google Fonts + 自身内联资源（与现有 index.html 配合）
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'

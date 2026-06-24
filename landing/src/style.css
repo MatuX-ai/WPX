@@ -1,0 +1,528 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================
+   WPX 全局样式
+   字体：Inter (拉丁) + Noto Sans SC (思源黑体 / 中文)
+   ===================================================== */
+
+:root {
+  --wpx-primary-from: #2563EB;
+  --wpx-primary-to: #7C3AED;
+  --wpx-accent-yellow: #FBBF24;
+  --wpx-accent-mint: #34D399;
+  --wpx-dark: #1E1E1E;
+  --wpx-light: #FAFAFA;
+  --wpx-pulse-ring: rgba(124, 58, 237, 0.45);
+}
+
+/* ============== CTA 脉冲动画（2s 循环） ============== */
+@keyframes wpxCtaPulse {
+  0% {
+    box-shadow:
+      0 0 0 0 var(--wpx-pulse-ring),
+      0 10px 30px -10px rgba(79, 70, 229, 0.35);
+  }
+  70% {
+    box-shadow:
+      0 0 0 14px rgba(124, 58, 237, 0),
+      0 10px 30px -10px rgba(79, 70, 229, 0.35);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(124, 58, 237, 0),
+      0 10px 30px -10px rgba(79, 70, 229, 0.35);
+  }
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  font-family:
+    'Inter',
+    'Noto Sans SC',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: var(--wpx-dark);
+  background-color: var(--wpx-light);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* 字体优化：中文优先使用思源黑体 */
+:lang(zh-CN),
+:lang(zh) {
+  font-family:
+    'Noto Sans SC',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    'Inter',
+    system-ui,
+    sans-serif;
+}
+
+/* 通用排版 */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family:
+    'Inter',
+    'Noto Sans SC',
+    'PingFang SC',
+    system-ui,
+    sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@layer components {
+  .wpx-gradient-text {
+    @apply bg-wpx-gradient bg-clip-text text-transparent;
+    background-size: 200% 200%;
+    animation: gradientShift 8s ease infinite;
+  }
+
+  .wpx-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full
+           bg-wpx-gradient px-6 py-3 font-semibold text-white
+           shadow-wpx transition-all duration-300
+           hover:shadow-wpx-glow hover:-translate-y-0.5
+           focus:outline-none focus:ring-2 focus:ring-primary-500/50;
+  }
+
+  .wpx-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full
+           border border-dark/10 bg-white/60 px-6 py-3
+           font-semibold text-dark backdrop-blur
+           transition-all duration-300
+           hover:bg-white hover:border-primary-500/40 hover:text-primary-600;
+  }
+
+  /* 脉冲 CTA：2s 循环，适合作为主行动召唤 */
+  .wpx-btn-cta-pulse {
+    @apply relative inline-flex items-center justify-center gap-2
+           rounded-full bg-wpx-gradient px-6 py-3 font-semibold text-white
+           transition-transform duration-300
+           hover:-translate-y-0.5
+           focus:outline-none focus:ring-2 focus:ring-primary-500/50;
+    animation: wpxCtaPulse 2s ease-in-out infinite;
+  }
+
+  .wpx-section {
+    @apply relative w-full px-6 py-24 md:py-32;
+  }
+
+  .wpx-container {
+    @apply mx-auto max-w-6xl;
+  }
+
+  .wpx-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-primary-500/20
+           bg-wpx-gradient-soft px-4 py-1.5 text-sm font-medium text-primary-600;
+  }
+}
+
+/* 自定义滚动条（仅在支持浏览器中显示） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(79, 70, 229, 0.45);
+}
+
+/* 尊重用户的减少动效偏好：暂停 CTA 脉冲 */
+@media (prefers-reduced-motion: reduce) {
+  .wpx-btn-cta-pulse {
+    animation: none;
+  }
+  .wpx-unicorn-fab,
+  .wpx-snake-stage,
+  .wpx-konami-dialog {
+    animation: none;
+  }
+}
+
+/* =====================================================
+   彩蛋 UI（useEasterEggs.js 动态插入的 DOM）
+   ===================================================== */
+
+/* === 全局宿主层 === */
+#__wpx_egg_host {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+#__wpx_egg_host > * {
+  pointer-events: auto;
+}
+
+/* === 贪吃蛇 === */
+.wpx-snake-stage {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  border-top: 2px solid #34d399;
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.35);
+  animation: wpxSnakeUp 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes wpxSnakeUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.wpx-snake-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  font-size: 12px;
+  background: rgba(124, 58, 237, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.wpx-snake-score b {
+  color: #34d399;
+  font-size: 14px;
+}
+.wpx-snake-close {
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.wpx-snake-close:hover {
+  color: #ff5f56;
+}
+.wpx-snake-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  width: 100%;
+  height: calc(100% - 36px);
+  position: relative;
+}
+.wpx-snake-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.wpx-snake-head {
+  background: linear-gradient(135deg, #34d399, #2563eb);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.wpx-snake-body {
+  background: rgba(124, 58, 237, 0.55);
+  border-radius: 2px;
+}
+.wpx-snake-food {
+  animation: wpxFoodBlink 0.6s ease-in-out infinite alternate;
+}
+@keyframes wpxFoodBlink {
+  from { transform: scale(1); filter: brightness(1); }
+  to   { transform: scale(1.15); filter: brightness(1.4); }
+}
+.wpx-snake-gameover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ff5f56;
+  font-weight: 800;
+  background: rgba(15, 23, 42, 0.95);
+}
+.wpx-snake-gameover small {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+}
+.wpx-snake-retry {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: #34d399;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 12px;
+  border: 0;
+  cursor: pointer;
+}
+
+/* === 成就解锁 === */
+.wpx-achievement {
+  position: fixed;
+  left: 50%;
+  top: 24%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  pointer-events: auto;
+  animation: wpxAchievementIn 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wpx-achievement-leave {
+  animation: wpxAchievementOut 240ms ease-in forwards;
+}
+@keyframes wpxAchievementIn {
+  from { opacity: 0; transform: translateX(-50%) scale(0.7); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+@keyframes wpxAchievementOut {
+  to { opacity: 0; transform: translateX(-50%) scale(0.85); }
+}
+.wpx-achievement-inner {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  color: #fff;
+  padding: 20px 28px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(251, 191, 36, 0.5);
+  min-width: 280px;
+}
+.wpx-achievement-icon {
+  font-size: 40px;
+  margin-bottom: 6px;
+}
+.wpx-achievement-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  text-transform: uppercase;
+}
+.wpx-achievement-text {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.wpx-achievement-btn {
+  margin-top: 14px;
+  padding: 6px 18px;
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 9999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wpx-achievement-btn:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* === Konami 像素背景 === */
+.wpx-pixel-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.0) 0,
+      rgba(0, 0, 0, 0.0) 6px,
+      rgba(0, 0, 0, 0.18) 6px,
+      rgba(0, 0, 0, 0.18) 7px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.0) 0,
+      rgba(0, 0, 0, 0.0) 6px,
+      rgba(0, 0, 0, 0.18) 6px,
+      rgba(0, 0, 0, 0.18) 7px
+    ),
+    radial-gradient(circle at 20% 20%, #1e3a8a, #0f172a),
+    radial-gradient(circle at 80% 80%, #7c3aed, #1e1b4b);
+  image-rendering: pixelated;
+  animation: wpxPixelIn 320ms steps(6) forwards;
+}
+.wpx-pixel-bg-leave {
+  animation: wpxPixelOut 280ms ease-in forwards;
+}
+@keyframes wpxPixelIn {
+  from { opacity: 0; transform: scale(1.05); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes wpxPixelOut {
+  to { opacity: 0; transform: scale(1.05); }
+}
+.wpx-konami-dialog {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10001;
+  background: #000;
+  color: #34d399;
+  font-family: 'Courier New', monospace;
+  border: 4px solid #34d399;
+  box-shadow:
+    0 0 0 4px #000,
+    0 0 0 8px #34d399,
+    0 30px 80px rgba(0, 0, 0, 0.6);
+  animation: wpxKonamiIn 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+}
+.wpx-konami-leave {
+  animation: wpxKonamiOut 280ms ease-in forwards;
+}
+@keyframes wpxKonamiIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes wpxKonamiOut {
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+}
+.wpx-konami-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #34d399;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+}
+.wpx-konami-titlebar-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.wpx-konami-titlebar-text {
+  margin-left: 8px;
+}
+.wpx-konami-body {
+  padding: 24px 32px;
+  min-width: 320px;
+  text-align: center;
+}
+.wpx-konami-big {
+  font-size: 24px;
+  font-weight: 900;
+  margin-bottom: 12px;
+  text-shadow: 2px 2px 0 #000;
+}
+.wpx-konami-line {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wpx-konami-small {
+  margin-top: 16px;
+  font-size: 11px;
+  opacity: 0.7;
+  animation: wpxBlink 0.9s steps(2) infinite;
+}
+@keyframes wpxBlink {
+  to { opacity: 0; }
+}
+
+/* === 独角兽浮动按钮 === */
+.wpx-unicorn-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 50;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(135deg, #f0abfc, #818cf8);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
+  font-size: 22px;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+  animation: wpxUnicornBob 2.4s ease-in-out infinite;
+}
+.wpx-unicorn-fab:hover {
+  transform: scale(1.12) rotate(8deg);
+}
+@keyframes wpxUnicornBob {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%      { transform: translateY(-4px) rotate(4deg); }
+}
+.wpx-unicorn-toast {
+  position: fixed;
+  right: 80px;
+  bottom: 18px;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 360px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #fff, #f5f3ff);
+  border: 2px solid #c084fc;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(124, 58, 237, 0.25);
+  animation: wpxUnicornToastIn 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wpx-unicorn-toast-leave {
+  animation: wpxUnicornToastOut 280ms ease-in forwards;
+}
+@keyframes wpxUnicornToastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes wpxUnicornToastOut {
+  to { opacity: 0; transform: translateY(20px) scale(0.9); }
+}
+.wpx-unicorn-emoji {
+  font-size: 28px;
+  flex-shrink: 0;
+  animation: wpxUnicornBob 2.4s ease-in-out infinite;
+}
+.wpx-unicorn-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wpx-dark);
+  line-height: 1.4;
+}
+.wpx-unicorn-close {
+  background: transparent;
+  border: 0;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+  margin-left: 4px;
+}
+.wpx-unicorn-close:hover {
+  color: #ff5f56;
+}

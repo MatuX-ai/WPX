@@ -1,0 +1,78 @@
+# =============================================================================
+# 本地一体化启动：PostgreSQL + Redis + Server
+# 仅用于本地开发/CI；生产请用托管服务（RDS / Upstash / ElastiCache 等）
+#
+# 用法：
+#   docker compose up -d         # 启动
+#   docker compose logs -f       # 跟踪日志
+#   docker compose down -v       # 停止并清空数据
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wpx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wpx
+    ports:
+      - "5432:5432"
+    volumes:
+      - wpx_pg_data:/var/lib/postgresql/data
+      # 首次启动自动建表
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wpx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wpx-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - wpx_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wpx-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: wpx
+      REDIS_URL: redis://redis:6379
+      # 本地开发可放开 JWT 校验
+      AUTH_BYPASS: "true"
+      AUTH_BYPASS_ROLES: admin
+      # CORS 允许本地前端 dev server
+      CORS_ORIGIN: "http://localhost:5174,http://localhost:5175,http://localhost:3000"
+      LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+
+volumes:
+  wpx_pg_data:
+  wpx_redis_data:

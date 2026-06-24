@@ -1,0 +1,140 @@
+/**
+ * WPX 管理后台 - 角色权限定义
+ *
+ * 角色：
+ *  - super_admin    超级管理员：全部模块 + 系统设置 + 管理员账号管理
+ *  - operation_admin 运营管理员：用户、Token/订单、公告、字体审核、调用监控
+ *  - content_editor 内容编辑：Skills 管理、字体商店内容更新
+ *
+ * 权限码（用于路由 meta 与按钮级控制）：
+ *  - module:dashboard / users / models / fonts / skills / orders / announcements / settings / logs
+ *  - action:view / create / update / delete / approve
+ */
+
+// 角色枚举
+export const ROLES = Object.freeze({
+  SUPER_ADMIN: 'super_admin',
+  OPERATION_ADMIN: 'operation_admin',
+  CONTENT_EDITOR: 'content_editor'
+})
+
+// 角色中文名
+export const ROLE_LABELS = Object.freeze({
+  [ROLES.SUPER_ADMIN]: '超级管理员',
+  [ROLES.OPERATION_ADMIN]: '运营管理员',
+  [ROLES.CONTENT_EDITOR]: '内容编辑'
+})
+
+// 角色等级（数值越大权限越高）
+const ROLE_LEVEL = Object.freeze({
+  [ROLES.SUPER_ADMIN]: 100,
+  [ROLES.OPERATION_ADMIN]: 50,
+  [ROLES.CONTENT_EDITOR]: 10
+})
+
+/**
+ * 模块 -> 允许访问的角色列表
+ * key 为权限码（如 'module:users'），value 为允许的角色数组
+ */
+export const MODULE_PERMISSIONS = Object.freeze({
+  // 仪表盘：所有角色都能看
+  'module:dashboard': [
+    ROLES.SUPER_ADMIN,
+    ROLES.OPERATION_ADMIN,
+    ROLES.CONTENT_EDITOR
+  ],
+
+  // 用户管理：超管 + 运营
+  'module:users': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN],
+
+  // AI 模型配置：超管 + 运营
+  'module:models': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN],
+
+  // 字体商店：超管 + 运营（审核）+ 内容编辑（更新内容）
+  'module:fonts': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN, ROLES.CONTENT_EDITOR],
+
+  // Skills 管理：超管 + 内容编辑
+  'module:skills': [ROLES.SUPER_ADMIN, ROLES.CONTENT_EDITOR],
+
+  // Token 与订单：超管 + 运营
+  'module:orders': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN],
+
+  // 公告与版本：超管 + 运营
+  'module:announcements': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN],
+
+  // 系统设置：仅超管
+  'module:settings': [ROLES.SUPER_ADMIN],
+
+  // 操作日志：超管 + 运营
+  'module:logs': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN]
+})
+
+/**
+ * 角色 -> 默认首页（登录后跳转）
+ */
+export const ROLE_HOME = Object.freeze({
+  [ROLES.SUPER_ADMIN]: '/dashboard',
+  [ROLES.OPERATION_ADMIN]: '/dashboard',
+  [ROLES.CONTENT_EDITOR]: '/skills/builtin'
+})
+
+/**
+ * 判断角色是否拥有指定权限码
+ * @param {string|string[]} role 角色或角色列表
+ * @param {string} permission 权限码，如 'module:users'
+ * @returns {boolean}
+ */
+export function hasPermission(role, permission) {
+  if (!role || !permission) return false
+  const allowed = MODULE_PERMISSIONS[permission]
+  if (!allowed) return false
+  const roles = Array.isArray(role) ? role : [role]
+  return roles.some((r) => allowed.includes(r))
+}
+
+/**
+ * 判断角色等级是否 >= 期望等级
+ */
+export function hasRoleLevel(role, expected) {
+  if (!role) return false
+  return (ROLE_LEVEL[role] ?? -1) >= (ROLE_LEVEL[expected] ?? Infinity)
+}
+
+/**
+ * 从 JWT 中解码角色
+ * 注意：JWT 内容不应作为信任源，仅作为前端 UI 提示；
+ * 后端需独立校验角色与权限。
+ */
+export function decodeRoleFromJwt(token) {
+  if (!token || typeof token !== 'string') return null
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  try {
+    // base64url -> base64
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const payload = JSON.parse(atob(padded))
+    return payload.role || payload.roles?.[0] || null
+  } catch (_e) {
+    return null
+  }
+}
+
+/**
+ * 检查 JWT 是否已过期（基于 exp 字段，单位秒）
+ */
+export function isJwtExpired(token, skewSeconds = 30) {
+  if (!token) return true
+  const parts = token.split('.')
+  if (parts.length !== 3) return true
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const payload = JSON.parse(atob(padded))
+    if (!payload.exp) return false
+    const nowSec = Math.floor(Date.now() / 1000)
+    return payload.exp <= nowSec + skewSeconds
+  } catch (_e) {
+    return true
+  }
+}

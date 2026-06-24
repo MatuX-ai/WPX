@@ -32,6 +32,8 @@ function handleDropArchives(paths) {
 const { isArchiveDragOver } = useArchiveDropTarget(() => appShellRef.value, handleDropArchives)
 
 const showNavbar = computed(() => !isEditorRoute(route))
+// Landing 页面（web 端）自带完整布局：不再叠加 TitleBar / Navbar / 全局弹窗
+const isLanding = computed(() => route.name === 'landing')
 
 function handleSaveDialogClose() {
   appStore.closeSaveDialog()
@@ -92,6 +94,7 @@ onUnmounted(() => {
 
 <template>
   <div
+    v-if="!isLanding"
     v-show="trayStore.mainWindowVisible"
     ref="appShellRef"
     class="app-shell"
@@ -121,6 +124,8 @@ onUnmounted(() => {
     <ProgressBar />
     <ZipArchiveHost ref="zipArchiveHostRef" />
   </div>
+
+  <RouterView v-else />
 
   <TraySimulator v-if="trayStore.isHiddenToTray" />
 </template>

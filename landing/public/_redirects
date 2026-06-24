@@ -1,0 +1,8 @@
+# Cloudflare Pages / Netlify 通用 SPA fallback
+# 当使用 Vercel 时，vercel.json 的 rewrites 字段优先；本文件作为兜底。
+
+# SPA 路由 fallback：所有未匹配的文件路径走 index.html
+# 但保留 _headers / _redirects / assets / robots / sitemap / 预渲染 HTML 不被改写
+/blog    /blog/index.html    200
+/about   /about/index.html   200
+/*       /index.html         200

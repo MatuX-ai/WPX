@@ -2,6 +2,145 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary meta -->
+    <title>WPX · AI 智能文档编辑器</title>
+    <meta
+      name="description"
+      content="WPX 是一款 AI 驱动的智能文档编辑器，集成大模型协作、海量字体与专业级导出，专为教学、学术与内容创作打造。本地优先、隐私可控。"
+    />
+    <meta
+      name="keywords"
+      content="AI 文档编辑器,Markdown,智能写作,论文排版,字体市场,所见即所得,WPX,大模型协作"
+    />
+    <meta name="author" content="WPX" />
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="application-name" content="WPX" />
+    <meta name="apple-mobile-web-app-title" content="WPX" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <!-- Canonical & favicon -->
+    <link rel="canonical" href="https://wpx.app/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/icon.png" type="image/png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#7c3aed" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WPX · AI 智能文档编辑器" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content="WPX · AI 智能文档编辑器" />
+    <meta
+      property="og:description"
+      content="AI 驱动的智能文档编辑器，集成大模型协作、海量字体与专业级导出。"
+    />
+    <meta property="og:url" content="https://wpx.app/" />
+    <meta property="og:image" content="https://wpx.app/og-image.svg" />
+    <meta property="og:image:secure_url" content="https://wpx.app/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="WPX · AI 智能文档编辑器" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="WPX · AI 智能文档编辑器" />
+    <meta
+      name="twitter:description"
+      content="AI 驱动的智能文档编辑器，集成大模型协作、海量字体与专业级导出。"
+    />
+    <meta name="twitter:image" content="https://wpx.app/og-image.svg" />
+    <meta name="twitter:image:alt" content="WPX · AI 智能文档编辑器" />
+
+    <!-- Performance hints -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+
+    <!--
+      Electron 桌面端：window.electronAPI 由 electron/preload.js 经 contextBridge 注入。
+      渲染进程请通过 electronAPI 与主进程通信，不要直接使用 ipcRenderer。
+    -->
+    <script>
+      ;(function () {
+        if (typeof window !== 'undefined' && window.electronAPI) {
+          window.__WPX_ELECTRON__ = true
+        }
+      })()
+    </script>
+    <script>
+      ;(function () {
+        var theme = 'light'
+        try {
+          var raw = localStorage.getItem('wpx-theme')
+          if (raw) {
+            var mode = JSON.parse(raw).mode
+            if (mode === 'dark') theme = 'dark'
+            else if (mode === 'system') {
+              theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+            }
+          } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            theme = 'dark'
+          }
+        } catch (e) {}
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
+
+    <!-- JSON-LD: organization & software -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "WPX",
+        "alternateName": "WPX AI 文档编辑器",
+        "applicationCategory": "ProductivityApplication",
+        "operatingSystem": "Windows, macOS, Linux, Web",
+        "description": "AI 驱动的智能文档编辑器，集成大模型协作、海量字体与专业级导出。",
+        "url": "https://wpx.app/",
+        "image": "https://wpx.app/og-image.svg",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "CNY"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>
+      <p style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 600px; margin: 4rem auto;">
+        WPX 是一款 AI 智能文档编辑器。请启用 JavaScript 以获得完整体验。
+        <a href="https://wpx.app/library">浏览文库</a>
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WPX · AI 智能文档编辑器</title>

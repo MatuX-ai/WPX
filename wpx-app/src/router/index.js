@@ -47,6 +47,17 @@ const router = createRouter({
       component: AppLayout,
       children: [
         {
+          path: '',
+          name: 'landing',
+          // Landing 仅在 Web 端（history 模式）有意义；Electron 仍以 editor 为首屏
+          component: () => import('@/views/LandingView.vue'),
+          meta: {
+            title: 'WPX · AI 智能文档编辑器',
+            description: 'AI 驱动的智能文档编辑器，专为教学、学术与内容创作打造。',
+            webOnly: true,
+          },
+        },
+        {
           path: 'editor',
           name: 'editor',
           alias: '',
@@ -144,6 +155,11 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from) => {
+  // Web 端：若用户访问根路径但带了 docPath / windowId / 直达 editor 链接，正常通过。
+  // Electron（hash 模式）始终以 editor 为首屏：若误进入 landing，重定向回 editor。
+  if (to.name === 'landing' && to.meta?.webOnly && isElectron()) {
+    return { name: 'editor' }
+  }
   if (to.name === 'editor' && !to.query.windowId && !to.query.docPath) {
     const launchQuery = buildEditorQuery()
     if (Object.keys(launchQuery).length > 0) {
@@ -154,6 +170,8 @@ router.beforeEach((to, _from) => {
 })
 
 router.afterEach((to) => {
+  // 标题回退：landing 由视图内部 setMeta 写入（避免与 description 一同回退）
+  if (to.name === 'landing') return
   document.title = to.meta.title ? `${to.meta.title} · WPX` : 'WPX'
 })
 

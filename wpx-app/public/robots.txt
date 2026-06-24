@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# 重要：禁止爬取动态 / 用户敏感路由
+Disallow: /editor
+Disallow: /settings
+Disallow: /token/recharge
+
+Sitemap: https://wpx.app/sitemap.xml

@@ -1,0 +1,9 @@
+# Cloudflare Pages 重定向规则
+#
+# 优先级：自上而下首个匹配胜出
+#
+# 1) /api/* 走 Pages Functions（位于 functions/api/[[path]].js）
+# 2) 所有其他未匹配路径 fallback 到 SPA 入口
+
+# SPA fallback（兜底，必须放在最后）
+/*    /index.html    200

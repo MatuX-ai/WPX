@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- ========== Favicon & 主题色（构建时由 vite-plugin-html 注入路径） ========== -->
+    <link rel="icon" type="image/svg+xml" href="<%= favicon %>" />
+    <meta name="theme-color" content="<%= themeColor %>" />
+    <meta name="color-scheme" content="light" />
+
+    <!-- ========== 视口与基础 SEO（EJS 模板变量） ========== -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="<%= description %>" />
+    <meta name="keywords" content="<%= keywords %>" />
+    <meta name="author" content="<%= author %>" />
+
+    <!-- ========== OG / Twitter / canonical（数组由插件自动渲染） ========== -->
+    <!--prepend-lines-->
+    <% metaSocial.forEach(function(m){ %>
+    <meta <%= m.type %>="<%= m.key %>" content="<%= m.value %>" />
+    <% }); %>
+    <!--append-lines-->
+
+    <!-- ========== 额外：apple-touch / 主题色 / canonical 等（插件渲染） ========== -->
+    <!--prepend-links-->
+    <% extra.forEach(function(e){ %>
+    <% if (e.rel) { %>
+    <link rel="<%= e.rel %>" href="<%= e.href %>" />
+    <% } else { %>
+    <meta name="<%= e.name %>" content="<%= e.value %>"<% if (e.media) { %> media="<%= e.media %>"<% } %> />
+    <% } %>
+    <% }); %>
+    <!--append-links-->
+
+    <!-- ========== 站点主标题 ========== -->
+    <title><%= title %></title>
+
+    <!-- ========== 社交分享图（预留 /og-image.png 1200x630） ========== -->
+    <!--
+      部署前请把分享图放到 public/og-image.png（建议 1200x630，< 200KB）
+      若要替换文案版本，可在 src/config/seo.js 改 ogImage 字段
+    -->
+    <link rel="preload" as="image" href="<%= ogImage %>" />
+
+    <!-- ========== Global Fonts: Inter + Noto Sans SC (思源黑体) via CDN ========== -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app"><!--ssr-outlet--></div>
+    <script type="module" src="/src/entry-client.js"></script>
+  </body>
+</html>

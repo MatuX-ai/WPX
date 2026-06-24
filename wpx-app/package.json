@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:web": "cross-env-shell VITE_TARGET=web WPX_PRERENDER=1 vite build",
+    "build:electron": "cross-env-shell WPX_PRERENDER=0 vite build",
+    "prerender": "node scripts/prerender.mjs",
     "preview": "vite preview",
+    "preview:web": "vite preview --port 4173",
     "export-service": "node src/server/export-service.js",
     "remove-bg-service": "python src/server/remove-bg-service.py",
     "knowledge-service": "python src/server/knowledge-service.py",

@@ -1,0 +1,51 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# 环境变量（含密钥，切勿提交）
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# 日志
+logs/
+*.log
+pm2.*.log
+
+# 构建产物
+dist/
+build/
+coverage/
+
+# 工具
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 测试报告
+playwright-report/
+test-results/
+
+# PM2
+.pm2/
+
+# 部署配置（避免在仓库内暴露实际服务器信息，按需取消注释）
+# ecosystem.config.cjsnode_modules/
+.env
+.env.local
+.env.*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+coverage/
+dist/
+build/

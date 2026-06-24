@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="50%" stop-color="#5b21b6" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a78bfa" />
+      <stop offset="100%" stop-color="#f0abfc" />
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40" />
+    </filter>
+  </defs>
+
+  <!-- 背景渐变 -->
+  <rect width="1200" height="630" fill="url(#bg)" />
+
+  <!-- 装饰光斑 -->
+  <circle cx="180" cy="120" r="160" fill="#7c3aed" opacity="0.4" filter="url(#blur)" />
+  <circle cx="1050" cy="500" r="200" fill="#a855f7" opacity="0.45" filter="url(#blur)" />
+  <circle cx="950" cy="100" r="120" fill="#f0abfc" opacity="0.35" filter="url(#blur)" />
+
+  <!-- Logo W -->
+  <g transform="translate(80, 220)">
+    <rect x="0" y="0" width="120" height="120" rx="28" fill="rgba(255,255,255,0.12)" />
+    <path
+      d="M30 96 L48 30 L60 78 L72 30 L90 96"
+      stroke="url(#accent)"
+      stroke-width="8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+
+  <!-- 标题 -->
+  <text
+    x="80"
+    y="430"
+    font-family="'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    font-size="76"
+    font-weight="700"
+    fill="#ffffff"
+    letter-spacing="-2"
+  >
+    WPX · AI 文档编辑器
+  </text>
+
+  <!-- 副标题 -->
+  <text
+    x="80"
+    y="495"
+    font-family="'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    font-size="32"
+    font-weight="400"
+    fill="rgba(255,255,255,0.85)"
+  >
+    让 AI 成为你的写作搭档
+  </text>
+
+  <!-- 特性标签 -->
+  <g transform="translate(80, 530)">
+    <g>
+      <rect x="0" y="0" width="120" height="40" rx="20" fill="rgba(255,255,255,0.12)" />
+      <text x="60" y="27" font-family="'Inter', sans-serif" font-size="18" fill="#fff" text-anchor="middle">AI 协作</text>
+    </g>
+    <g transform="translate(135, 0)">
+      <rect x="0" y="0" width="120" height="40" rx="20" fill="rgba(255,255,255,0.12)" />
+      <text x="60" y="27" font-family="'Inter', sans-serif" font-size="18" fill="#fff" text-anchor="middle">专业字体</text>
+    </g>
+    <g transform="translate(270, 0)">
+      <rect x="0" y="0" width="120" height="40" rx="20" fill="rgba(255,255,255,0.12)" />
+      <text x="60" y="27" font-family="'Inter', sans-serif" font-size="18" fill="#fff" text-anchor="middle">论文排版</text>
+    </g>
+  </g>
+
+  <!-- 右下角水印 -->
+  <text
+    x="1120"
+    y="595"
+    font-family="'Inter', sans-serif"
+    font-size="20"
+    font-weight="500"
+    fill="rgba(255,255,255,0.6)"
+    text-anchor="end"
+  >
+    wpx.app
+  </text>
+</svg>
