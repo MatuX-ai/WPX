@@ -38,7 +38,14 @@ const SITE_URL = process.env.VITE_SITE_URL || 'https://prowpx.com'
 const PRERENDER_ROUTES = [
   { path: '/', outFile: 'index.html', priority: '1.0', changefreq: 'weekly' },
   { path: '/blog', outFile: 'blog/index.html', priority: '0.7', changefreq: 'weekly' },
-  { path: '/about', outFile: 'about/index.html', priority: '0.6', changefreq: 'monthly' }
+  { path: '/about', outFile: 'about/index.html', priority: '0.6', changefreq: 'monthly' },
+  { path: '/changelog', outFile: 'changelog/index.html', priority: '0.6', changefreq: 'weekly' },
+  { path: '/docs', outFile: 'docs/index.html', priority: '0.6', changefreq: 'weekly' },
+  { path: '/skills', outFile: 'skills/index.html', priority: '0.6', changefreq: 'weekly' },
+  { path: '/fonts', outFile: 'fonts/index.html', priority: '0.6', changefreq: 'weekly' },
+  { path: '/legal/privacy', outFile: 'legal/privacy/index.html', priority: '0.4', changefreq: 'monthly' },
+  { path: '/legal/terms', outFile: 'legal/terms/index.html', priority: '0.4', changefreq: 'monthly' },
+  { path: '/legal/licenses', outFile: 'legal/licenses/index.html', priority: '0.4', changefreq: 'monthly' }
 ]
 
 // ========== 工具函数 ==========
