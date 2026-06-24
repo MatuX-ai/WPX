@@ -175,9 +175,15 @@ function main() {
   log('  - 复制 admin/dist → public/admin/');
   copyDir(ADMIN_DIST, path.join(PUBLIC_DIR, 'admin'));
 
-  // admin/api/proxy.js → api/proxy.js（Vercel 自动识别）
-  log('  - 复制 admin/api/proxy.js → api/proxy.js');
-  fs.copyFileSync(ADMIN_PROXY_SRC, path.join(API_DIR, 'proxy.js'));
+  // admin/api/proxy.js → public/api/proxy.js（Vercel Serverless Function）
+  // 重要：因为 vercel.json 里 outputDirectory = "public"，
+  //       Vercel 只部署 public/ 里的东西，所以函数必须放在 public/api/ 下，
+  //       放在仓库根的 api/ 会被 Vercel 忽略，报错
+  //       "The pattern api/proxy.js doesn't match any Serverless Functions"
+  log('  - 复制 admin/api/proxy.js → public/api/proxy.js');
+  const PUBLIC_API_DIR = path.join(PUBLIC_DIR, 'api');
+  fs.mkdirSync(PUBLIC_API_DIR, { recursive: true });
+  fs.copyFileSync(ADMIN_PROXY_SRC, path.join(PUBLIC_API_DIR, 'proxy.js'));
 
   // 5. 打印统计
   const publicFiles = countFiles(PUBLIC_DIR);
