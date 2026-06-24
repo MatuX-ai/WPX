@@ -56,11 +56,7 @@ export default defineConfig(({ mode }) => {
                 media: '(prefers-color-scheme: light)'
               },
               { name: 'color-scheme', value: 'light' },
-              { rel: 'canonical', href: siteUrl },
-              {
-                rel: 'image_src',
-                href: siteUrl + siteConfig.ogImage
-              }
+              { rel: 'canonical', href: siteUrl }
             ]
           }
         },
