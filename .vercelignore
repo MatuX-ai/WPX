@@ -16,12 +16,12 @@
 /package.json
 /package-lock.json
 
-# === landing 子项目：排除 IDE/文档/配置文件，保留 src/（Vite 构建需要） ===
-# 注：landing/src/ 必须保留，因为 vite.config.js 和 index.html 都引用 src/ 下的文件
-#     landing/public/ 排除可接受（Vite 对缺失 public/ 仅告警不报错）
+# === landing 子项目：排除 IDE/文档，保留 src/（Vite 构建需要）+ public/（Vite 构建输出来源） ===
+# 注：landing/public/ 不能排除！Vite 构建时会将 public/ 下的文件（og-image.svg、favicon.svg、
+#     robots.txt、sitemap.xml 等）原样复制到 dist/。缺少则页面 404。
+#     _redirects / _headers 虽在其中，但 build-frontend.js 会从输出中自动删除。
 landing/.vscode/**
 /landing/.env.production.example
-landing/public/**
 /landing/README.md
 
 # === admin 子项目：排除 IDE/文档/CF Functions/配置文件，保留 src/（Vite 构建需要） ===
