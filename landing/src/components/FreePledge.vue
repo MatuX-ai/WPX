@@ -13,9 +13,14 @@ const rows = [
     wpx: { text: '完全免费', good: true }
   },
   {
+    feature: 'AI 大模型',
+    wps: { text: '单独付费', bad: true },
+    wpx: { text: '完全免费', good: true, note: '自带 API Key 即可' }
+  },
+  {
     feature: '商业字体',
     wps: { text: '单独购买', bad: true },
-    wpx: { text: 'Token 按字付费', note: '可选用免费开源字体' }
+    wpx: { text: '完全免费', good: true, note: '自导入已授权字体' }
   },
   {
     feature: '模板',
@@ -41,14 +46,19 @@ const pledgeItems = [
     desc: '编辑器、文件管理、虚拟纸张、压缩解压、PDF 互转……全都不要钱。'
   },
   {
+    icon: '🤖',
+    title: 'AI 大模型完全免费',
+    desc: '用户自备 API Key（支持 DeepSeek、智谱、通义千问、文心一言、豆包、Kimi、腾讯混元等），平台零抽成。'
+  },
+  {
     icon: '🔤',
     title: '字体可自导入',
-    desc: '系统字体 + 开源字体随便用。商用授权字体按 Token 计费，6 块起。'
+    desc: '系统字体 + 开源字体随便用。商用授权字体由用户自行采购后导入，不另收平台费。'
   },
   {
     icon: '🚫',
     title: '零弹窗零绑架',
-    desc: '没有"猜你喜欢"、没有续费提醒、没有诱导分享。'
+    desc: '没有"猜你喜欢"、没有续费提醒、没有诱导分享、没有 Token 充值弹窗。'
   }
 ]
 </script>
@@ -60,12 +70,11 @@ const pledgeItems = [
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">我们的承诺</span>
         <h2 class="mt-4 text-[1.6rem] font-extrabold leading-tight sm:text-3xl md:text-5xl">
-          <span class="wpx-gradient-text">为什么免费？</span>
+          <span class="wpx-gradient-text">完全免费 · 没有例外</span>
         </h2>
         <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-dark/70">
-          工具<strong class="text-dark">永久免费</strong>，字体可自导入。
-          只有你使用我们的云端 AI 算力或购买商店商业字体时才需要购买 Token，
-          而且 <strong class="text-primary-600">6 块钱起</strong>。
+          工具<strong class="text-dark">永久免费</strong>，AI 与字体由用户自备 / 自导入。
+          WPX <strong class="text-emerald-700">不收任何平台服务费、不抽成、不收 Token 费</strong>。
           <br class="hidden md:block" />
           其余一切不收费，不弹窗，不绑架。
         </p>
@@ -202,11 +211,11 @@ const pledgeItems = [
           </div>
           <div class="flex items-center gap-1.5">
             <span class="h-2 w-2 rounded-full bg-emerald-500" />
-            <span>WPX：¥0 起，Token 6 元起步</span>
+            <span>WPX：¥0 起，完全免费</span>
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="h-2 w-2 rounded-full bg-primary-from" />
-            <span>5 年累计可省 ¥500+</span>
+            <span class="h-2 w-2 rounded-full bg-emerald-500" />
+            <span>5 年累计可省 ¥1000+</span>
           </div>
         </div>
         <a

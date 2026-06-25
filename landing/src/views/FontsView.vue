@@ -2,11 +2,13 @@
 /**
  * FontsView.vue
  * ------------------------------------------------------------
- * WPX 营销站 · 字体商店
+ * WPX 营销站 · 字体库
  *
  *  - 内置 8 款免费开源字体（随安装包）
  *  - 在线免费字体（按需下载）
- *  - 商业字体 Token 充值说明
+ *  - 自导入本地已授权字体说明
+ *
+ * V1.1 变更：不再提供商业字体 Token 充值；商业字体需用户自行采购后导入。
  * ------------------------------------------------------------
  */
 
@@ -32,11 +34,11 @@ const onlineFonts = [
   { name: 'MiSans', type: '黑体', scene: '小米风格' }
 ]
 
-const commercialRules = [
-  { key: '充值方式', value: '10 元包（一次性）/ 自定义充值（10 元为单位）' },
-  { key: '计费模式', value: '按字付费，用多少花多少；不订阅、不绑卡' },
-  { key: '授权范围', value: '个人 / 商用可选；商用需绑定企业信息' },
-  { key: '导出嵌入', value: '购买后字体可子集化嵌入 PDF / DOCX，随文档永久使用' }
+const importRules = [
+  { key: '支持格式', value: '.ttf / .otf / .woff / .woff2' },
+  { key: '导入方式', value: '「设置 → 字体 → 导入本地字体」，一键启用' },
+  { key: '授权责任', value: '用户需自行确保已获得合法授权；WPX 不提供商业字体' },
+  { key: '嵌入导出', value: '导入的字体可子集化嵌入 PDF / DOCX，随文档携带' }
 ]
 </script>
 
@@ -45,13 +47,13 @@ const commercialRules = [
     <div class="wpx-container">
       <!-- Hero -->
       <div class="mx-auto max-w-3xl text-center">
-        <span class="wpx-chip">字体商店</span>
+        <span class="wpx-chip">字体库</span>
         <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
           <span class="wpx-gradient-text">好看的字体，免费、合法、即装即用</span>
         </h1>
         <p class="mt-4 text-dark/60">
           8 款免费开源字体随应用打包；按需下载更多免费字体；
-          商业字体按字付费，不绑架、不订阅。
+          商业字体由用户<strong class="text-emerald-700">自行采购授权后导入</strong>，平台不收费。
         </p>
       </div>
 
@@ -137,32 +139,41 @@ const commercialRules = [
         </div>
       </div>
 
-      <!-- 商业字体 Token 充值 -->
-      <div class="mt-20 rounded-3xl border border-primary-500/20 bg-wpx-gradient-soft p-8 md:p-10">
+      <!-- 商业字体：用户自备导入 -->
+      <div class="mt-20 rounded-3xl border border-emerald-500/20 bg-emerald-50/40 p-8 md:p-10">
         <div class="grid gap-8 md:grid-cols-2 md:items-center">
           <div>
             <h2 class="text-2xl font-extrabold md:text-3xl">
               <span class="wpx-gradient-text">需要商业字体？</span>
             </h2>
             <p class="mt-3 text-dark/70">
-              按字付费，不订阅、不绑卡。10 元起充，余额永久有效；用多少花多少，导出时可一键嵌入文档。
+              商业字体需由用户<strong class="text-emerald-700">自行采购授权</strong>后导入本地使用。
+              WPX 不提供商业字体、不收取 Token 费用、不介入授权交易。
             </p>
-            <a
-              href="https://github.com/wpx-team/wpx/discussions"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="wpx-btn-primary mt-6"
-            >
-              了解 Token 充值
-            </a>
+            <div class="mt-6 flex flex-wrap gap-3">
+              <a
+                href="https://github.com/wpx-team/wpx/discussions"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="wpx-btn-primary"
+              >
+                交流字体使用心得
+              </a>
+              <router-link
+                to="/changelog"
+                class="wpx-btn-ghost"
+              >
+                查看更新历史
+              </router-link>
+            </div>
           </div>
           <div class="rounded-2xl bg-white p-6 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wider text-dark/50">
-              商业字体使用规则
+              本地字体导入规则
             </h3>
             <dl class="mt-4 space-y-3 text-sm">
               <div
-                v-for="r in commercialRules"
+                v-for="r in importRules"
                 :key="r.key"
                 class="flex justify-between gap-3 border-b border-dark/5 pb-3 last:border-0 last:pb-0"
               >

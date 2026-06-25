@@ -41,7 +41,7 @@ const props = defineProps({
   },
   modelName: {
     type: String,
-    default: 'DeepSeek-V3',
+    default: '未配置 · 请在「我的模型」中接入',
   },
   messages: {
     type: Array,
@@ -443,7 +443,9 @@ async function handleQuotaLogin() {
 }
 
 function handleQuotaRecharge() {
-  void router.push({ name: 'token-recharge' })
+  // V1.1 完全免费模式：不再提供平台 Token 充值。
+  // 跳转到“设置 → 我的模型”，提示用户自行接入大模型。
+  void router.push({ name: 'settings-models' })
 }
 
 function handleGoToModelSettings() {
@@ -888,7 +890,7 @@ watch(
                     class="ai-chat-window__quota-action wpx-btn"
                     @click="handleQuotaRecharge"
                   >
-                    充值
+                    去配置大模型
                   </button>
                 </div>
                 <!-- Skill 调用结果 -->

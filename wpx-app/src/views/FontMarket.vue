@@ -30,20 +30,19 @@ onMounted(() => {
   <section class="font-market">
     <header class="font-market__header">
       <div>
-        <h1 class="font-market__title">字体商店</h1>
-        <p class="font-market__subtitle">浏览、预览并应用到编辑器</p>
+        <h1 class="font-market__title">字体库</h1>
+        <p class="font-market__subtitle">浏览、预览、下载开源免费字体，或在「我的字体」中导入本地已授权字体</p>
       </div>
 
       <div class="font-market__header-actions">
         <RouterLink to="/my-fonts" class="font-market__my-fonts-btn">我的字体</RouterLink>
-
-        <div class="font-market__token">
-          <span class="font-market__token-label">我的 Token：</span>
-          <strong class="font-market__token-value">{{ tokenBalance }}</strong>
-          <RouterLink to="/token/recharge" class="font-market__recharge-btn">
-            充值
-          </RouterLink>
-        </div>
+        <a
+          v-if="false"
+          href="/token/recharge"
+          class="font-market__recharge-btn"
+        >
+          充值
+        </a>
       </div>
     </header>
 

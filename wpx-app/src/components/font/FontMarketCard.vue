@@ -52,7 +52,8 @@ function getCardPreviewStyle() {
 }
 
 function getPriceLabel() {
-  return props.font.isFree ? '免费' : '⚡ 付费'
+  // V1.1 完全免费模式：不再提供付费字体入口，统一显示"免费"
+  return props.font.isFree ? '免费' : '免费 · 需自导入'
 }
 
 async function handleDownloadClick() {
@@ -124,8 +125,14 @@ onMounted(() => {
 
     <div class="font-market-card__body">
       <h2 class="font-market-card__title">{{ font.name }}</h2>
-      <p class="font-market-card__price" :class="{ 'font-market-card__price--paid': !font.isFree }">
+      <p
+        class="font-market-card__price"
+        :class="{ 'font-market-card__price--paid': !font.isFree }"
+      >
         {{ getPriceLabel() }}
+      </p>
+      <p v-if="!font.isFree" class="font-market-card__hint">
+        商业字体由用户自行采购授权后从「我的字体」导入
       </p>
       <button type="button" class="font-market-card__preview-btn" @click="emit('preview', font)">
         预览效果
