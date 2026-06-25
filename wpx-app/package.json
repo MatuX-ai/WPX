@@ -31,9 +31,8 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.51",
     "@ai-sdk/vue": "^3.0.208",
-    "@copilotkit/runtime": "^2.0.0",
-    "@copilotkit/vue": "^2.0.0",
-    "@copilotkit/agent": "^2.0.0",
+    "@copilotkit/runtime": "^1.61.1",
+    "@copilotkit/vue": "^1.61.1",
     "@floating-ui/dom": "^1.7.6",
     "@lucide/vue": "^1.21.0",
     "@tiptap/extension-color": "^3.27.1",
@@ -59,11 +58,11 @@
     "pinia": "^3.0.4",
     "pptxgenjs": "^3.12.0",
     "qrcode": "^1.5.4",
-    "zod": "^3.23.8",
     "tui-image-editor": "^3.15.3",
     "vue": "^3.5.34",
     "vue-router": "^5.1.0",
-    "vue3-draggable-resizable": "^1.6.5"
+    "vue3-draggable-resizable": "^1.6.5",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@pinia/testing": "^1.0.3",

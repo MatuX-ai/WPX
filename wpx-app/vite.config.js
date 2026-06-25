@@ -69,6 +69,14 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       // CopilotKit npm 包在本环境下可能未安装；测试环境跳过预构建与解析
       exclude: ['@copilotkit/vue/v2', '@copilotkit/vue', '@copilotkit/runtime', '@copilotkit/agent'],
+      // `extend` is a CJS deep-merge utility pulled in transitively by
+      // CopilotKit (gaxios) and tui-image-editor (request).  We *do* want
+      // Vite/esbuild to pre-bundle it so the CJS module.exports becomes
+      // a proper ESM default export.  Listing it in `include` makes the
+      // alias's shim see the pre-bundled module (which already has a
+      // `default` export) instead of the raw `node_modules/extend/index.js`
+      // source that browsers would otherwise fail to parse.
+      include: ['extend'],
     },
     build: {
       outDir: 'dist',
@@ -158,6 +166,18 @@ export default defineConfig(({ mode }) => {
           find: /^vue3-draggable-resizable$/,
           replacement: fileURLToPath(
             new URL('./src/shims/vue3-draggable-resizable.js', import.meta.url),
+          ),
+        },
+        {
+          // The `extend` CJS package is pulled in transitively by CopilotKit
+          // (gaxios) and tui-image-editor (request).  Vite/esbuild surfaces
+          // the whole module.exports object as `default`, breaking
+          // `import extend from 'extend'` consumers with
+          // "extend is not a function".  Route the bare import through a
+          // shim that unwraps the real function.
+          find: /^extend$/,
+          replacement: fileURLToPath(
+            new URL('./src/shims/extend.js', import.meta.url),
           ),
         },
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
