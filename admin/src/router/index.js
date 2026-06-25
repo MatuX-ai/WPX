@@ -23,12 +23,7 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: (to) => {
-          // 首次进入 / ：等 auth store 恢复完会话后再跳转
-          // 这里给一个占位：实际跳转由全局 afterEach 调整
-          return { name: 'root-redirect' }
-        },
-        name: 'root-redirect'
+        redirect: '/dashboard'
       },
 
       // 仪表盘
