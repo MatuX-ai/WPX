@@ -9,8 +9,232 @@
  *  - 自导入本地已授权字体说明
  *
  * V1.1 变更：不再提供商业字体 Token 充值；商业字体需用户自行采购后导入。
+ * 点击交互：网页端点击字体名跳转到官方下载源 / 百度搜索；下载后由用户导入 WPX。
  * ------------------------------------------------------------
  */
+
+/**
+ * 在线免费字体下载源映射表
+ * - 热门 / 厂商品牌字体：指向官方 GitHub 仓库 / 官网下载页
+ * - 表中查不到的字体：自动兑底到百度搜索「{名称} 字体 免费下载」
+ */
+const FONT_HOMES = {
+  // ───── 思源 / Noto（GitHub adobe-fonts / notofonts） ─────
+  '思源黑体 CN': 'https://github.com/adobe-fonts/source-han-sans/releases/latest',
+  '思源黑体 TW': 'https://github.com/adobe-fonts/source-han-sans/releases/latest',
+  '思源黑体 JP': 'https://github.com/adobe-fonts/source-han-sans/releases/latest',
+  '思源黑体 KR': 'https://github.com/adobe-fonts/source-han-sans/releases/latest',
+  '思源黑体 HW': 'https://github.com/adobe-fonts/source-han-sans/releases/latest',
+  '思源黑体 VF': 'https://github.com/adobe-fonts/source-han-sans/releases/latest',
+  '思源宋体 CN': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源宋体 TW': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源宋体 JP': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源宋体 KR': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源宋体 VF': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源楷体': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源柔黑': 'https://github.com/Pal3love/Source-Han-TrueType',
+  '思源仿宋': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  '思源点阵宋': 'https://github.com/adobe-fonts/source-han-serif/releases/latest',
+  'Noto Sans CJK SC': 'https://github.com/notofonts/noto-cjk',
+  'Noto Serif CJK SC': 'https://github.com/notofonts/noto-cjk',
+  'Noto Sans Mono CJK SC': 'https://github.com/notofonts/noto-cjk',
+  'Noto Color Emoji': 'https://github.com/googlefonts/noto-emoji',
+
+  // ───── 阿里 / 蚂蚁 ─────
+  '阿里巴巴普惠体 1.0': 'https://fonts.alibabagroup.com/#/fonts',
+  '阿里巴巴普惠体 2.0': 'https://fonts.alibabagroup.com/#/fonts',
+  '阿里巴巴普惠体 3.0': 'https://fonts.alibabagroup.com/#/fonts',
+  '阿里巴巴妈妈体': 'https://fonts.alibabagroup.com/#/fonts',
+  '阿里汉仪智能黑': 'https://fonts.alibabagroup.com/#/fonts',
+
+  // ───── 华为 / 荣耀 ─────
+  'HarmonyOS Sans SC': 'https://developer.huawei.com/consumer/cn/design/resource/HarmonyOS-sans',
+  'HarmonyOS Sans TC': 'https://developer.huawei.com/consumer/cn/design/resource/HarmonyOS-sans',
+  'HarmonyOS Sans Latin': 'https://developer.huawei.com/consumer/cn/design/resource/HarmonyOS-sans',
+  'HarmonyOS Sans Mono': 'https://developer.huawei.com/consumer/cn/design/resource/HarmonyOS-sans',
+  '荣耀 Honor Sans': 'https://www.hihonor.com/',
+
+  // ───── OPPO / vivo / 小米 ─────
+  'OPPO Sans': 'https://www.oppo.com/cn/event/opposans/',
+  'OPPO Sans 4.0': 'https://www.oppo.com/cn/event/opposans/',
+  'vivo Sans': 'https://shop.vivo.com.cn/font/',
+  'MiSans': 'https://hyperos.mi.com/font/',
+  'MiSans VF': 'https://hyperos.mi.com/font/',
+  'MiSans Latin': 'https://hyperos.mi.com/font/',
+
+  // ───── 站酷系列 ─────
+  '站酷快乐体': 'https://www.zcool.com.cn/special/zcoolkuaile/',
+  '站酷文艺体': 'https://www.zcool.com.cn/',
+  '站酷高端黑': 'https://www.zcool.com.cn/special/zcoolgaoduanhei/',
+  '站酷小薇 LOGO 体': 'https://www.zcool.com.cn/special/zcoolxiaowei/',
+  '站酷酷黑体': 'https://www.zcool.com.cn/special/zcoolkuheiti/',
+  '站库意大利体': 'https://www.zcool.com.cn/',
+  '站酷庆科黄油体': 'https://www.zcool.com.cn/special/zcoolqingKeHuangYouTi/',
+  '小薇 LOGO 体': 'https://www.zcool.com.cn/special/zcoolxiaowei/',
+
+  // ───── 霞鹜文楷（GitHub） ─────
+  '霞鹜文楷': 'https://github.com/lxgw/LxgwWenKai/releases',
+  '霞鹜文楷 TC': 'https://github.com/lxgw/LxgwWenKaiTC/releases',
+  '霞鹜文楷等宽': 'https://github.com/lxgw/LxgwWenKaiMono',
+  '霞鹜文楷屏幕阅读版': 'https://github.com/lxgw/LxgwWenKai-Screen',
+
+  // ───── 文泉驿 ─────
+  '文泉驿微米黑': 'https://github.com/anthonyfok/fonts-wqy-microhei',
+  '文泉驿正黑': 'https://github.com/anthonyfok/fonts-wqy-zenhei',
+  '文泉驿点阵宋': 'https://github.com/anthonyfok/fonts-wqy-bitmap-song',
+  '文泉驿等宽微米黑': 'https://github.com/anthonyfok/fonts-wqy-microhei',
+
+  // ───── 英文/国际化：Google Fonts 收录 ─────
+  'Inter': 'https://fonts.google.com/specimen/Inter',
+  'Inter Display': 'https://fonts.google.com/specimen/Inter',
+  'Roboto': 'https://fonts.google.com/specimen/Roboto',
+  'Roboto Flex': 'https://fonts.google.com/specimen/Roboto+Flex',
+  'Roboto Condensed': 'https://fonts.google.com/specimen/Roboto+Condensed',
+  'Open Sans': 'https://fonts.google.com/specimen/Open+Sans',
+  'Lato': 'https://fonts.google.com/specimen/Lato',
+  'Montserrat': 'https://fonts.google.com/specimen/Montserrat',
+  'Poppins': 'https://fonts.google.com/specimen/Poppins',
+  'Nunito': 'https://fonts.google.com/specimen/Nunito',
+  'Nunito Sans': 'https://fonts.google.com/specimen/Nunito+Sans',
+  'Manrope': 'https://fonts.google.com/specimen/Manrope',
+  'DM Sans': 'https://fonts.google.com/specimen/DM+Sans',
+  'Public Sans': 'https://fonts.google.com/specimen/Public+Sans',
+  'Source Sans 3': 'https://github.com/adobe-fonts/source-sans',
+  'IBM Plex Sans': 'https://github.com/IBM/plex',
+  'Work Sans': 'https://fonts.google.com/specimen/Work+Sans',
+  'Plus Jakarta Sans': 'https://fonts.google.com/specimen/Plus+Jakarta+Sans',
+  'Figtree': 'https://fonts.google.com/specimen/Figtree',
+  'Outfit': 'https://fonts.google.com/specimen/Outfit',
+  'Sora': 'https://fonts.google.com/specimen/Sora',
+  'Be Vietnam Pro': 'https://fonts.google.com/specimen/Be+Vietnam+Pro',
+  'Atkinson Hyperlegible': 'https://fonts.google.com/specimen/Atkinson+Hyperlegible',
+  'Lexend': 'https://fonts.google.com/specimen/Lexend',
+  'Space Grotesk': 'https://fonts.google.com/specimen/Space+Grotesk',
+  'Archivo': 'https://fonts.google.com/specimen/Archivo',
+  'Archivo Black': 'https://fonts.google.com/specimen/Archivo+Black',
+  'Rubik': 'https://fonts.google.com/specimen/Rubik',
+  'Karla': 'https://fonts.google.com/specimen/Karla',
+  'Hind': 'https://fonts.google.com/specimen/Hind',
+  'Heebo': 'https://fonts.google.com/specimen/Heebo',
+  'Mulish': 'https://fonts.google.com/specimen/Mulish',
+  'Barlow': 'https://fonts.google.com/specimen/Barlow',
+  'Asap': 'https://fonts.google.com/specimen/Asap',
+  'Cabin': 'https://fonts.google.com/specimen/Cabin',
+  'Quicksand': 'https://fonts.google.com/specimen/Quicksand',
+  'Source Serif 4': 'https://github.com/adobe-fonts/source-serif',
+  'IBM Plex Serif': 'https://github.com/IBM/plex',
+  'Lora': 'https://fonts.google.com/specimen/Lora',
+  'Merriweather': 'https://fonts.google.com/specimen/Merriweather',
+  'Playfair Display': 'https://fonts.google.com/specimen/Playfair+Display',
+  'Cormorant Garamond': 'https://fonts.google.com/specimen/Cormorant+Garamond',
+  'Crimson Pro': 'https://fonts.google.com/specimen/Crimson+Pro',
+  'EB Garamond': 'https://fonts.google.com/specimen/EB+Garamond',
+  'PT Serif': 'https://fonts.google.com/specimen/PT+Serif',
+  'Roboto Slab': 'https://fonts.google.com/specimen/Roboto+Slab',
+  'Bitter': 'https://fonts.google.com/specimen/Bitter',
+  'DM Serif Display': 'https://fonts.google.com/specimen/DM+Serif+Display',
+  'Spectral': 'https://fonts.google.com/specimen/Spectral',
+  'Libre Baskerville': 'https://fonts.google.com/specimen/Libre+Baskerville',
+  'Cardo': 'https://fonts.google.com/specimen/Cardo',
+  'JetBrains Mono': 'https://www.jetbrains.com/lp/mono/',
+  'JetBrains Mono NL': 'https://www.jetbrains.com/lp/mono/',
+  'Fira Code': 'https://github.com/tonsky/FiraCode',
+  'Fira Mono': 'https://github.com/tonsky/FiraCode',
+  'Source Code Pro': 'https://github.com/adobe-fonts/source-code-pro',
+  'IBM Plex Mono': 'https://github.com/IBM/plex',
+  'Cascadia Code': 'https://github.com/microsoft/cascadia-code',
+  'Cascadia Mono': 'https://github.com/microsoft/cascadia-code',
+  'Hack': 'https://github.com/source-foundry/Hack',
+  'Inconsolata': 'https://github.com/googlefonts/Inconsolata',
+  'Roboto Mono': 'https://fonts.google.com/specimen/Roboto+Mono',
+  'Ubuntu Mono': 'https://fonts.google.com/specimen/Ubuntu+Mono',
+  'Iosevka': 'https://github.com/be5invis/Iosevka',
+  'Geist Mono': 'https://github.com/vercel/geist-font',
+  'DM Mono': 'https://fonts.google.com/specimen/DM+Mono',
+  'Space Mono': 'https://fonts.google.com/specimen/Space+Mono',
+  'Berkeley Mono': 'https://berkeleygraphics.com/typefaces/berkeley-mono/',
+  'Intel One Mono': 'https://github.com/intel/intel-one-mono',
+  'Maple Mono': 'https://github.com/subframe7536/Maple-font',
+  'Commit Mono': 'https://github.com/eigilhs/commit-mono',
+  'Caveat': 'https://fonts.google.com/specimen/Caveat',
+  'Pacifico': 'https://fonts.google.com/specimen/Pacifico',
+  'Dancing Script': 'https://fonts.google.com/specimen/Dancing+Script',
+  'Lobster': 'https://fonts.google.com/specimen/Lobster',
+  'Bebas Neue': 'https://fonts.google.com/specimen/Bebas+Neue',
+  'Anton': 'https://fonts.google.com/specimen/Anton',
+  'Oswald': 'https://fonts.google.com/specimen/Oswald',
+  'Abril Fatface': 'https://fonts.google.com/specimen/Abril+Fatface',
+  'Righteous': 'https://fonts.google.com/specimen/Righteous',
+  'Fredoka': 'https://fonts.google.com/specimen/Fredoka',
+  'Twemoji Mozilla': 'https://github.com/twitter/twemoji',
+  'OpenMoji': 'https://openmoji.org/',
+
+  // ───── 中文社区作品（GitHub / 字体网） ─────
+  '得意黑': 'https://github.com/atelier-anchor/smiley-sans',
+  '未来荧黑': 'https://github.com/watanabei/Source-Han-TrueType',
+  '未来风黑体': 'https://github.com/watanabei/Source-Han-TrueType',
+  '极影毁片文宋': 'https://github.com/Pal3love/Source-Han-TrueType',
+  '鸿雷板书简体': 'https://github.com/wordshub/free-font',
+  '演示佛系体': 'https://github.com/wordshub/free-font',
+  '演示悠然小楷': 'https://github.com/wordshub/free-font',
+  '演示夏行楷': 'https://github.com/wordshub/free-font',
+  '寒蝉正楷体': 'https://github.com/StellarCN/scp_zh',
+  '寒蝉端黑体': 'https://github.com/StellarCN/scp_zh',
+  '寒蝉半糖体': 'https://github.com/StellarCN/scp_zh',
+  '寒蝉全圆体': 'https://github.com/StellarCN/scp_zh',
+  '江西拙楷体': 'https://github.com/wordshub/free-font',
+  '优设标题黑': 'https://github.com/wordshub/free-font',
+  '优设巧巧体': 'https://github.com/wordshub/free-font',
+  '优设鲨鱼菲特健康体': 'https://github.com/wordshub/free-font',
+  '庞门正道粗书体': 'https://github.com/wordshub/free-font',
+  '庞门正道标题体': 'https://github.com/wordshub/free-font',
+  '摄图摩登小方体': 'https://github.com/wordshub/free-font',
+  '摄图胖体': 'https://github.com/wordshub/free-font',
+  '千图笔锋手写体': 'https://github.com/wordshub/free-font',
+  '千图纤云体': 'https://github.com/wordshub/free-font',
+  '千图方块体': 'https://github.com/wordshub/free-font',
+  '千图小石头体': 'https://github.com/wordshub/free-font',
+  '字魂扁桃体': 'https://www.hellofont.cn/font',
+  '字魂大黑魂': 'https://www.hellofont.cn/font',
+  '字魂无外润黑体': 'https://www.hellofont.cn/font',
+  '胡晓波男神体': 'https://www.hellofont.cn/font',
+  '胡晓波真帅体': 'https://www.hellofont.cn/font',
+  '胡晓波骚包体': 'https://www.hellofont.cn/font',
+  '沐瑶软笔手写体': 'https://www.hellofont.cn/font',
+  '沐瑶随心手写体': 'https://www.hellofont.cn/font',
+  '萌神手写体': 'https://github.com/wordshub/free-font',
+  '标小智龙珠体': 'https://www.hellofont.cn/font',
+  '标小智无界黑': 'https://www.hellofont.cn/font',
+  '联盟起艺卢帅正锐黑': 'https://github.com/wordshub/free-font',
+  '默陌手写体': 'https://github.com/wordshub/free-font',
+  '默陌星球': 'https://github.com/wordshub/free-font',
+  '游圆体': 'https://github.com/wordshub/free-font',
+  '颜宋体': 'https://github.com/wordshub/free-font',
+  '莫大毛笔楷书': 'https://github.com/wordshub/free-font',
+  '华康手书体': 'https://github.com/wordshub/free-font',
+  '包图小白体': 'https://github.com/wordshub/free-font'
+}
+
+/**
+ * 兑底搜索 URL（百度，国内可用）
+ */
+function buildFallbackSearch(name) {
+  return 'https://www.baidu.com/s?wd=' + encodeURIComponent(name + ' 字体 免费下载')
+}
+
+/**
+ * 跳转到字体下载源
+ * - 有 event 时阻止 a 标签默认跳转（避免弹两次窗）
+ * - 无 event 时使用 window.open
+ */
+function gotoFontHome(event, name) {
+  // a 标签本身已经有正确的 href，阻止默认行为后仅记录点击/不重复跳转
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault()
+  }
+  const url = FONT_HOMES[name] || buildFallbackSearch(name)
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 const builtInFonts = [
   { name: '思源黑体', en: 'Source Han Sans', type: '黑体', weights: 7, scene: '正文 / 标题，通用型', license: 'SIL OFL 1.1', emoji: '黑' },
@@ -284,9 +508,19 @@ const importRules = [
           <article
             v-for="f in builtInFonts"
             :key="f.name"
-            class="group flex flex-col rounded-2xl border border-dark/5 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-primary-500/30 hover:shadow-wpx"
+            class="group relative flex flex-col rounded-2xl border border-dark/5 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-primary-500/30 hover:shadow-wpx"
           >
-            <div class="flex items-center gap-3">
+            <a
+              v-if="FONT_HOMES[f.name]"
+              :href="FONT_HOMES[f.name]"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="absolute inset-0 z-10 rounded-2xl"
+              :title="`查看「${f.name}」官方源`"
+            >
+              <span class="sr-only">查看 {{ f.name }} 官方源</span>
+            </a>
+            <div class="pointer-events-none flex items-center gap-3">
               <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-wpx-gradient text-lg font-extrabold text-white shadow-wpx">
                 {{ f.emoji }}
               </div>
@@ -299,7 +533,7 @@ const importRules = [
                 </p>
               </div>
             </div>
-            <dl class="mt-4 space-y-1.5 text-xs text-dark/70">
+            <dl class="pointer-events-none mt-4 space-y-1.5 text-xs text-dark/70">
               <div class="flex justify-between">
                 <dt class="text-dark/50">类型</dt>
                 <dd class="font-semibold">{{ f.type }}</dd>
@@ -313,8 +547,18 @@ const importRules = [
                 <dd class="text-right font-semibold">{{ f.scene }}</dd>
               </div>
             </dl>
-            <span class="mt-4 inline-flex w-fit items-center rounded-full bg-wpx-gradient-soft px-2.5 py-0.5 text-[11px] font-semibold text-primary-600">
+            <span class="pointer-events-none mt-4 inline-flex w-fit items-center rounded-full bg-wpx-gradient-soft px-2.5 py-0.5 text-[11px] font-semibold text-primary-600">
               {{ f.license }}
+            </span>
+            <span
+              v-if="FONT_HOMES[f.name]"
+              class="pointer-events-none absolute right-3 top-3 z-20 rounded-full bg-white/80 p-1 text-dark/30 group-hover:text-primary-500"
+              aria-hidden="true"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17 17 7" />
+                <path d="M7 7h10v10" />
+              </svg>
             </span>
           </article>
         </div>
@@ -328,7 +572,7 @@ const importRules = [
               <span class="wpx-gradient-text">在线免费字体</span>
             </h2>
             <p class="mt-2 text-sm text-dark/60">
-              同样免费可商用，体积较大或使用频率低，按需从 CDN 下载。覆盖中英文黑体、衬线、等宽、手写、装饰等全场景。
+              点击任一字体跳转到官方下载页 / GitHub 仓库 / 百度搜索。下载后导入 WPX 即可使用。
             </p>
           </div>
           <span class="hidden rounded-full bg-accent-mint/20 px-3 py-1 text-xs font-semibold text-emerald-700 md:inline-block">
@@ -337,20 +581,42 @@ const importRules = [
         </div>
 
         <div class="mt-8 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-          <article
+          <a
             v-for="f in onlineFonts"
             :key="f.name"
-            class="flex items-center gap-3 rounded-xl border border-dark/5 bg-white px-4 py-3 transition-colors hover:border-primary-500/30 hover:bg-wpx-gradient-soft/50"
+            :href="FONT_HOMES[f.name] || buildFallbackSearch(f.name)"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="group flex w-full items-center gap-3 rounded-xl border border-dark/5 bg-white px-4 py-3 text-left text-dark no-underline transition-all hover:-translate-y-0.5 hover:border-primary-500/40 hover:bg-wpx-gradient-soft/50 hover:shadow-wpx focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            :title="FONT_HOMES[f.name] ? '点击跳转到官方下载源' : '点击跳转到百度搜索'"
+            @click="gotoFontHome($event, f.name)"
           >
-            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-wpx-gradient-soft text-sm font-bold text-primary-600">
+            <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-wpx-gradient-soft text-sm font-bold text-primary-600">
               {{ f.name.slice(0, 1) }}
             </div>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-bold">{{ f.name }}</div>
-              <div class="truncate text-xs text-dark/50">{{ f.type }} · {{ f.scene }}</div>
+              <div class="truncate text-sm font-bold group-hover:text-primary-600">
+                {{ f.name }}
+              </div>
+              <div class="truncate text-xs text-dark/50">
+                {{ f.type }} · {{ f.scene }}
+              </div>
             </div>
-          </article>
+            <span
+              class="flex-shrink-0 text-dark/30 transition-colors group-hover:text-primary-500"
+              aria-hidden="true"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17 17 7" />
+                <path d="M7 7h10v10" />
+              </svg>
+            </span>
+          </a>
         </div>
+
+        <p class="mt-6 text-center text-xs text-dark/50">
+          💡 下载字体文件后，在 WPX 桌面端「设置 → 字体 → 导入本地字体」一键启用。
+        </p>
       </div>
 
       <!-- 商业字体：用户自备导入 -->
