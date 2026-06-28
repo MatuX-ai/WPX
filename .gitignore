@@ -4,6 +4,7 @@ wpx-app/node_modules/
 wpx-app/dist/
 release/
 release-build/
+dist/
 
 # === 前端构建产物（由 scripts/build-frontend.js 在 Vercel 上重新生成） ===
 # 不要把这些提交到 git：它们是 build-frontend.js 的输出，
@@ -52,6 +53,11 @@ resources/fonts/**/*.woff2
 resources/fonts/**/*.ttc
 resources/fonts/**/*.eot
 
+# Built-in Pandoc binary (large — distributed separately or via install script)
+resources/bin/pandoc/pandoc.exe
+resources/bin/pandoc/pandoc
+resources/bin/pandoc/pandoc-*
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json
@@ -95,3 +101,27 @@ electron*.png
 electron_*.png
 *.screenshot.png
 *.screenshot-*.png
+
+# wpx-app debug scripts (local development only)
+wpx-app/capture-screenshot.cjs
+wpx-app/check-app.cjs
+wpx-app/check-console*.cjs
+wpx-app/check-electron-errors.cjs
+wpx-app/check-network*.cjs
+wpx-app/check-procs.cjs
+wpx-app/check-vite-html.cjs
+wpx-app/close-all-windows.cjs
+wpx-app/inspect-*.cjs
+wpx-app/kill-dev.cjs
+wpx-app/list-procs.ps1
+wpx-app/reload-window.cjs
+wpx-app/screenshot-app.cjs
+wpx-app/screenshot-final.png
+wpx-app/.editor-after-fix.png
+wpx-app/start-dev.cjs
+wpx-app/test-ck*.cjs
+wpx-app/wait-app.cjs
+
+# Python compile cache
+wpx-app/src/server/__pycache__/
+**/__pycache__/
