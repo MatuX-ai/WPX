@@ -27,7 +27,7 @@ const team = [
     <div class="wpx-container">
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">关于我们</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">我们想做一个真正懂写作者的工具</span>
         </h1>
         <p class="mt-6 text-lg leading-relaxed text-dark/70">

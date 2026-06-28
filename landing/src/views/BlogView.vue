@@ -50,7 +50,7 @@ const posts = [
     <div class="wpx-container">
       <div class="mx-auto max-w-2xl text-center">
         <span class="wpx-chip">博客</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">来自 WPX 团队的小记</span>
         </h1>
         <p class="mt-4 text-dark/60">

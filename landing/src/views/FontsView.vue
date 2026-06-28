@@ -478,7 +478,7 @@ const importRules = [
       <!-- Hero -->
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">字体库</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">好看的字体，免费、合法、即装即用</span>
         </h1>
         <p class="mt-4 text-dark/60">

@@ -23,7 +23,7 @@ const skills = [
         <span class="wpx-chip">内置技能</span>
         <h2
           id="skills-title"
-          class="mt-4 text-3xl font-extrabold md:text-5xl"
+          class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-5xl"
         >
           <span class="wpx-gradient-text">开箱即用的学生 / 教师工具</span>
         </h2>

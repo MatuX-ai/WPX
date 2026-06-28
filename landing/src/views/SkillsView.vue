@@ -116,7 +116,7 @@ const groupedSkills = computed(() => {
       <!-- Hero -->
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">Skills 市场</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">把 WPX 变成最懂你的工作台</span>
         </h1>
         <p class="mt-4 text-dark/60">

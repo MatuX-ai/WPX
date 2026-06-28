@@ -53,7 +53,7 @@ const features = [
         <span class="wpx-chip">核心特性</span>
         <h2
           id="features-title"
-          class="mt-4 text-3xl font-extrabold md:text-5xl"
+          class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-5xl"
         >
           <span class="wpx-gradient-text">为写作者而生的工具集</span>
         </h2>

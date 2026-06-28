@@ -122,7 +122,7 @@ const chipLabels = {
       <!-- Hero -->
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">更新日志</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">WPX 的每一次小步快跑</span>
         </h1>
         <p class="mt-4 text-dark/60">

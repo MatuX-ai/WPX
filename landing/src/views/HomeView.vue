@@ -88,14 +88,14 @@ function scrollToShowcase(e) {
     <!-- 背景装饰 -->
     <div
       aria-hidden="true"
-      class="pointer-events-none absolute inset-0 -z-10"
+      class="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
     >
-      <div class="absolute -top-40 left-1/2 h-[480px] w-[860px] -translate-x-1/2 rounded-full bg-wpx-gradient opacity-20 blur-3xl" />
-      <div class="absolute -bottom-32 right-0 h-[280px] w-[480px] rounded-full bg-accent-mint/20 blur-3xl" />
+      <div class="absolute -top-40 left-1/2 h-[280px] w-[480px] -translate-x-1/2 rounded-full bg-wpx-gradient opacity-20 blur-3xl sm:h-[480px] sm:w-[860px]" />
+      <div class="absolute -bottom-32 right-0 h-[200px] w-[320px] rounded-full bg-accent-mint/20 blur-3xl sm:h-[280px] sm:w-[480px]" />
     </div>
 
-    <div class="wpx-container grid items-center gap-12 md:grid-cols-2">
-      <div>
+    <div class="wpx-container grid items-center gap-10 md:grid-cols-2 md:gap-12">
+      <div class="min-w-0">
         <span class="wpx-chip">
           <span
             aria-hidden="true"
@@ -107,7 +107,7 @@ function scrollToShowcase(e) {
         <h1
           id="hero-title"
           ref="heroTitle"
-          class="mt-6 text-4xl font-extrabold leading-[1.1] tracking-tight md:text-6xl"
+          class="mt-6 text-[1.65rem] font-extrabold leading-[1.15] tracking-tight sm:text-4xl sm:leading-[1.1] md:text-6xl"
         >
           <span class="block">让写作更自由的</span>
           <span class="block">
@@ -179,7 +179,7 @@ function scrollToShowcase(e) {
       <!-- 视觉占位：编辑器 Hero 卡片 -->
       <div
         ref="heroVisual"
-        class="relative"
+        class="relative min-w-0"
         role="img"
         aria-label="WPX 桌面端编辑器截图示意"
       >

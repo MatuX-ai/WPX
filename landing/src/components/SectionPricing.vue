@@ -112,7 +112,7 @@ function handleCta(s) {
         <span class="wpx-chip">收费说明</span>
         <h2
           id="pricing-title"
-          class="mt-4 text-3xl font-extrabold md:text-5xl"
+          class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-5xl"
         >
           <span class="wpx-gradient-text">完全免费 · 一行代码也不收</span>
         </h2>
@@ -126,7 +126,7 @@ function handleCta(s) {
           v-for="s in scenarios"
           :key="s.name"
           :class="[
-            'relative flex flex-col rounded-3xl border bg-white p-8 transition-all duration-300 hover:-translate-y-1',
+            'relative flex flex-col rounded-3xl border bg-white p-6 transition-all duration-300 hover:-translate-y-1 sm:p-8',
             s.highlight
               ? 'border-transparent shadow-wpx-glow ring-2 ring-emerald-500/40'
               : 'border-dark/5 shadow-sm'

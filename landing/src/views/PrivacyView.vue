@@ -34,7 +34,7 @@ const lastUpdated = '2026-06-18'
       <!-- Hero -->
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">法律 · 隐私</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">隐私政策</span>
         </h1>
         <p class="mt-4 text-dark/60">
@@ -48,9 +48,9 @@ const lastUpdated = '2026-06-18'
       <!-- Body: 两栏布局 -->
       <div class="mt-14 grid gap-10 lg:grid-cols-[220px_1fr]">
         <!-- 左侧 sticky 目录 -->
-        <aside class="lg:sticky lg:top-24 lg:self-start">
+        <aside class="min-w-0 lg:sticky lg:top-24 lg:self-start">
           <nav
-            class="rounded-2xl border border-dark/5 bg-white p-4"
+            class="overflow-hidden rounded-2xl border border-dark/5 bg-white p-4"
             aria-label="目录"
           >
             <div class="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-dark/40">
@@ -71,7 +71,7 @@ const lastUpdated = '2026-06-18'
         </aside>
 
         <!-- 右侧内容 -->
-        <article class="prose-like max-w-none">
+        <article class="prose-like min-w-0 max-w-none">
           <section :id="sections[0].id" class="scroll-mt-24">
             <h2 class="text-2xl font-extrabold">{{ sections[0].title }}</h2>
             <p class="mt-3 leading-relaxed text-dark/75">
@@ -147,8 +147,8 @@ const lastUpdated = '2026-06-18'
             <p class="mt-3 leading-relaxed text-dark/75">
               为提供完整服务，我们会与以下第三方共享<strong class="text-dark">最小必要</strong>的信息：
             </p>
-            <div class="mt-4 overflow-hidden rounded-xl border border-dark/5">
-              <table class="w-full text-left text-sm">
+            <div class="mt-4 overflow-x-auto rounded-xl border border-dark/5">
+              <table class="w-full min-w-[480px] text-left text-sm">
                 <thead class="bg-wpx-gradient-soft text-xs uppercase tracking-wider text-dark/60">
                   <tr>
                     <th class="px-4 py-3">第三方</th>

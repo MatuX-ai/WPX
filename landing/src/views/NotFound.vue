@@ -296,7 +296,7 @@ function goDownload() {
         <!-- 装饰数字 404 -->
         <div
           aria-hidden="true"
-          class="mt-10 select-none text-[8rem] font-black leading-none text-dark/[0.04] md:text-[12rem]"
+          class="mt-10 select-none truncate text-[6rem] font-black leading-none text-dark/[0.04] sm:text-[8rem] md:text-[12rem]"
         >
           404
         </div>

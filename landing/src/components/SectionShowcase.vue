@@ -14,7 +14,7 @@
         <span class="wpx-chip">真实截图</span>
         <h2
           id="showcase-title"
-          class="mt-4 text-3xl font-extrabold md:text-5xl"
+          class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-5xl"
         >
           沉浸式<span class="wpx-gradient-text">纸面体验</span>
         </h2>

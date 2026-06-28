@@ -53,7 +53,7 @@ const otherDeps = [
       <!-- Hero -->
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">法律 · 许可证</span>
-        <h1 class="mt-4 text-4xl font-extrabold md:text-5xl">
+        <h1 class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-4xl lg:text-5xl">
           <span class="wpx-gradient-text">WPX 站在开源的肩膀上</span>
         </h1>
         <p class="mt-4 text-dark/60">
@@ -99,8 +99,8 @@ const otherDeps = [
           以下字体随 WPX 安装包分发，均为免费可商用授权。使用或再分发时，请遵守各自许可条款（通常需保留版权声明与许可全文）。
         </p>
 
-        <div class="mt-6 overflow-hidden rounded-2xl border border-dark/5 bg-white">
-          <table class="w-full text-left text-sm">
+        <div class="mt-6 overflow-x-auto rounded-2xl border border-dark/5 bg-white">
+          <table class="w-full min-w-[480px] text-left text-sm">
             <thead class="bg-wpx-gradient-soft text-xs uppercase tracking-wider text-dark/60">
               <tr>
                 <th class="px-5 py-3">字体名称</th>

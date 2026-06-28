@@ -41,7 +41,7 @@ const faqs = [
         <span class="wpx-chip">常见问题</span>
         <h2
           id="faq-title"
-          class="mt-4 text-3xl font-extrabold md:text-5xl"
+          class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-5xl"
         >
           <span class="wpx-gradient-text">可能你也在问</span>
         </h2>
@@ -51,7 +51,7 @@ const faqs = [
         <details
           v-for="(f, idx) in faqs"
           :key="idx"
-          class="group p-6"
+          class="group px-4 py-5 sm:p-6"
         >
           <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-semibold">
             <span>{{ f.q }}</span>
