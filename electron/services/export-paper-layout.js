@@ -325,7 +325,16 @@ function buildDocxRootRelsXml() {
 }
 
 /**
- * HTML 注入：CSS 让图片/表格自适应 + 可选 page-break 控制
+ * HTML 注入：CSS 让图片/表格自适应 + 可选 page-break 控制 + 可选 @page 尺寸。
+ *
+ * printPaper 仅取浏览器 @page { size } 原生识别的关键字：
+ *   - 'A4'     → A4
+ *   - 'Letter' → letter
+ *   - 'B5'     → B5
+ *   - 其他     → 不注入 size，由浏览器按窗口宽度自适应
+ *
+ * 注意：与 PDF/docx 母版使用的 'a4paper' / 'letterpaper' / '16k' / 'mobile'
+ * 等 Pandoc 关键字不同，HTML 必须使用 CSS 标准关键字，否则浏览器忽略。
  */
 function buildHtmlFitCss(exportOptions) {
   const rules = [
@@ -333,12 +342,39 @@ function buildHtmlFitCss(exportOptions) {
     'img{max-width:100%;height:auto;}',
     'table{width:100%;border-collapse:collapse;}',
     'figure img{max-width:100%;}',
-    '@page{margin:0;}',
   ]
+
+  const printPaper = exportOptions?.printPaper
+  const cssPageSize = resolveHtmlPrintPaperCss(printPaper)
+  if (cssPageSize) {
+    rules.push(`@page{size:${cssPageSize};margin:0;}`)
+  } else {
+    rules.push('@page{margin:0;}')
+  }
+
   if (exportOptions?.autoPaginate !== false) {
     rules.push('p,li,figure,table{page-break-inside:avoid;orphans:3;widows:3;}')
   }
   return `<style>\n${rules.join('\n')}\n</style>`
+}
+
+/**
+ * 映射前端 printPaper 值 → CSS @page { size } 关键字。
+ * 不在白名单中的值返回 null（不注入 size）。
+ *
+ * 与 `wpx-app/src/constants/htmlPrintPaper.js` 中的 HTML_PRINT_PAPER_VALUES
+ * 一一对应。修改该映射时必须同步前端白名单；这处常量由后端单独维护以避免
+ * electron 主进程与 vite 前端包共享一个文件。
+ */
+const HTML_PRINT_PAPER_CSS_MAP = Object.freeze({
+  A4: 'A4',
+  Letter: 'letter',
+  B5: 'B5',
+})
+
+function resolveHtmlPrintPaperCss(printPaper) {
+  if (typeof printPaper !== 'string') return null
+  return HTML_PRINT_PAPER_CSS_MAP[printPaper] || null
 }
 
 function twipsFromMm(mm) {
@@ -400,6 +436,7 @@ module.exports = {
   buildDocxDocumentRelsXml,
   buildDocxRootRelsXml,
   buildHtmlFitCss,
+  resolveHtmlPrintPaperCss,
   writeDocxReferenceDocx,
   twipsFromMm,
   clampMargin,

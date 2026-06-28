@@ -77,13 +77,18 @@ function extractMetaContent(html, patterns) {
 
 function resolveAbsoluteUrl(raw, pageUrl) {
   const src = String(raw || '').trim()
-  if (!src || src.startsWith('data:') || src.startsWith('javascript:')) return ''
+  if (!src || src.startsWith('javascript:') || src.startsWith('vbscript:')) return ''
+  // data: URL（base64 内联图/SVG）原样保留；上游会按体积裁断
+  if (src.startsWith('data:')) return src
   try {
     return new URL(src, pageUrl).href
   } catch {
     return ''
   }
 }
+
+/** data: URL 体积上限（原始字符串长度）。超限跳过，防止 markdown 炸 */
+const MAX_DATA_URL_LENGTH = 2 * 1024 * 1024
 
 function parseDimension(value) {
   const parsed = Number.parseInt(String(value || '').replace(/px$/i, ''), 10)
@@ -282,25 +287,59 @@ function isLikelyDecorativeImage(img, width, height) {
   return false
 }
 
+/** 判断 URL 是否像「懒加载占位符」（不是真实图） */
+function isLikelyPlaceholderUrl(url) {
+  const u = String(url || '').toLowerCase()
+  if (!u) return true
+  if (u.includes('placeholder')) return true
+  if (u.includes('spacer')) return true
+  if (u.includes('blank.gif') || u.includes('blank.png')) return true
+  if (u.includes('loading.gif') || u.includes('loader.gif') || u.includes('lazy.gif')) return true
+  if (u.startsWith('data:image/gif;base64,r0lgodlh')) return true // 1x1 透明 gif
+  return false
+}
+
 function collectImagesFromRoot(root, pageUrl, seen) {
   const images = []
 
   for (const img of root.querySelectorAll('img, picture source[srcset], source[srcset]')) {
     let src = ''
     if (img.tagName?.toLowerCase() === 'img') {
-      src =
-        img.getAttribute('src') ||
-        img.getAttribute('data-src') ||
-        img.getAttribute('data-original') ||
-        img.getAttribute('data-lazy-src') ||
-        ''
+      // 覆盖主流懒加载库：lazyload/echo.js/jQuery.Lazy/部分中文站点
+      // 先拼出所有候选 src，再跳过明显是占位图的，最后取首个有效值
+      const candidates = [
+        img.getAttribute('src'),
+        img.getAttribute('data-src'),
+        img.getAttribute('data-original'),
+        img.getAttribute('data-lazy-src'),
+        img.getAttribute('data-echo'),
+        img.getAttribute('data-defer-src'),
+        img.getAttribute('data-url'),
+        img.getAttribute('data-original-src'),
+        img.getAttribute('_src'),
+      ]
+      for (const candidate of candidates) {
+        if (candidate && !isLikelyPlaceholderUrl(candidate)) {
+          src = candidate
+          break
+        }
+      }
+      if (!src) src = candidates.find((c) => c) || ''
     } else {
+      // srcset 形如 "url 1x, url 2x" 或 "url 1200w, url 600w"
       const srcset = img.getAttribute('srcset') || ''
-      src = srcset.split(',')[0]?.trim().split(/\s+/)[0] || ''
+      // 取最后一个（一般是最清晰的）并去掉宽高描述符
+      const candidates = srcset
+        .split(',')
+        .map((s) => s.trim().split(/\s+/)[0])
+        .filter(Boolean)
+      src = candidates[candidates.length - 1] || ''
     }
 
     const absoluteUrl = resolveAbsoluteUrl(src, pageUrl)
     if (!absoluteUrl || seen.has(absoluteUrl)) continue
+    // 体积裁断：data: URL 超过 2MB 不入插图列表（避免炸 markdown）
+    if (absoluteUrl.startsWith('data:') && absoluteUrl.length > MAX_DATA_URL_LENGTH) continue
 
     const width = Math.max(
       parseDimension(img.getAttribute('width')),
@@ -661,9 +700,12 @@ function buildImportContent(payload) {
     parts.push('## 配图')
     for (const [index, image] of images.entries()) {
       const alt = normalizeText(image.alt || '') || `图片 ${index + 1}`
+      // 按 CommonMark 转义 alt / url 中的 \ [ ] ( ) \\ 防止下游 markdown 解析错误
+      const safeAlt = alt.replace(/[\\[\]()]/g, '\\$&')
+      const safeUrl = String(image.url || '').replace(/[()\\]/g, '\\$&')
       const dim =
         image.width && image.height ? ` (${image.width}×${image.height})` : ''
-      parts.push(`![${alt}](${image.url})${dim}`)
+      parts.push(`![${safeAlt}](${safeUrl})${dim}`)
     }
   }
 

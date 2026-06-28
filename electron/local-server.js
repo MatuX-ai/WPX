@@ -4,6 +4,7 @@ const { registerExportRoutes } = require('./services/export-routes')
 const { registerRemoveBgRoutes } = require('./services/remove-bg-routes')
 const { registerTokenRoutes } = require('./services/token-routes')
 const { registerCommercialFontRoutes } = require('./services/commercial-font-routes')
+const { registerJcodeRoutes } = require('./services/jcode-routes')
 const { initTokenStore } = require('./services/token-store')
 const { initCommercialFontStore } = require('./services/commercial-font-store')
 
@@ -43,6 +44,7 @@ async function startLocalServer() {
   registerRemoveBgRoutes(expressApp, upload)
   registerTokenRoutes(expressApp)
   registerCommercialFontRoutes(expressApp)
+  registerJcodeRoutes(expressApp)
 
   expressApp.use((_req, res) => {
     res.status(404).json({ error: '接口不存在' })
@@ -54,11 +56,16 @@ async function startLocalServer() {
   })
 
   const state = await new Promise((resolve, reject) => {
-    const server = expressApp.listen(0, '127.0.0.1', () => {
+    // 端口优先级：
+    //   1) process.env.WPX_LOCAL_SERVER_PORT（开发期 Vite proxy 需要固定端口）
+    //   2) 0：让 OS 分配空闲端口（生产/打包后使用，零冲突）
+    const envPort = Number.parseInt(process.env.WPX_LOCAL_SERVER_PORT || '', 10)
+    const listenPort = Number.isFinite(envPort) && envPort > 0 ? envPort : 0
+    const server = expressApp.listen(listenPort, '127.0.0.1', () => {
       const address = server.address()
       const port = typeof address === 'object' && address ? address.port : 0
       const baseUrl = `http://127.0.0.1:${port}`
-      console.log(`[local-server] 运行于 ${baseUrl}`)
+      console.log(`[local-server] 运行于 ${baseUrl}${listenPort ? ' (固定端口)' : ' (动态端口)'}`)
       resolve({ server, port, baseUrl })
     })
     server.on('error', reject)

@@ -12,7 +12,9 @@ const WINDOW_CREATE_ERROR = {
 }
 
 const MAX_WINDOWS_MESSAGE = '最多只能打开8个窗口，请关闭一个后再试'
-const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
+// 显式用 127.0.0.1 (IPv4) 而非 localhost，避开 Windows / Electron Chromium 的 Happy Eyeballs
+// 解析偶发只走 IPv4 失败的问题。Vite 18+ 默认只监听 IPv6，Electron 加载 localhost 偶尔会卡。
+const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
 const WPX_APP_ROOT = path.join(__dirname, '..', 'wpx-app')
 
 function resolvePreloadPath() {

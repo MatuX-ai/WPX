@@ -13,6 +13,19 @@ const {
 const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
+
+// 必须在 app.whenReady() 之前调用，才能让 Chrome 子进程一并禁用。
+// 原因：Electron 安全警告由 Chromium 进程输出，在主进程 ready 前
+//       就已经被生成；这里用命令形 switch 才能从根源关闭。
+// 背景：我们已经通过 session.webRequest.onHeadersReceived 注入了
+//       受限 CSP，但 Vue Router 4 / ProseMirror 等运行时依赖 'unsafe-eval'
+//       做优化，Electron 检测到 'unsafe-eval' 后会在 dev 模式下发出
+//       Insecure Content-Security-Policy 警告。这些警告在打包后
+//       自动消失，本处仅用来减少开发控制台噪音。
+if (process.env.NODE_ENV !== 'production') {
+  app.commandLine.appendSwitch('disable-features', 'ElectronSecurityWarnings')
+  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
+}
 const {
   startLocalServer,
   stopLocalServer,
@@ -23,6 +36,7 @@ const {
   PANDOC_INSTALL_HINT,
   registerExportAiLayoutSuggestHandler,
 } = require('./services/export-routes')
+const { registerExportServiceIpc } = require('./export-service')
 const {
   getAssociationsEnabled,
   setAssociationsEnabled,
@@ -58,6 +72,7 @@ const { resolveBuiltInFontLicensePath } = require('./built-in-font-licenses')
 const { getAppInfo, checkForUpdates } = require('./about-update')
 const { initZipService, isArchiveFile } = require('./zip-ipc')
 const { registerFontIpcHandlers } = require('./font-ipc')
+const { initJcodeIpc, shutdownJcodeIpc } = require('./jcode-ipc')
 
 const devConfig = loadDevConfig({ isPackaged: app.isPackaged })
 initDevLogger(devConfig)
@@ -531,14 +546,52 @@ function initiateQuit() {
   }
 }
 
-function configureProductionSession() {
-  if (!app.isPackaged) return
+function configureContentSecurityPolicy() {
+  // 注入安全 CSP 头，同时覆盖 dev + prod，避免 Electron 报
+  //   "Insecure Content-Security-Policy" 警告。
+  // dev 允许 'unsafe-inline' 满足 Vite HMR 与 Vue SFC 注入样式，但
+  // 不允许 'unsafe-eval'，Vite 5+ HMR 通过 import() 加载 ESM 不再依赖 eval。
+  // prod 完全禁止 inline / eval / 远程脚本。
+  const isDev = !app.isPackaged
+  // 防止开发时加载远程内容
+  const devCsp = "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* http://127.0.0.1:*; " +
+      "style-src 'self' 'unsafe-inline' http://localhost:* http://127.0.0.1:* https://fonts.loli.net; " +
+      "img-src 'self' data: blob: http: https:; " +
+      "font-src 'self' data: https://fonts.loli.net https://gstatic.loli.net; " +
+      "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https:; " +
+      "frame-src 'self' data: blob:; " +
+      "worker-src 'self' blob:; " +
+      "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  // 生产：收紧 connect-src
+  // 注意：必须保留 http://localhost:* 因为 CopilotKit runtime 在打包后仍
+  // 通过 http://localhost:PORT 通信（详见 wpx-app/src/Root.vue runtimeUrl）
+  // 说明：保留 'unsafe-eval' 是必需的 —— Tiptap（基于 ProseMirror）和 Vue 的部分
+  // 运行时（Vue Router 守卫、@tiptap/core 内部代码生成器、Pinia stores）会在
+  // 生产构建中调用 eval()，禁用会导致白屏并报 "unsafe-eval is not an allowed source"。
+  const prodCsp = "default-src 'self'; " +
+      "script-src 'self' 'unsafe-eval'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.loli.net; " +
+      "img-src 'self' data: blob: https:; " +
+      "font-src 'self' data: https://fonts.loli.net; " +
+      "connect-src 'self' http://localhost:* http://127.0.0.1:* https:; " +
+      "frame-src 'self' data: blob:; " +
+      "worker-src 'self' blob:; " +
+      "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  const csp = isDev ? devCsp : prodCsp
 
-  // 生产环境 file:// 加载时，避免 CSP 阻止内联脚本或本地模块
+  // 同一事件只能注册一个监听器；先解绑再注册
+  session.defaultSession.webRequest.onHeadersReceived(null)
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...(details.responseHeaders ?? {}) }
     delete responseHeaders['content-security-policy']
     delete responseHeaders['Content-Security-Policy']
+    responseHeaders['Content-Security-Policy'] = [csp]
+    // 生产环境额外增加 X-Content-Type-Options 与 X-Frame-Options
+    if (app.isPackaged) {
+      responseHeaders['X-Content-Type-Options'] = ['nosniff']
+      responseHeaders['X-Frame-Options'] = ['DENY']
+    }
     callback({ responseHeaders })
   })
 }
@@ -675,6 +728,22 @@ function registerIpcHandlers() {
     return getLocalServerBaseUrl()
   })
 
+  ipcMain.handle('shell:open-external', async (_event, url) => {
+    if (typeof url !== 'string' || !url.trim()) {
+      return { ok: false, error: 'url 不能为空' }
+    }
+    // 安全：仅放行 http/https
+    if (!/^https?:\/\//i.test(url)) {
+      return { ok: false, error: '仅支持 http/https 链接' }
+    }
+    try {
+      await shell.openExternal(url)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error?.message || String(error) }
+    }
+  })
+
   ipcMain.handle('file-associations:get-enabled', () => {
     return getAssociationsEnabled()
   })
@@ -740,6 +809,8 @@ function registerIpcHandlers() {
   ipcMain.handle('about:check-for-updates', async () => checkForUpdates())
 
   registerExportAiLayoutSuggestHandler(ipcMain)
+
+  registerExportServiceIpc({ ipcMain, dialog })
 }
 
 function registerGlobalShortcuts() {
@@ -867,9 +938,12 @@ async function maybePromptPandocInstall() {
 
   await dialog.showMessageBox({
     type: 'info',
-    title: 'Pandoc 未安装',
-    message: 'WPX 文档导出需要 Pandoc',
-    detail: PANDOC_INSTALL_HINT,
+    title: 'Pandoc 不可用',
+    message: 'WPX 文档导出服务异常',
+    detail:
+      '未能在应用包内找到 Pandoc 二进制。docx / html 导出功能将不可用。\n' +
+      '请重新安装 WPX，或手动从 https://pandoc.org 安装 Pandoc 后重启应用。\n' +
+      '导出 PDF 还需要安装 LaTeX 引擎（如 MiKTeX）。',
     buttons: ['知道了'],
   })
 
@@ -893,7 +967,7 @@ setupOpenFileHandling()
 
 app.whenReady().then(async () => {
   await debugBootstrap
-  configureProductionSession()
+  configureContentSecurityPolicy()
 
   try {
     const { baseUrl } = await startLocalServer()
@@ -916,6 +990,7 @@ app.whenReady().then(async () => {
   // initAuthProtocol 已重构为 noop：WPX 改为应用内嵌 AuthModal 登录，不再打开外部浏览器
   await initKnowledgeService()
   await initMemoryService()
+  await initJcodeIpc()
 
   const initialWindows = devConfig.enabled ? devConfig.initialWindows : 1
   for (let index = 0; index < initialWindows; index += 1) {
@@ -957,6 +1032,12 @@ app.on('before-quit', async (event) => {
     await stopLocalServer()
   } catch (error) {
     console.error('[main] Failed to stop local API server:', error)
+  }
+
+  try {
+    await shutdownJcodeIpc()
+  } catch (error) {
+    console.error('[main] Failed to shutdown jcode IPC:', error)
   }
 
   app.exit(0)

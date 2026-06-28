@@ -20,6 +20,15 @@ if (!process.env.WPX_DEV_AUTO_DEVTOOLS) {
   process.env.WPX_DEV_AUTO_DEVTOOLS = '1'
 }
 
+// jcode 集成：开发期固定 local-server 端口，Vite proxy 与 copilotkit-runtime 都依赖此值。
+// 生产/打包场景下不设置，由 OS 分配端口。
+if (!process.env.WPX_LOCAL_SERVER_PORT) {
+  process.env.WPX_LOCAL_SERVER_PORT = '3007'
+}
+if (!process.env.WPX_LOCAL_SERVER_URL) {
+  process.env.WPX_LOCAL_SERVER_URL = `http://127.0.0.1:${process.env.WPX_LOCAL_SERVER_PORT}`
+}
+
 for (const arg of process.argv.slice(2)) {
   if (arg === '--multi') {
     process.env.WPX_DEV_INITIAL_WINDOWS = process.env.WPX_DEV_INITIAL_WINDOWS || '3'

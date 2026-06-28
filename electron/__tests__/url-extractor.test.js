@@ -136,4 +136,70 @@ describe('url-extractor', () => {
     const html = `<!DOCTYPE html><html><head><title>MSN</title><script>window._clientSettings={"pagetype":"article"}</script></head><body><div id="root"></div></body></html>`
     expect(isSpaShellHtml(html)).toBe(true)
   })
+
+  // ---- 修复点：补充懒加载属性 + srcset 多个候选 ----
+  it('picks up images from common lazy-load attributes', () => {
+    const html = `<!DOCTYPE html><html><body><article>
+      <p>${'足够长的中文正文内容用于触发 Readability 提取。'.repeat(6)}</p>
+      <img src="https://example.com/real-a.jpg" width="600" height="400" />
+      <img data-src="https://example.com/real-b.jpg" width="600" height="400" />
+      <img data-echo="https://example.com/real-c.jpg" width="600" height="400" />
+      <img data-defer-src="https://example.com/real-d.jpg" width="600" height="400" />
+      <img _src="https://example.com/real-e.jpg" width="600" height="400" />
+    </article></body></html>`
+
+    const preview = buildUrlPreviewFromHtml(html, 'https://example.com/article')
+    const urls = preview.images.map((i) => i.url)
+    expect(urls).toContain('https://example.com/real-a.jpg')
+    expect(urls).toContain('https://example.com/real-b.jpg')
+    expect(urls).toContain('https://example.com/real-c.jpg')
+    expect(urls).toContain('https://example.com/real-d.jpg')
+    expect(urls).toContain('https://example.com/real-e.jpg')
+  })
+
+  it('prefers the last (largest) candidate from srcset', () => {
+    const html = `<!DOCTYPE html><html><body><article>
+      <p>${'足够长的中文正文内容用于触发 Readability 提取。'.repeat(6)}</p>
+      <img src="https://example.com/fallback.jpg" width="600" height="400" />
+      <picture>
+        <source srcset="https://example.com/small.jpg 600w, https://example.com/large.jpg 1200w" />
+      </picture>
+    </article></body></html>`
+
+    const preview = buildUrlPreviewFromHtml(html, 'https://example.com/article')
+    const urls = preview.images.map((i) => i.url)
+    expect(urls).toContain('https://example.com/large.jpg')
+  })
+
+  // ---- 修复点：保留 data: URL ----
+  it('keeps small data: URLs as inline images', () => {
+    // 100×100 红色 PNG（不被当装饰图）约 200 字节
+    const png =
+      'data:image/png;base64,' +
+      'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAYklEQVR42u3OQQ0AAAjEMK5/aWdg' +
+      'cG8jiIGcxIqJUOQplmqdUJpLpOYQ3k1xZuQA8A8GAhDpHgYHAgEBAQEBAQEBAQEBAQEBvhwYCAQEB' +
+      'AQEB/fw0EAgICAgICAQEB/fxQIBwQEBAQEBAQEB/r4aCAQEBAQEBAQEB/r4KCAQEB</PLACEHOLDER>'.replace('</PLACEHOLDER>', '')
+    const html = `<!DOCTYPE html><html><body><article>
+      <p>${'足够长的中文正文内容用于触发 Readability 提取。'.repeat(6)}</p>
+      <img src="${png}" width="100" height="100" />
+    </article></body></html>`
+
+    const preview = buildUrlPreviewFromHtml(html, 'https://example.com/article')
+    expect(preview.images.some((i) => i.url.startsWith('data:image/png'))).toBe(true)
+  })
+
+  // ---- 修复点：buildImportContent 转义 URL 括号 ----
+  it('escapes parentheses in image URLs inside import content', () => {
+    const content = buildImportContent({
+      title: '带括号 URL',
+      sourceUrl: 'https://example.com',
+      paragraphs: [{ text: '正文内容。'.repeat(15) }],
+      images: [
+        { url: 'https://cdn.example.com/photo(1).jpg', alt: '配图', width: 800, height: 600 },
+      ],
+    })
+    // 原始 ( 变成 \( ）避免被下游 markdown 解析器误吞
+    expect(content).toContain('\\(1\\)')
+    // 之后 markdownToHtml 负责还原
+  })
 })

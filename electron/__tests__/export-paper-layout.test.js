@@ -36,6 +36,7 @@ const {
   clampMargin,
   normalizeExportOptions,
   normalizePaper,
+  resolveHtmlPrintPaperCss,
   resolveMarginsMm,
   twipsFromMm,
   writeDocxReferenceDocx,
@@ -343,10 +344,50 @@ describe('export-paper-layout — HTML CSS', () => {
     expect(css).toContain('img{max-width:100%')
     expect(css).toContain('table{width:100%')
     expect(css).toContain('page-break-inside:avoid')
+    expect(css).toContain('@page{margin:0;}')
   })
 
   it('autoPaginate=false 时不输出分页保护', () => {
     const css = buildHtmlFitCss({ autoPaginate: false, fitImagesToWidth: true })
     expect(css).not.toContain('page-break-inside:avoid')
+  })
+
+  it('printPaper=A4 时输出 @page { size: A4; margin: 0 }', () => {
+    const css = buildHtmlFitCss({ printPaper: 'A4' })
+    expect(css).toContain('@page{size:A4;margin:0;}')
+  })
+
+  it('printPaper=Letter 时输出 @page { size: letter; margin: 0 }', () => {
+    const css = buildHtmlFitCss({ printPaper: 'Letter' })
+    expect(css).toContain('@page{size:letter;margin:0;}')
+  })
+
+  it('printPaper=B5 时输出 @page { size: B5; margin: 0 }', () => {
+    const css = buildHtmlFitCss({ printPaper: 'B5' })
+    expect(css).toContain('@page{size:B5;margin:0;}')
+  })
+
+  it('printPaper=none 时仅输出 @page margin，不指定 size', () => {
+    const css = buildHtmlFitCss({ printPaper: 'none' })
+    expect(css).toContain('@page{margin:0;}')
+    expect(css).not.toMatch(/@page\{[^}]*size:/)
+  })
+
+  it('printPaper 取未知值时 fallback 到仅 margin，不注入 size', () => {
+    const css = buildHtmlFitCss({ printPaper: 'mobile' })
+    expect(css).not.toMatch(/@page\{[^}]*size:/)
+    expect(css).toContain('@page{margin:0;}')
+  })
+
+  it('resolveHtmlPrintPaperCss 白名单映射', () => {
+    expect(resolveHtmlPrintPaperCss('A4')).toBe('A4')
+    expect(resolveHtmlPrintPaperCss('Letter')).toBe('letter')
+    expect(resolveHtmlPrintPaperCss('B5')).toBe('B5')
+    expect(resolveHtmlPrintPaperCss('none')).toBeNull()
+    expect(resolveHtmlPrintPaperCss('mobile')).toBeNull()
+    expect(resolveHtmlPrintPaperCss('16K')).toBeNull()
+    expect(resolveHtmlPrintPaperCss(undefined)).toBeNull()
+    expect(resolveHtmlPrintPaperCss(null)).toBeNull()
+    expect(resolveHtmlPrintPaperCss('')).toBeNull()
   })
 })

@@ -93,6 +93,14 @@ const electronAPI = {
     upload: (payload) => ipcRenderer.invoke('knowledge:upload', payload),
     delete: (id) => ipcRenderer.invoke('knowledge:delete', id),
     clearIndex: () => ipcRenderer.invoke('knowledge:clear-index'),
+    search: (query, topK) => ipcRenderer.invoke('knowledge:search', { query, topK }),
+    getVersions: (docId) => ipcRenderer.invoke('knowledge:versions', docId),
+    getVersionContent: (docId, verId) => ipcRenderer.invoke('knowledge:version-content', docId, verId),
+    rollback: (docId, verId) => ipcRenderer.invoke('knowledge:rollback', docId, verId),
+    fulltextSearch: (query, limit) => ipcRenderer.invoke('knowledge:fulltext-search', { query, limit }),
+    getTags: () => ipcRenderer.invoke('knowledge:tags'),
+    getIndex: () => ipcRenderer.invoke('knowledge:index'),
+    getLinks: (docId) => ipcRenderer.invoke('knowledge:links', docId),
     onUpdated: (callback) => onChannel('data:knowledge:updated', callback),
   },
   memory: {
@@ -136,6 +144,48 @@ const electronAPI = {
     cleanupPreview: (payload) => ipcRenderer.invoke('font:cleanup-preview', payload),
     subsetForExport: (payload) => ipcRenderer.invoke('font:subset-for-export', payload),
     onDownloadProgress: (callback) => onChannel('font:download-progress', callback),
+  },
+  jcode: {
+    // 探测本地安装（jcode 可执行文件 / 版本 / 路径）
+    detect: () => ipcRenderer.invoke('jcode:detect'),
+    // 当前运行状态（state / pid / port / lastError）
+    getStatus: () => ipcRenderer.invoke('jcode:get-status'),
+    // 启动 / 停止引擎
+    start: () => ipcRenderer.invoke('jcode:start'),
+    stop: () => ipcRenderer.invoke('jcode:stop'),
+    // 偏好读写
+    getSettings: () => ipcRenderer.invoke('jcode:get-settings'),
+    setSettings: (partial) => ipcRenderer.invoke('jcode:set-settings', partial),
+    // 调用适配层（jcode-routes），主进程内部转 jcode 子进程
+    callSwarm: (payload) => ipcRenderer.invoke('jcode:call-swarm', payload),
+    stream: (payload) => ipcRenderer.invoke('jcode:stream', payload),
+    // 清理本地记忆文件
+    clearMemory: () => ipcRenderer.invoke('jcode:clear-memory'),
+    backupMemory: () => ipcRenderer.invoke('jcode:backup-memory'),
+    restoreMemory: () => ipcRenderer.invoke('jcode:restore-memory'),
+    listBackups: () => ipcRenderer.invoke('jcode:list-backups'),
+    // 标记「安装引导提示」已展示，避免重复打扰
+    markInstallHintShown: () => ipcRenderer.invoke('jcode:mark-install-hint-shown'),
+    // 订阅 / 取消订阅状态广播
+    onStatusChanged: (callback) => onChannel('jcode:status-changed', callback),
+    onStreamEvent: (callback) => onChannel('jcode:stream-event', callback),
+    onSettingsChanged: (callback) => onChannel('jcode:settings-changed', callback),
+    offStatusChanged: (callback) => {
+      if (typeof callback !== 'function') return
+      ipcRenderer.removeListener('jcode:status-changed', callback)
+    },
+    offStreamEvent: (callback) => {
+      if (typeof callback !== 'function') return
+      ipcRenderer.removeListener('jcode:stream-event', callback)
+    },
+    offSettingsChanged: (callback) => {
+      if (typeof callback !== 'function') return
+      ipcRenderer.removeListener('jcode:settings-changed', callback)
+    },
+  },
+  shell: {
+    // 用于在桌面端用系统默认浏览器打开外部链接
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   },
 }
 

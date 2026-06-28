@@ -4,6 +4,10 @@ const path = require('node:path')
 const os = require('node:os')
 const { app, ipcMain } = require('electron')
 const fontService = require('../font-service')
+
+// 源码项目根目录（仅开发模式用于定位 resources/bin/ 下的内置二进制）
+const PROJECT_ROOT = path.join(__dirname, '..', '..')
+
 const {
   embedFontsInDocx,
   injectHtmlFontFaces,
@@ -45,13 +49,21 @@ const SUPPORTED_FORMATS = {
 }
 
 function resolveBundledPandocPath() {
-  if (!app?.isPackaged) return null
+  if (!app) return null
 
   const binaryName = process.platform === 'win32' ? 'pandoc.exe' : 'pandoc'
-  const candidates = [
-    path.join(process.resourcesPath, 'bin', 'pandoc', binaryName),
-    path.join(process.resourcesPath, 'pandoc', binaryName),
-  ]
+
+  // 打包后：resources/bin/pandoc/ 是 extraResources 的目标位置
+  // 开发模式：直接读取源码目录 resources/bin/pandoc/，无需系统安装
+  const candidates = app.isPackaged
+    ? [
+        path.join(process.resourcesPath, 'bin', 'pandoc', binaryName),
+        path.join(process.resourcesPath, 'pandoc', binaryName),
+      ]
+    : [
+        path.join(PROJECT_ROOT, 'resources', 'bin', 'pandoc', binaryName),
+        path.join(PROJECT_ROOT, 'resources', 'pandoc', binaryName),
+      ]
 
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null
 }

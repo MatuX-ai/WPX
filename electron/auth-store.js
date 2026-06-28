@@ -13,7 +13,13 @@ let authStore = null
 
 function deriveAesKey() {
   const seed = `${app.getPath('userData')}|wpx-auth-store-v1`
-  return crypto.pbkdf2Sync(seed, 'wpx-auth-aes-salt', PBKDF2_ITERATIONS, 32, 'sha256')
+  // 从 userData 路径派生机密盐值，每个安装实例不同，避免全局固定盐
+  const salt = crypto
+    .createHash('sha256')
+    .update(app.getPath('userData') + '|wpx-auth-salt')
+    .digest('hex')
+    .slice(0, 16)
+  return crypto.pbkdf2Sync(seed, salt, PBKDF2_ITERATIONS, 32, 'sha256')
 }
 
 /**
