@@ -26,16 +26,29 @@ function applyInlineMarkdown(text) {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
 }
 
-const IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]+)\)(?:\s*\([^)]*\))?$/
+// 识别行尾尺寸后缀： (1280×720) / (1280x720)
+const DIM_SUFFIX_RE = /\s+\(\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\)$/
+// 图片行核心正则：alt 可含 \]、url 可含任意字符（含 ( )）
+const IMAGE_LINE_RE = /^!\[((?:\\.|[^\]\\])*)\]\((.+)\)$/
 const HR_LINE_RE = /^(-{3,}|\*{3,}|_{3,})$/
 
 function renderImageHtml(alt, src) {
-  const safeSrc = escapeAttr(src.trim())
-  const safeAlt = escapeAttr(alt)
+  // 去掉上游 markdown 里的反斜杠转义（\( \) \[ \] \\）
+  const cleanedSrc = String(src).trim().replace(/\\(.)/g, '$1')
+  const cleanedAlt = String(alt).replace(/\\(.)/g, '$1')
+  const safeSrc = escapeAttr(cleanedSrc)
+  const safeAlt = escapeAttr(cleanedAlt)
   return (
     `<img src="${safeSrc}" alt="${safeAlt}" class="editor-image" ` +
     `data-align="left" data-float="left" />`
   )
+}
+
+function tryParseImageLine(line) {
+  const stripped = line.replace(DIM_SUFFIX_RE, '')
+  const m = stripped.match(IMAGE_LINE_RE)
+  if (!m) return null
+  return { alt: m[1], src: m[2] }
 }
 
 export function markdownToHtml(markdown) {
@@ -70,9 +83,9 @@ export function markdownToHtml(markdown) {
     const trimmed = line.trim()
     if (!trimmed) continue
 
-    const imageMatch = trimmed.match(IMAGE_LINE_RE)
+    const imageMatch = tryParseImageLine(trimmed)
     if (imageMatch) {
-      html.push(renderImageHtml(imageMatch[1], imageMatch[2]))
+      html.push(renderImageHtml(imageMatch.alt, imageMatch.src))
       continue
     }
 

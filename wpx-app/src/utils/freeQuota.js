@@ -1,13 +1,18 @@
 import { getElectronAPI, isElectron } from '@/utils/electron'
 
 export const FREE_QUOTA_EXHAUSTED = 'FREE_QUOTA_EXHAUSTED'
+// V1 完全免费模式：平台不再提供任何「公共模型」免费 Token 额度。
+// 仅保留错误码与文桉常量以兼容历史调用方，但 limit 一律为 0。
 export const FREE_QUOTA_MESSAGE =
-  '今日免费 Token 额度已用完，请明天再试或配置自己的大模型 API'
+  'V1 平台不提供公共模型额度，请前往「我的模型」接入大模型 API'
 
 /** 访客不提供公共模型免费 Token */
 export const DEFAULT_GUEST_DAILY_TOKEN_LIMIT = 0
-/** 注册用户默认每日 100M Token */
-export const DEFAULT_USER_DAILY_TOKEN_LIMIT = 100_000_000
+/**
+ * V1 完全免费模式：注册用户也不再享有平台免费 Token 额度，
+ * 与访客一致、一律为 0。所有 AI 调用必须由用户自己接入 API。
+ */
+export const DEFAULT_USER_DAILY_TOKEN_LIMIT = 0
 
 const WEB_QUOTA_KEY = 'wpx-free-quota-web'
 

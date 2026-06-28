@@ -48,7 +48,15 @@ export function downloadBlob(blob, filename) {
  * @param {{ embedFonts?: Array<{ fontId?: string, path?: string, text: string }>, contentFormat?: 'markdown' | 'html', exportOptions?: ExportOptionPayload }} [options]
  */
 export async function exportViaApi(content, format, filename = 'document', options = {}) {
-  const apiBase = await getLocalApiBase()
+  let apiBase
+  try {
+    apiBase = await getLocalApiBase()
+  } catch (error) {
+    if (error?.code === 'WPX_LOCAL_API_UNAVAILABLE') {
+      throw new Error('本地导出服务尚未启动，请重试或重启 WPX。')
+    }
+    throw new Error(`无法连接本地服务：${error?.message || error}`)
+  }
   const { embedFonts, contentFormat = 'markdown', exportOptions } = options
 
   /** @type {Record<string, unknown>} */
@@ -60,14 +68,27 @@ export async function exportViaApi(content, format, filename = 'document', optio
     body.exportOptions = exportOptions
   }
 
-  const response = await fetch(`${apiBase}/api/export`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-WPX-User-Id': getUserId(),
-    },
-    body: JSON.stringify(body),
-  })
+  let response
+  try {
+    response = await fetch(`${apiBase}/api/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WPX-User-Id': getUserId(),
+      },
+      body: JSON.stringify(body),
+    })
+  } catch (error) {
+    // fetch 抛出网络层异常（连接拒绝 / 服务未启动 / CSP 拦截 / URL 为空走相对路径失败）。
+    // 将 “Failed to fetch” 等原始文案转换为面向用户的可读提示。
+    const raw = String(error?.message || error || '')
+    if (/Failed to fetch|NetworkError|fetch failed/i.test(raw)) {
+      throw new Error(
+        '无法连接本地导出服务（Failed to fetch）。可能原因：本地服务未启动、被安全软件拦截、或 API 地址未正确注入。请重启 WPX 后重试。',
+      )
+    }
+    throw new Error(`网络请求失败：${raw}`)
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
