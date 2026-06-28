@@ -7,10 +7,15 @@ import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useAuthStore } from '@/stores/auth'
 import { useTrayStore } from '@/stores/tray'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
-import { hasHtmlImport } from '@/composables/useHtmlImporter'
-import { getActiveEditor } from '@/composables/useEditorRegistry'
-import { useHtmlFormatPromptStore } from '@/stores/htmlFormatPrompt'
+import { useSettingsStore } from '@/stores/settings'
+import { useFocusModeFormatPrompt } from '@/composables/useFocusModeFormatPrompt'
 import { getElectronAPI, isElectron } from '@/utils/electron'
+import {
+  FLOATING_WINDOW_ID,
+  useFloatingWindowState,
+  useFloatingWindows,
+} from '@/composables/useFloatingWindows'
+import { getAvatarUrlById, DEFAULT_AVATAR_ID } from '@/constants/aiAvatars'
 import {
   detectPlatform,
   hasNativeWindowControls,
@@ -56,7 +61,10 @@ const props = defineProps({
 const trayStore = useTrayStore()
 const authStore = useAuthStore()
 const userPreferencesStore = useUserPreferencesStore()
-const htmlPromptStore = useHtmlFormatPromptStore()
+const settingsStore = useSettingsStore()
+const floatingWindows = useFloatingWindows()
+const aiChat = useFloatingWindowState(FLOATING_WINDOW_ID.AI_CHAT)
+const { triggerFocusFormatPrompt } = useFocusModeFormatPrompt()
 const { isAuthenticated, currentUser } = storeToRefs(authStore)
 const { login, logout, isLoggingIn } = useAuth()
 const { openSettings } = useOpenSettings()
@@ -79,12 +87,9 @@ async function handleToggleFocusMode() {
   if (!focusModeAvailable.value) return
   try {
     await userPreferencesStore.toggleFocusMode()
-    // 进入 A4 阅读模式（焦点模式开启）+ 文档含 htmlSource → 触发 HTML 排版选择弹窗
+    // 进入 A4 阅读模式（焦点模式开启）→ 根据文档内容类型主动提示 AI 助理排版
     if (userPreferencesStore.paper?.focusMode === true) {
-      const editor = getActiveEditor()
-      if (editor && hasHtmlImport(editor)) {
-        htmlPromptStore.trigger({ source: 'a4-focus-mode' })
-      }
+      triggerFocusFormatPrompt()
     }
   } catch (error) {
     console.warn('[TitleBar] Failed to toggle focus mode:', error)
@@ -238,6 +243,30 @@ function handleAvatarError() {
   avatarLoadFailed.value = true
 }
 
+/**
+ * AI 助手是否贴边（docked）？
+ * 仅当 docked=true 且面板可见时，TitleBar 右侧出现一个头像按钮。
+ * 点击后调用 undock + open，恢复为右下角浮窗 + avatar入口。
+ */
+const aiChatIsDocked = computed(() => aiChat.isDocked.value && aiChat.visible.value)
+const titleBarAvatarUrl = computed(() => {
+  return settingsStore.avatarUrl || getAvatarUrlById(settingsStore.avatarId || DEFAULT_AVATAR_ID)
+})
+
+function handleTitleBarAvatarClick() {
+  if (aiChat.isDocked.value) {
+    floatingWindows.undockWindow(FLOATING_WINDOW_ID.AI_CHAT)
+  }
+  floatingWindows.openWindow(FLOATING_WINDOW_ID.AI_CHAT)
+}
+
+function handleTitleBarAvatarKeydown(event) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    handleTitleBarAvatarClick()
+  }
+}
+
 watch(userAvatarUrl, () => {
   avatarLoadFailed.value = false
 })
@@ -326,6 +355,29 @@ onUnmounted(() => {
           :stroke-width="1.8"
           aria-hidden="true"
         />
+      </button>
+
+      <!--
+        贴边模式下的 AI 助手头像按钮。
+        当 AI 助手 dock 到右侧栏后，右下角的 Avatar 会隐藏。
+        这里提供入口，点击后调用 undock + open，让 Avatar / 浮窗重新出现。
+      -->
+      <button
+        v-if="aiChatIsDocked"
+        type="button"
+        class="title-bar__menu-btn title-bar__ai-avatar-btn"
+        aria-label="恢复 AI 助手为浮窗"
+        title="恢复为右下角浮窗"
+        @click="handleTitleBarAvatarClick"
+        @keydown="handleTitleBarAvatarKeydown"
+      >
+        <img
+          v-if="titleBarAvatarUrl"
+          :src="titleBarAvatarUrl"
+          alt=""
+          class="title-bar__ai-avatar-img"
+        />
+        <span v-else class="title-bar__ai-avatar-fallback" aria-hidden="true">AI</span>
       </button>
       <button
         v-if="showWindowMenu"
@@ -595,6 +647,43 @@ onUnmounted(() => {
 .title-bar__focus-btn:focus-visible {
   outline: 2px solid var(--theme-accent);
   outline-offset: 2px;
+}
+
+/* ── AI 助手头像按钮（docked 模式专用）── */
+.title-bar__ai-avatar-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--theme-accent, #7c3aed);
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.title-bar__ai-avatar-btn:hover {
+  background: color-mix(in srgb, var(--theme-accent, #7c3aed) 88%, #000 12%);
+  transform: scale(1.05);
+}
+
+.title-bar__ai-avatar-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.title-bar__ai-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .title-bar__user {

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEditorStore } from '@/stores/editor'
 import { useSettingsStore } from '@/stores/settings'
@@ -18,7 +18,7 @@ import AiAvatar from '@/components/ai/AiAvatar.vue'
 import AiChatWindow from '@/components/ai/AiChatWindow.vue'
 import { getMessageText, useAiChat } from '@/composables/useAiChat'
 import { useSkillExecutor } from '@/composables/useSkillExecutor'
-import { useLocalCommands, getLocalCommandPlaceholders } from '@/composables/useLocalCommands'
+import { useLocalCommands, getLocalCommandPlaceholders, countCleanableItems, runBatchClean, runBatchCleanAsync } from '@/composables/useLocalCommands'
 import { getActiveEditor } from '@/composables/useEditorRegistry'
 import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useRouter } from 'vue-router'
@@ -53,6 +53,7 @@ import {
 } from '@/composables/useHtmlFormatter'
 import { useHtmlFormatPromptStore } from '@/stores/htmlFormatPrompt'
 import { useHtmlFormatStore } from '@/stores/htmlFormatBar'
+import { useFocusModeFormatPrompt } from '@/composables/useFocusModeFormatPrompt'
 import {
   getDefaultTemplate,
   setDefaultTemplate,
@@ -74,11 +75,223 @@ const { processUserInput } = useLocalCommands()
 const router = useRouter()
 const formatPromptStore = useMarkdownFormatPromptStore()
 const htmlPromptStore = useHtmlFormatPromptStore()
+const { triggerFocusFormatPrompt } = useFocusModeFormatPrompt()
 const htmlFormatBarStore = useHtmlFormatStore()
+
+// ── Level 3: 提示气泡数据源 ────────────────────────────
+// 统计当前编辑器中「可被批量清洗」的内容数量（链接/邮箱/手机号/Markdown/图片）。
+// 该值为只读快照，供 AiChatWindow 提示气泡展示使用。节流刷新避免频繁扫描。
+const CLEANABLE_DEFAULT = Object.freeze({
+  links: 0,
+  urls: 0,
+  emails: 0,
+  phones: 0,
+  md: 0,
+  images: 0,
+  total: 0,
+})
+const cleanableCount = ref({ ...CLEANABLE_DEFAULT })
+let cleanableScanTimer = null
+
+function refreshCleanableCount() {
+  const editor = getActiveEditor()
+  if (!editor) {
+    cleanableCount.value = { ...CLEANABLE_DEFAULT }
+    return
+  }
+  try {
+    const result = countCleanableItems(editor)
+    cleanableCount.value = { ...result }
+  } catch (err) {
+    // 扫描失败（编辑器未挂载 / ProseMirror 异常）静默降级为 0
+    cleanableCount.value = { ...CLEANABLE_DEFAULT }
+    if (typeof console !== 'undefined' && console.debug) {
+      console.debug('[AiAssistantPlaceholder] countCleanableItems failed:', err)
+    }
+  }
+}
+
+function scheduleCleanableScan(delay = 1500) {
+  if (cleanableScanTimer) {
+    clearTimeout(cleanableScanTimer)
+  }
+  cleanableScanTimer = setTimeout(() => {
+    cleanableScanTimer = null
+    refreshCleanableCount()
+  }, delay)
+}
+
+/**
+ * 把 runBatchClean 的结果对象格式化为可读的清洗摘要。
+ * 例：{ links: 3, emails: 2, md: 5 } → "3 处链接 + 2 处邮箱 + 5 处 Markdown 标记"
+ */
+function formatBatchCleanSummary(r) {
+  const parts = []
+  if (r.links) parts.push(`${r.links} 处链接`)
+  if (r.urls) parts.push(`${r.urls} 处 URL`)
+  if (r.emails) parts.push(`${r.emails} 处邮箱`)
+  if (r.phones) parts.push(`${r.phones} 处手机号`)
+  if (r.md) parts.push(`${r.md} 处 Markdown 标记`)
+  if (r.images) parts.push(`${r.images} 张图片`)
+  return parts.length ? parts.join(' + ') : `${r.total} 项`
+}
+
+// ── 批量清洗异步进度 + 中断 + 一键撤销 ─────────────────
+
+/** 当前 batch-clean 进度消息 ID，用于就地更新内容 */
+let batchProgressMessageId = null
+/** 当前 batch-clean 的 AbortController，用于中断 */
+let batchAbortController = null
+/** 当前 batch-clean 的可读状态，供 AiChatWindow 判断是否显示「中断 / 撤销」按钮 */
+const batchProgress = ref({ active: false, step: 0, totalSteps: 6, label: '', counts: null, finished: false })
+
+const canUndoBatchClean = computed(
+  () => !batchProgress.value.active && batchProgress.value.finished,
+)
+
+/**
+ * 处理 AiChatWindow 提示气泡发出的「一键清洗」请求。
+ * 使用 runBatchCleanAsync 支持进度可视与中断；完成后可一键 Ctrl+Z 撤销整个批量。
+ */
+async function handleBatchClean() {
+  const editor = getActiveEditor()
+  if (!editor) return
+  if (batchProgress.value.active) {
+    // 已有清洗任务进行中，忽略重复触发
+    return
+  }
+
+  // 推送用户消息
+  displayMessages.value.push({
+    id: createMessageId(),
+    role: 'user',
+    content: '🧹 一键清洗',
+  })
+
+  // 推送进度消息（就地更新）
+  batchProgressMessageId = createMessageId()
+  displayMessages.value.push({
+    id: batchProgressMessageId,
+    role: 'local',
+    content: '⏳ 准备清洗…',
+    commandId: 'batch-clean',
+    category: 'text',
+    localCommandProgress: true,
+    batchCleanProgress: { active: true, step: 0, totalSteps: 6, label: '准备中', count: 0 },
+  })
+
+  batchProgress.value = { active: true, step: 0, totalSteps: 6, label: '准备中', counts: null, finished: false }
+  batchAbortController = new AbortController()
+
+  let result
+  try {
+    result = await runBatchCleanAsync(editor, {
+      signal: batchAbortController.signal,
+      onProgress: (info) => {
+        // 就地更新进度消息内容
+        batchProgress.value = {
+          active: !info.done,
+          step: info.step,
+          totalSteps: info.totalSteps,
+          label: info.label,
+          counts: batchProgress.value.counts,
+          finished: info.done,
+        }
+        const target = displayMessages.value.find((m) => m.id === batchProgressMessageId)
+        if (target) {
+          if (info.done) {
+            target.content = '✅ 清洗完成'
+            target.batchCleanProgress = { active: false, step: info.totalSteps, totalSteps: info.totalSteps, label: '完成', count: 0 }
+          } else {
+            target.content = `🧹 清洗中（${info.step}/${info.totalSteps}）：${info.label}${info.count ? ` · ${info.count} 处` : ''}`
+            target.batchCleanProgress = {
+              active: true,
+              step: info.step,
+              totalSteps: info.totalSteps,
+              label: info.label,
+              count: info.count,
+            }
+          }
+        }
+      },
+    })
+  } catch (err) {
+    result = {
+      links: 0, urls: 0, emails: 0, phones: 0, md: 0, images: 0, total: 0,
+      errors: [err?.message || String(err)], aborted: false,
+    }
+  }
+
+  // 用最终结果替换进度消息内容
+  const target = displayMessages.value.find((m) => m.id === batchProgressMessageId)
+  if (target) {
+    target.localCommandProgress = false
+    if (result.aborted) {
+      target.content = '⏹ 已中断'
+      target.localCommandSuccess = false
+      target.batchCleanProgress = { active: false, step: 0, totalSteps: 6, label: '已中断', count: 0, aborted: true }
+    } else if (result.total === 0) {
+      target.content = '✨ 文档已经很干净，没有可清洗的内容'
+      target.localCommandSuccess = false
+      target.batchCleanProgress = { active: false, step: 6, totalSteps: 6, label: '完成', count: 0, empty: true }
+    } else {
+      target.content = `✅ 已批量清洗：${formatBatchCleanSummary(result)}${
+        result.errors.length ? '（部分步骤出错：' + result.errors.join('；') + '）' : ''
+      }`
+      target.localCommandSuccess = true
+      target.batchCleanResult = result
+      target.batchCleanProgress = { active: false, step: 6, totalSteps: 6, label: '完成', count: result.total, finished: true }
+    }
+  }
+
+  batchProgress.value = {
+    active: false,
+    step: result.aborted ? 0 : 6,
+    totalSteps: 6,
+    label: result.aborted ? '已中断' : '完成',
+    counts: result,
+    finished: !result.aborted && result.total > 0,
+  }
+  batchAbortController = null
+  scheduleCleanableScan(0)
+}
+
+/**
+ * 中断当前 batch-clean。已应用的修改会被丢弃（共享 transaction 不会被 dispatch）。
+ */
+function abortBatchClean() {
+  if (batchAbortController && !batchAbortController.signal.aborted) {
+    batchAbortController.abort()
+  }
+}
+
+/**
+ * 一键撤销 batch-clean（Ctrl+Z 的可视化入口）。
+ * 依赖 Tiptap undo history —— 由于 batch-clean 是单个 undo step，一次 undo 即可恢复。
+ */
+function undoBatchClean() {
+  const editor = getActiveEditor()
+  if (!editor) return
+  if (editor.commands.undo) {
+    editor.chain().focus().undo().run()
+  }
+  batchProgress.value = { active: false, step: 0, totalSteps: 6, label: '已撤销', counts: null, finished: false }
+  scheduleCleanableScan(0)
+}
 
 const aiChatWindowVisible = computed(() => aiChat.visible.value)
 const aiChatWindowPinned = computed(() => aiChat.pinned.value)
 const aiChatWindowZIndex = computed(() => aiChat.zIndex.value)
+/** 是否贴边（docked）。当 docked 时，A: AiAvatar 隐藏；B: AiChatWindow 作为 inline panel 渲染。 */
+const aiChatWindowDocked = computed(() => aiChat.isDocked.value)
+
+/**
+ * 贴边（docked）模式的挂载点。
+ * EditorLayout 在右栏提供了 aiChatDockTarget ref；
+ * docked 模式下，A:AssistantPlaceholder 会使用 Teleport 把 AiChatWindow 传送到这个节点。
+ * 默认提供 null（独立使用场景）。
+ */
+const aiChatDockTarget = inject('aiChatDockTarget', ref(null))
 
 if (!skillsStore.hydrated) {
   skillsStore.initFromLocalStorage()
@@ -273,13 +486,9 @@ function tryLocalCommand(text, activeSelection) {
       const next = !userPreferencesStore.paper.focusMode
       userPreferencesStore.setFocusMode(next)
         .then(() => {
-          // 进入 A4 阅读模式 + 文档含 htmlSource → 触发 HTML 排版选择弹窗
-          if (next) {
-            const editor = getActiveEditor()
-            if (editor && hasHtmlImport(editor)) {
-              htmlPromptStore.trigger({ source: 'a4-focus-mode' })
-            }
-          }
+          // 进入 A4 阅读模式 → 根据文档内容类型主动提示 AI 助理排版
+          if (!next) return
+          triggerFocusFormatPrompt()
         })
         .catch((error) => {
           console.warn('[AiAssistantPlaceholder] toggleFocusMode failed:', error)
@@ -392,6 +601,8 @@ function pushMarkdownFormatPrompt(opts = {}) {
     content:
       source === 'manual'
         ? '请选择排版模板：'
+        : source === 'a4-focus-mode'
+        ? '检测到 Markdown 内容，是否按模板排版？'
         : '检测到 Markdown 格式，需要我帮你排版吗？',
     commandId: 'format-md',
     category: 'format',
@@ -892,6 +1103,18 @@ function handlePinChange() {
   aiChat.togglePin()
 }
 
+/**
+ * 处理来自 AiChatWindow 的 dock / undock 事件。
+ * 通过 floatingWindows.dockWindow / undockWindow 同步 store 状态。
+ */
+function handleDockChange(nextDocked) {
+  if (nextDocked) {
+    floatingWindows.dockWindow(FLOATING_WINDOW_ID.AI_CHAT)
+  } else {
+    floatingWindows.undockWindow(FLOATING_WINDOW_ID.AI_CHAT)
+  }
+}
+
 function handleAvatarToggle() {
   floatingWindows.toggleWindow(FLOATING_WINDOW_ID.AI_CHAT)
 }
@@ -961,6 +1184,19 @@ watch(
   },
 )
 
+// 浮窗打开 / 选区变化时刷新可清洗统计
+watch(
+  () => aiChatWindowVisible.value,
+  (visible) => {
+    if (visible) scheduleCleanableScan(120)
+  },
+)
+watch(
+  () => editorStore.activeSelection,
+  () => scheduleCleanableScan(800),
+  { deep: true },
+)
+
 watch(
   () => [modelSettingsStore.hydrated, modelSettingsStore.hasStoredTextApiKey, isGuest.value],
   ([hydrated, hasKey]) => {
@@ -974,17 +1210,60 @@ watch(
 </script>
 
 <template>
+  <!--
+    AiChatWindow 在两种模式下都由同一个组件提供内容。
+    当 docked=true 时，Teleport 到 EditorLayout 提供的右栏容器 aiChatDockTarget 中。
+    当 docked=false 时，Teleport disabled，正常以右下角浮窗渲染。
+    同一个组件以单一事件总线提供所有用户交互。
+  -->
+  <Teleport
+    v-if="aiChatDockTarget"
+    :to="aiChatDockTarget"
+    :disabled="!aiChatWindowDocked"
+  >
+    <AiChatWindow
+      :visible="aiChatWindowVisible"
+      :pinned="aiChatWindowPinned"
+      :docked="aiChatWindowDocked"
+      :z-index="aiChatWindowZIndex"
+      :model-name="modelName"
+      :messages="displayMessages"
+      :selection-context="selectionPreview"
+      :local-command-placeholders="localCommandPlaceholders"
+      :cleanable-count="cleanableCount"
+      :batch-progress="batchProgress"
+      @send="handleSend"
+      @close="handleClose"
+      @pin-change="handlePinChange"
+      @dock-change="handleDockChange"
+      @focus="handleChatFocus"
+      @input-focus="handleInputFocus"
+      @input-blur="handleInputBlur"
+      @onboarding-complete="handleOnboardingComplete"
+      @regenerate="retrySkillCall"
+      @insert-slide-deck="handleInsertSlideDeck"
+      @local-command-select="handleLocalCommandSelect"
+      @batch-clean="handleBatchClean"
+      @batch-clean-abort="abortBatchClean"
+      @batch-clean-undo="undoBatchClean"
+    />
+  </Teleport>
   <AiChatWindow
+    v-else
     :visible="aiChatWindowVisible"
     :pinned="aiChatWindowPinned"
+    :docked="aiChatWindowDocked"
     :z-index="aiChatWindowZIndex"
     :model-name="modelName"
     :messages="displayMessages"
     :selection-context="selectionPreview"
     :local-command-placeholders="localCommandPlaceholders"
+    :cleanable-count="cleanableCount"
+    :batch-progress="batchProgress"
     @send="handleSend"
     @close="handleClose"
     @pin-change="handlePinChange"
+    @dock-change="handleDockChange"
     @focus="handleChatFocus"
     @input-focus="handleInputFocus"
     @input-blur="handleInputBlur"
@@ -992,9 +1271,17 @@ watch(
     @regenerate="retrySkillCall"
     @insert-slide-deck="handleInsertSlideDeck"
     @local-command-select="handleLocalCommandSelect"
+    @batch-clean="handleBatchClean"
+    @batch-clean-abort="abortBatchClean"
+    @batch-clean-undo="undoBatchClean"
   />
 
+  <!--
+    Avatar 在 docked 模式隐藏，让头像“收缩到导航”。
+    点击 TitleBar 上的 docked-avatar 按钮可恢复为 floating 浮窗。
+  -->
   <AiAvatar
+    v-if="!aiChatWindowDocked"
     :preset="settingsStore.avatarId"
     :avatar-url="settingsStore.avatarUrl"
     :loading="isLoading"

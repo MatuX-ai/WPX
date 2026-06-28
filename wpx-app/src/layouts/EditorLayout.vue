@@ -20,8 +20,10 @@ import { useEditorFonts } from '@/composables/useEditorFonts'
 import { shortcutTooltip, useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useToast } from '@/composables/useToast'
+import { AI_CHAT_DOCKED } from '@/constants/floatingWindow'
 import {
   FLOATING_WINDOW_ID,
+  useFloatingWindowState,
   useFloatingWindows,
 } from '@/composables/useFloatingWindows'
 import EditorCore from '@/components/editor/EditorCore.vue'
@@ -92,6 +94,29 @@ const {
 const saveTooltip = shortcutTooltip('保存到文库', 'save')
 const windowSize = useWindowSize()
 const { isToolbarIconOnly } = windowSize
+
+/**
+ * AI 对话窗贴边（docked）状态。
+ * 仅当 AI 对话窗处于 docked 模式且 visible 时才在右栏面板渲染 inline panel。
+ */
+const aiChatDockedState = useFloatingWindowState(FLOATING_WINDOW_ID.AI_CHAT)
+const aiChatDockTargetRef = ref(null)
+
+/**
+ * 将 docked 模式下的 AiChatWindow 挂载点提供给子组件（AiAssistantPlaceholder）。
+ * 当 docked=false 时，A:AssistantPlaceholder 使用 :disabled 的 Teleport fallback 正常渲染到原位。
+ */
+provide('aiChatDockTarget', aiChatDockTargetRef)
+
+/** 右栏宽度：根据 viewport 选择紧凑版或默认版（参考 AI_CHAT_DOCKED） */
+const aiDockPanelWidth = computed(() => {
+  return windowSize.isCompactWidth.value ? AI_CHAT_DOCKED.compactW : AI_CHAT_DOCKED.defaultW
+})
+
+/** 是否当前处于贴边模式且面板可见 */
+const showAiDockPanel = computed(
+  () => aiChatDockedState.isDocked.value && aiChatDockedState.visible.value,
+)
 
 const editorRef = ref(null)
 provide('editorHostRef', editorRef)
@@ -552,6 +577,7 @@ watch(
     :style="editorContainerStyle"
     :data-focus-mode="focusModeActive ? 'true' : 'false'"
     :data-paper-size="userPreferencesStore.paper?.paperSize || 'none'"
+    :data-ai-docked="showAiDockPanel ? 'true' : 'false'"
   >
     <div class="editor-layout__workspace">
       <main class="editor-layout__main">
@@ -560,6 +586,7 @@ watch(
           :class="{
             'editor-layout__editor--empty': !appStore.hasOpenDocument,
             'editor-layout__editor--focus': focusModeActive,
+            'editor-layout__editor--ai-docked': showAiDockPanel,
           }"
           @mousedown="floatingWindows.handleEditorAreaClick()"
         >
@@ -626,6 +653,20 @@ watch(
           </EditorCore>
         </div>
       </main>
+
+      <!--
+        AI 助手贴边容器（docked 模式）：
+          - 只在 docked=true 且 visible=true 时渲染。
+          - 子组件 AiAssistantPlaceholder 会把 AiChatWindow Teleport 到这个节点。
+          - 高度与 workspace 同步，撑满垂直空间。
+      -->
+      <aside
+        v-if="showAiDockPanel"
+        ref="aiChatDockTargetRef"
+        class="editor-layout__ai-dock"
+        :style="{ '--ai-dock-width': `${aiDockPanelWidth}px` }"
+        aria-label="AI 助手贴边面板"
+      />
     </div>
 
     <div class="editor-layout__overlays" aria-hidden="false">
@@ -634,11 +675,11 @@ watch(
         @close="closeKnowledgePanel()"
       />
       <KnowledgeTrigger />
-      
+
       <AiAssistantPlaceholder />
-      
+
       <SlideCopilotActionsHost />
-      
+
       <ExportTemplateIndicator />
 
       <Transition name="image-editor-pop">
@@ -836,4 +877,24 @@ watch(
 }
 
 /* 勿对全部子节点启用 pointer-events：AI 对话窗/ImageEditor 宿主层为 inset:0，会拦截整页点击 */
+
+/* ── AI 助手贴边（docked）右栏 ── */
+.editor-layout__ai-dock {
+  flex-shrink: 0;
+  width: var(--ai-dock-width, 400px);
+  min-width: var(--ai-dock-width, 400px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-bg, #fff);
+  border-left: 1px solid var(--theme-border, #e2e8f0);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* 当 docked 右栏出现时，为主编辑器区预留右侧空间 */
+.editor-layout__editor--ai-docked {
+  padding-right: 8px;
+}
 </style>

@@ -51,6 +51,12 @@ function createWindowRecord(id, defaults) {
     id,
     visible: defaults.visible ?? false,
     pinned: false,
+    /**
+     * 展示模式：
+     *   - 'floating'：以浮窗形式悬浮在视口上（默认）
+     *   - 'docked'：贴边到编辑器右侧栏，类似 IDE 侧边栏体验
+     */
+    mode: defaults.mode ?? 'floating',
     x: defaults.x ?? 0,
     y: defaults.y ?? 0,
     w: defaults.w,
@@ -443,6 +449,44 @@ function createFloatingWindowsManager(initialConfig = {}) {
     bringToFront(id)
   }
 
+  /**
+   * AI 对话窗支持贴边（dock）到右侧栏。
+   * dock 时，浮窗不再作为 fixed 浮窗渲染，而是被 AiAssistantPlaceholder
+   * 以 inline 形式嵌入到 EditorLayout 的右栏容器中。
+   * dock 切换会同时打开窗口（若未打开），以确保用户总是能看到 AI 助手内容。
+   *
+   * 副作用：贴边后 autoCloseOnEditorClick 强制为 false，避免点击编辑器误关右栏。
+   */
+  function dockWindow(id) {
+    const win = assertWindow(id)
+    if (win.mode === 'docked') return
+    win.mode = 'docked'
+    win.autoCloseOnEditorClick = false
+    if (!win.visible) {
+      win.visible = true
+      syncExternalState(id, true)
+    }
+  }
+
+  /**
+   * 解除贴边：恢复为右下角浮窗模式。
+   * 不会自动关闭，调用方按需处理。
+   */
+  function undockWindow(id) {
+    const win = assertWindow(id)
+    if (win.mode !== 'docked') return
+    win.mode = 'floating'
+    win.autoCloseOnEditorClick = true
+  }
+
+  function isDocked(id) {
+    return Boolean(windows[id]?.mode === 'docked')
+  }
+
+  function getMode(id) {
+    return windows[id]?.mode ?? 'floating'
+  }
+
   ensureViewportListener()
 
   return {
@@ -457,6 +501,8 @@ function createFloatingWindowsManager(initialConfig = {}) {
     bringToFront,
     isOpen,
     isPinned,
+    isDocked,
+    getMode,
     getWindow,
     getZIndex,
     setPosition,
@@ -469,6 +515,8 @@ function createFloatingWindowsManager(initialConfig = {}) {
     setWindowAutoCloseOnEditorClick,
     handleEditorAreaClick,
     handleWindowFocus,
+    dockWindow,
+    undockWindow,
   }
 }
 
@@ -505,6 +553,9 @@ export function useFloatingWindowState(id) {
     window: win,
     visible: computed(() => win.value?.visible ?? false),
     pinned: computed(() => win.value?.pinned ?? false),
+    /** 当前展示模式：'floating' 浮窗 / 'docked' 贴边右栏 */
+    mode: computed(() => win.value?.mode ?? 'floating'),
+    isDocked: computed(() => win.value?.mode === 'docked'),
     zIndex: computed(() => floatingWindows.getZIndex(id)),
     minW: computed(() => win.value?.minW ?? 0),
     minH: computed(() => win.value?.minH ?? 0),
@@ -536,6 +587,8 @@ export function useFloatingWindowState(id) {
     close: () => floatingWindows.closeWindow(id),
     togglePin: () => floatingWindows.togglePin(id),
     focus: () => floatingWindows.handleWindowFocus(id),
+    dock: () => floatingWindows.dockWindow(id),
+    undock: () => floatingWindows.undockWindow(id),
     clampToParent: (options) => floatingWindows.clampWindowToParent(id, options),
     updateConstraints: (options) => floatingWindows.updateWindowConstraints(id, options),
   }

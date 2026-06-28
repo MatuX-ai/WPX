@@ -45,6 +45,22 @@ export const AI_CHAT_WINDOW = {
   resizeHandles: ['mr', 'br', 'bm'],
 }
 
+/**
+ * AI 对话窗贴边（docked）模式参数。
+ * docked 状态下浮窗不再作为 fixed 浮窗渲染，而是被嵌入到 EditorLayout
+ * 右侧栏作为 inline panel 渲染（IDE 风格）。
+ */
+export const AI_CHAT_DOCKED = {
+  /** 默认右栏宽度（与浮窗 defaultW 保持一致） */
+  defaultW: 400,
+  /** 窄屏（isCompactWidth）下右栏宽度 */
+  compactW: 320,
+  /** 右栏最小宽度（用户可拖动调整时使用） */
+  minW: 280,
+  /** 极窄屏阈值：低于此宽度不允许 docked 模式 */
+  minViewportWidth: 720,
+}
+
 /** 图片编辑器浮窗 */
 export const IMAGE_EDITOR_WINDOW = {
   defaultW: 800,

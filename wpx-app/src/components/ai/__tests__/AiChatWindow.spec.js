@@ -99,11 +99,94 @@ vi.mock('@/utils/knowledgeApi', () => ({
   fetchKnowledgePreview: vi.fn().mockResolvedValue({ content: '' }),
 }))
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    currentRoute: { value: { path: '/' } },
+  }),
+}))
+
+vi.mock('@/composables/useAuth', () => ({
+  useAuth: () => ({
+    isLoggingIn: ref(false),
+    login: vi.fn(),
+    logout: vi.fn(),
+    currentUser: ref(null),
+  }),
+}))
+
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  }),
+}))
+
+vi.mock('@/stores/theme', () => ({
+  useThemeStore: () => ({
+    isDark: false,
+  }),
+}))
+
+vi.mock('@/utils/slideExport', () => ({
+  downloadSlidesAsHtml: vi.fn(),
+  downloadSlidesAsPptx: vi.fn(),
+  downloadSlidesAsPdf: vi.fn(),
+}))
+
+vi.mock('@/composables/usePPTWorkflow', () => ({
+  usePPTWorkflow: () => ({
+    state: ref({
+      step: 'STEP_OUTLINE',
+      topic: '',
+      outline: '',
+      templateId: null,
+      templateCustom: '',
+      slides: [],
+      lastError: '',
+      lastMessage: '',
+      busy: false,
+      startedAt: null,
+      completedAt: null,
+    }),
+    step: { OUTLINE: 'STEP_OUTLINE', TEMPLATE: 'STEP_TEMPLATE', GENERATE: 'STEP_GENERATE', EDITING: 'STEP_EDITING' },
+    currentStep: ref('STEP_OUTLINE'),
+    stepIndex: ref(0),
+    isBusy: ref(false),
+    progress: ref(0.25),
+    hasOutline: ref(false),
+    hasTemplate: ref(false),
+    hasSlides: ref(false),
+    startWorkflow: vi.fn(),
+    confirmOutline: vi.fn(),
+    selectTemplate: vi.fn(),
+    onSlidesGenerated: vi.fn(),
+    markBusy: vi.fn(),
+    setError: vi.fn(),
+    setMessage: vi.fn(),
+    resetWorkflow: vi.fn(),
+    getSystemPromptAddition: vi.fn(() => ''),
+    onStepChange: vi.fn(() => () => {}),
+  }),
+  PPT_STEP: { OUTLINE: 'STEP_OUTLINE', TEMPLATE: 'STEP_TEMPLATE', GENERATE: 'STEP_GENERATE', EDITING: 'STEP_EDITING' },
+}))
+
 vi.mock('@/components/ai/AiMarkdownContent.vue', () => ({
   default: {
     name: 'AiMarkdownContent',
     props: ['content'],
     template: '<div class="mock-markdown">{{ content }}</div>',
+  },
+}))
+
+vi.mock('@/components/ai/LocalCommandMessage.vue', () => ({
+  default: {
+    name: 'LocalCommandMessage',
+    props: ['message', 'busy'],
+    template: '<div class="mock-local-cmd">{{ message?.commandId || "empty" }}</div>',
   },
 }))
 
@@ -167,7 +250,7 @@ describe('AiChatWindow.vue', () => {
     it('无消息时应显示空状态提示', () => {
       const wrapper = mountChatWindow()
 
-      expect(wrapper.find('.ai-chat-window__empty').text()).toContain('暂无消息')
+      expect(wrapper.find('.ai-chat-panel__empty').text()).toContain('暂无消息')
       wrapper.unmount()
     })
   })
@@ -194,7 +277,12 @@ describe('AiChatWindow.vue', () => {
     it('取消钉住时应触发 pin-change false', async () => {
       const wrapper = mountChatWindow({ pinned: true })
 
-      await wrapper.get('[aria-label="取消钉住窗口"]').trigger('click')
+      // AiChatPanelContent 中钉住按钮的 aria-label 是固定的 "钉住窗口"，
+      // 区分状态是通过 :title (取消钉住 / 钉住) 与 ai-chat-panel__action--active class。
+      const pinBtn = wrapper.get('[aria-label="钉住窗口"]')
+      expect(pinBtn.attributes('title')).toBe('取消钉住')
+      expect(pinBtn.classes()).toContain('ai-chat-panel__action--active')
+      await pinBtn.trigger('click')
 
       expect(wrapper.emitted('pin-change')).toEqual([[false]])
       wrapper.unmount()
@@ -229,8 +317,8 @@ describe('AiChatWindow.vue', () => {
     it('钉住时标题栏应显示 pinned 样式', () => {
       const wrapper = mountChatWindow({ pinned: true })
 
-      expect(wrapper.get('.ai-chat-window__header').classes()).toContain(
-        'ai-chat-window__header--pinned',
+      expect(wrapper.get('.ai-chat-panel__header').classes()).toContain(
+        'ai-chat-panel__header--pinned',
       )
       wrapper.unmount()
     })
@@ -270,7 +358,7 @@ describe('AiChatWindow.vue', () => {
     it('应渲染选中文本上下文', () => {
       const wrapper = mountChatWindow({ selectionContext: '需要润色的段落' })
 
-      expect(wrapper.find('.ai-chat-window__context-text').text()).toBe('需要润色的段落')
+      expect(wrapper.find('.ai-chat-panel__context-text').text()).toBe('需要润色的段落')
       wrapper.unmount()
     })
   })
@@ -280,7 +368,7 @@ describe('AiChatWindow.vue', () => {
       isOffline.value = true
       const wrapper = mountChatWindow()
 
-      expect(wrapper.find('.ai-chat-window__offline-banner').exists()).toBe(true)
+      expect(wrapper.find('.ai-chat-panel__offline-banner').exists()).toBe(true)
       expect(wrapper.get('textarea').attributes('disabled')).toBeDefined()
       wrapper.unmount()
     })
@@ -307,7 +395,7 @@ describe('AiChatWindow.vue', () => {
       wrapper.unmount()
     })
 
-    it('窗口从关闭变为打开时应预加载知识库列表', async () => {
+    it('窗口打开时应正常渲染面板（fetchKnowledgeList 由 @ 提及触发，见 AiChatPanelContent 测试）', async () => {
       const { fetchKnowledgeList } = await import('@/utils/knowledgeApi')
       fetchKnowledgeList.mockClear()
 
@@ -319,7 +407,111 @@ describe('AiChatWindow.vue', () => {
       await wrapper.setProps({ visible: true })
       await flushPromises()
 
-      expect(fetchKnowledgeList).toHaveBeenCalled()
+      // AiChatPanelContent 中 fetchKnowledgeList 是懒加载（@ 触发），不再在 visible 变化时预加载
+      expect(fetchKnowledgeList).not.toHaveBeenCalled()
+      // 面板仍能正常渲染
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
+  describe('一键清洗提示气泡（Level 3）', () => {
+    it('cleanableCount.total < 3 时不应显示提示气泡', () => {
+      const wrapper = mountChatWindow({
+        cleanableCount: { total: 2, links: 0, urls: 0, emails: 2, phones: 0, md: 0, images: 0 },
+      })
+
+      expect(wrapper.find('.ai-chat-panel__cleanable-tip').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('cleanableCount.total >= 3 时应显示提示气泡', () => {
+      const wrapper = mountChatWindow({
+        cleanableCount: { total: 5, links: 0, urls: 0, emails: 3, phones: 2, md: 0, images: 0 },
+      })
+
+      const tip = wrapper.find('.ai-chat-panel__cleanable-tip')
+      expect(tip.exists()).toBe(true)
+      expect(tip.text()).toContain('5')
+      expect(tip.text()).toContain('邮箱')
+      expect(tip.text()).toContain('手机号')
+      wrapper.unmount()
+    })
+
+    it('点击"一键清洗"按钮应触发 batch-clean 事件', async () => {
+      const wrapper = mountChatWindow({
+        cleanableCount: { total: 6, links: 0, urls: 1, emails: 2, phones: 0, md: 3, images: 0 },
+      })
+
+      await wrapper.get('.ai-chat-panel__cleanable-tip-btn').trigger('click')
+
+      expect(wrapper.emitted('batch-clean')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('cleanableCount 缺省时不应渲染提示气泡（保持向后兼容）', () => {
+      const wrapper = mountChatWindow()
+      expect(wrapper.find('.ai-chat-panel__cleanable-tip').exists()).toBe(false)
+      wrapper.unmount()
+    })
+  })
+
+  describe('一键清洗进度 / 中断 / 撤销（Level 4）', () => {
+    it('batchProgress.active=true 时应显示进度文案与"中断"按钮', () => {
+      const wrapper = mountChatWindow({
+        batchProgress: { active: true, step: 3, totalSteps: 6, label: '邮箱', counts: null, finished: false },
+      })
+
+      const tip = wrapper.find('.ai-chat-panel__cleanable-tip')
+      expect(tip.exists()).toBe(true)
+      expect(tip.text()).toContain('3/6')
+      expect(tip.text()).toContain('邮箱')
+      const abortBtn = wrapper.find('[data-test="batch-clean-abort"]')
+      expect(abortBtn.exists()).toBe(true)
+      expect(abortBtn.text()).toContain('中断')
+      wrapper.unmount()
+    })
+
+    it('batchProgress.finished=true 时应显示"撤销"按钮并触发 batch-clean-undo', async () => {
+      const wrapper = mountChatWindow({
+        batchProgress: { active: false, step: 6, totalSteps: 6, label: '完成', counts: {}, finished: true },
+      })
+
+      const undoBtn = wrapper.find('[data-test="batch-clean-undo"]')
+      expect(undoBtn.exists()).toBe(true)
+      await undoBtn.trigger('click')
+      expect(wrapper.emitted('batch-clean-undo')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('batchProgress.active=true 时点击应不触发 batch-clean（避免重复触发）', async () => {
+      const wrapper = mountChatWindow({
+        batchProgress: { active: true, step: 2, totalSteps: 6, label: 'URL', counts: null, finished: false },
+      })
+
+      const tip = wrapper.find('.ai-chat-panel__cleanable-tip')
+      expect(tip.find('[data-test="batch-clean-trigger"]').exists()).toBe(false)
+      // 点击 tip 本身不会误触发 batch-clean
+      await tip.trigger('click')
+      expect(wrapper.emitted('batch-clean')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('点击"中断"按钮应触发 batch-clean-abort 事件', async () => {
+      const wrapper = mountChatWindow({
+        batchProgress: { active: true, step: 1, totalSteps: 6, label: '链接', counts: null, finished: false },
+      })
+
+      await wrapper.get('[data-test="batch-clean-abort"]').trigger('click')
+
+      expect(wrapper.emitted('batch-clean-abort')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('batchProgress 缺省时不应渲染进度 / 中断 / 撤销 按钮', () => {
+      const wrapper = mountChatWindow()
+      expect(wrapper.find('[data-test="batch-clean-abort"]').exists()).toBe(false)
+      expect(wrapper.find('[data-test="batch-clean-undo"]').exists()).toBe(false)
       wrapper.unmount()
     })
   })
