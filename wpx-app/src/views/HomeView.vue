@@ -26,6 +26,17 @@ function getMarkdown() {
   return editorRef.value?.getMarkdown() || editorOutput.value.markdown || ''
 }
 
+/**
+ * 导出/保存到文库专用：使用净化版 JSON（剥离 htmlSource 等内部 attrs）。
+ * 注意：自动保存继续使用 getMarkdown()，因为 tiptapJsonToMarkdown 本身不会输出 doc.attrs。
+ */
+function getMarkdownForExport() {
+  if (typeof editorRef.value?.getMarkdownForExport === 'function') {
+    return editorRef.value.getMarkdownForExport()
+  }
+  return getMarkdown()
+}
+
 function getFormatSnapshot() {
   return editorRef.value?.getFormatSnapshot?.() || null
 }
@@ -37,7 +48,7 @@ function getDefaultTitle() {
 function openSaveDialog() {
   saveNotice.value = ''
   appStore.openSaveDialog({
-    content: getMarkdown(),
+    content: getMarkdownForExport(),
     defaultTitle: getDefaultTitle(),
   })
 }
@@ -80,7 +91,7 @@ onUnmounted(() => {
         <p v-if="saveNotice" class="mt-2 text-sm text-brand-700">{{ saveNotice }}</p>
       </div>
       <ExportMenu
-        :get-markdown="getMarkdown"
+        :get-markdown="getMarkdownForExport"
         :get-format-snapshot="getFormatSnapshot"
         :get-editor="() => editorRef.value?.getEditor?.()"
         :get-document-title="getDefaultTitle"

@@ -17,6 +17,7 @@ const avatarLoadFailed = ref(false)
 const navItems = [
   { name: 'settings-agent', label: 'Agent 设置', icon: '🤖' },
   { name: 'settings-skills', label: 'Skills 管理', icon: '⚡' },
+  { name: 'settings-jcode', label: 'AI 引擎', icon: '🚀' },
   { name: 'settings-models', label: '我的模型', icon: '🔌' },
   { name: 'settings-fonts', label: '字体与 Token', icon: '🔤', requiresLogin: true },
   { name: 'settings-general', label: '通用设置', icon: '⚙️' },

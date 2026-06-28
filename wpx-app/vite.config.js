@@ -2,6 +2,12 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
+import { dirname } from 'node:path'
+
+// 显式把 Vite root 锁在 vite.config.js 所在的 wpx-app 目录。
+// 防御 start-dev.cjs 在某些 shell/sandbox 下 cwd 被改写为 WPX 项目根
+// 进而误加载 'i:\\WPX\\index.html' (营销网站预构建产物)的问题。
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /** file:// 下 crossorigin 会导致模块脚本 CORS 失败，Electron 打包后按钮/事件失效 */
 function electronBuildHtmlPlugin() {
@@ -46,6 +52,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const knowledgePort = env.KNOWLEDGE_SERVICE_PORT || process.env.KNOWLEDGE_SERVICE_PORT || '3003'
     const copilotkitPort = env.COPILOTKIT_PORT || process.env.COPILOTKIT_PORT || '3006'
+    // jcode 集成：local-server 端口在 dev 模式下被固定为 3007
+    // （详见 electron/run-dev.js · WPX_LOCAL_SERVER_PORT）
+    const localServerPort =
+      env.WPX_LOCAL_SERVER_PORT || process.env.WPX_LOCAL_SERVER_PORT || '3007'
 
   // 是否启用预渲染
   // - 显式 WPX_PRERENDER=0 关闭
@@ -57,6 +67,7 @@ export default defineConfig(({ mode }) => {
     explicit === '1' || (explicit !== '0' && target === 'web')
 
   return {
+    root: __dirname,
     // Electron 生产环境通过 loadFile 加载，资源路径须为相对路径
     // Web 部署（VITE_TARGET=web）改为绝对路径，便于 CDN 缓存与 SEO
     base: target === 'web' ? '/' : './',
@@ -67,8 +78,6 @@ export default defineConfig(({ mode }) => {
       prerenderHookPlugin({ enabled: prerenderEnabled }),
     ],
     optimizeDeps: {
-      // CopilotKit npm 包在本环境下可能未安装；测试环境跳过预构建与解析
-      exclude: ['@copilotkit/vue/v2', '@copilotkit/vue', '@copilotkit/runtime', '@copilotkit/agent'],
       // `extend` is a CJS deep-merge utility pulled in transitively by
       // CopilotKit (gaxios) and tui-image-editor (request).  We *do* want
       // Vite/esbuild to pre-bundle it so the CJS module.exports becomes
@@ -76,7 +85,51 @@ export default defineConfig(({ mode }) => {
       // alias's shim see the pre-bundled module (which already has a
       // `default` export) instead of the raw `node_modules/extend/index.js`
       // source that browsers would otherwise fail to parse.
-      include: ['extend'],
+      //
+      // Likewise, `micromark` and its transitive CJS deps (`debug`,
+      // `ms`, `decode-named-character-reference`, etc.) reach into
+      // sub-paths such as `debug/src/browser.js`.  When Vite is asked
+      // to load a sub-path on a CJS package directly, the browser sees
+      // the raw CJS source and throws
+      //   "does not provide an export named 'default'".
+      // Pre-bundling the top-level packages routes those sub-paths
+      // through esbuild's CJS→ESM interop.
+      include: [
+        '@copilotkit/vue',
+        '@copilotkit/vue/v2',
+        // 显式声明 echarts，让 Vite/esbuild 在 dev 启动时把它预打包为 ESM。
+        // ChartSlide.vue 通过 `import('echarts')` 动态加载，Vite 8 的 import-analysis
+        // 在编译期无法解析到该包时会把 'echarts' 编译为裸 specifier，浏览器原生 ESM
+        // 会抛 `Failed to resolve module specifier 'echarts'`。预打包后浏览器拿到的是
+        // `/@id/echarts` 这种已被 Vite 解析过的 URL，可以正常加载。
+        'echarts',
+        'extend',
+        'micromark',
+        'micromark-util-character',
+        'micromark-util-symbol',
+        'micromark-util-chunked',
+        'micromark-util-classify-character',
+        'micromark-util-resolve-all',
+        'micromark-util-decode-numeric-character-reference',
+        'micromark-util-decode-string',
+        'micromark-util-normalize-identifier',
+        'micromark-util-subtokenize',
+        'micromark-util-combine-extensions',
+        'micromark-factory-destination',
+        'micromark-factory-label',
+        'micromark-factory-space',
+        'micromark-factory-title',
+        'micromark-factory-whitespace',
+        'micromark-core-commonmark',
+        'decode-named-character-reference',
+        'debug',
+        'ms',
+        'gaxios',
+        'https-proxy-agent',
+        'agent-base',
+        'readable-stream',
+        'string_decoder',
+      ],
     },
     build: {
       outDir: 'dist',
@@ -84,8 +137,14 @@ export default defineConfig(({ mode }) => {
       cssCodeSplit: true,
       target: 'es2020',
       // Rolldown/Vite 8.0.14+ 会破坏 Vue init_* 辅助函数；wpx-app 锁定 vite@8.0.10
+      //
+      // [FIX-WHITE-SCREEN] 不要把 @copilotkit/* 标记为 external。
+      // `external` 指示 Rollup 在产物中保留 bare specifier（如 'import "@copilotkit/vue/v2"'），
+      // 由运行时环境负责解析。但浏览器原生 ESM 与 Electron 渲染进程均不支持 bare
+      // specifier——加载时会抛 "Failed to resolve module specifier" 并阻断 Vue mount，
+      // 表现为白屏。CopilotKit 1.61.1 是纯 ESM 包（package.json "type": "module"），
+      // `./v2` 子路径已通过 exports 字段导出 ./dist/v2/index.mjs，Vite/Rollup 可直接打包。
       rollupOptions: {
-        external: ['@copilotkit/vue/v2', '@copilotkit/vue', '@copilotkit/runtime', '@copilotkit/agent'],
         output: {
           // 手动分包：把大型第三方依赖拆分为独立 chunk，缩短首屏加载时间
           manualChunks(id) {
@@ -191,14 +250,34 @@ export default defineConfig(({ mode }) => {
       css: true,
     },
     server: {
+      // 同时听 IPv4 (127.0.0.1) + IPv6 ([::1])，避免 Electron / Chrome 默认 IPv4 first
+      // 在 Windows 上解析 localhost 时偶发只走 IPv4 失败
+      host: '127.0.0.1',
+      strictPort: true,
       proxy: {
-        '/api/export': 'http://localhost:3001',
-        '/api/health': 'http://localhost:3001',
+        // 导出服务与本地 API 在 Electron dev 模式下统一跑在 local-server
+        // （端口由 WPX_LOCAL_SERVER_PORT 控制，默认 3007）。
+        // 历史上 '/api/export' 硬编码 3001（wpx-app/src/server/export-service.js
+        // 独立运行时端口），但 Electron dev 模式该进程不再启动，导致 fetch 拿到
+        // ECONNREFUSED / Failed to fetch。改为 dynamic port 与 localServer 保持一致。
+        '/api/export': {
+          target: `http://localhost:${localServerPort}`,
+          changeOrigin: true,
+        },
+        '/api/health': {
+          target: `http://localhost:${localServerPort}`,
+          changeOrigin: true,
+        },
         '/api/remove-bg': 'http://localhost:3002',
         '/api/knowledge': `http://localhost:${knowledgePort}`,
         '/api/library': 'http://localhost:3004',
         '/api/ai': 'http://localhost:3005',
         '/api/ck': `http://localhost:${copilotkitPort}`,
+        // jcode 适配层（jcode-routes）位于 local-server 进程内
+        '/api/jcode': {
+          target: `http://localhost:${localServerPort}`,
+          changeOrigin: true,
+        },
       },
     },
   }

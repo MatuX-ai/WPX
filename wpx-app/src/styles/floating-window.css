@@ -8,27 +8,32 @@
  *   - 拖动光标（仅在拖动手柄区生效，见各组件 dragHandle）
  *
  * 浮窗自身特殊的 box-shadow / border-radius / 背景 仍由各组件 scoped 块覆盖。
+ *
+ * 注意：本文件是全局 CSS（非 scoped），不能使用 `:deep()` 伪类。
+ * 各组件的 `.floating-host` 祖先链通常设置了 `pointer-events: none`，
+ * 这里必须显式把 `.vdr-container` 还原为 `auto`，否则浮窗内交互
+ * （按钮点击、拖拽手柄等）会穿透到底层元素，触发错误的关闭逻辑。
  */
 
-.floating-host :deep(.vdr-container) {
+.floating-host .vdr-container {
   pointer-events: auto;
   border: none;
   box-sizing: border-box;
   overflow: hidden;
 }
 
-.floating-host :deep(.vdr-handle) {
+.floating-host .vdr-handle {
   opacity: 0;
   transition: opacity 0.2s ease;
 }
 
-.floating-host :deep(.vdr-container:hover .vdr-handle),
-.floating-host :deep(.vdr-container.active .vdr-handle) {
+.floating-host .vdr-container:hover .vdr-handle,
+.floating-host .vdr-container.active .vdr-handle {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .floating-host :deep(.vdr-handle) {
+  .floating-host .vdr-handle {
     transition: none;
   }
 }

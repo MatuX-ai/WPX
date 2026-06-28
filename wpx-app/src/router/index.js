@@ -145,6 +145,12 @@ const router = createRouter({
               meta: { title: '我的模型' },
             },
             {
+              path: 'jcode',
+              name: 'settings-jcode',
+              component: () => import('@/views/settings/JcodeSettings.vue'),
+              meta: { title: 'AI 引擎' },
+            },
+            {
               path: 'fonts',
               name: 'settings-fonts',
               component: () => import('@/views/settings/FontsSettings.vue'),

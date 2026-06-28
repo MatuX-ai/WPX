@@ -1,16 +1,16 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useModelSettingsStore } from '@/stores/modelSettings'
 import { testModelConnection } from '@/utils/modelApi'
 
 const toast = useToast()
+// V1 完全免费模式：模型设置页不再提供「注册/登录」入口，
+// 仅保留 useAuthStore 以便保留与未来鉴权体系的兼容点。
 const authStore = useAuthStore()
 const { isGuest } = storeToRefs(authStore)
-const { login, isLoggingIn } = useAuth()
 const modelSettingsStore = useModelSettingsStore()
 
 const saving = ref(false)
@@ -23,11 +23,12 @@ const textTestStatus = ref(null)
 const visionTestStatus = ref(null)
 
 const form = reactive({
-  textSource: 'platform',
+  // V1 完全免费模式：平台不再提供公共模型，默认强制使用用户自己的 API。
+  textSource: 'custom',
   textEndpoint: '',
   textApiKey: '',
   textModelName: '',
-  visionSource: 'platform',
+  visionSource: 'custom',
   visionEndpoint: '',
   visionApiKey: '',
   visionModelName: '',
@@ -154,12 +155,6 @@ async function handleTestVisionConnection() {
   }
 }
 
-function handleGuestLogin() {
-  void login().catch((error) => {
-    toast.error(error?.message || '登录失败，请重试')
-  })
-}
-
 function clearTextTestStatus() {
   textTestStatus.value = null
 }
@@ -207,23 +202,9 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
     <header class="settings-panel__header">
       <h2 class="settings-panel__title">我的模型</h2>
       <p class="settings-panel__desc">
-        配置你自己的大模型 API，或使用 WPX 提供的公共模型
+        V1 完全免费模式：在本地配置你自己的大模型 API（支持 DeepSeek / 智谱 GLM / 通义千问 / 文心一言 / 豆包 / Kimi / 腾讯混元 等国产大模型）。
       </p>
     </header>
-
-    <section v-if="isGuest" class="settings-card model-settings__guest-banner">
-      <p class="model-settings__guest-banner-text">
-        访客模式下请配置自己的大模型 API。注册后可使用 WPX 公共大模型（每天约 100M Token，轻度使用通常足够）。
-      </p>
-      <button
-        type="button"
-        class="settings-btn-secondary model-settings__guest-login"
-        :disabled="isLoggingIn"
-        @click="handleGuestLogin"
-      >
-        {{ isLoggingIn ? '登录中…' : '注册 / 登录' }}
-      </button>
-    </section>
 
     <div v-if="showPrivacyBanner" class="model-settings__privacy" role="note">
       数据将发送到第三方模型服务，WPX 不会存储您的 API Key（仅本地加密存储）
@@ -234,21 +215,9 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         <h3 class="settings-card__title">文本模型</h3>
         <p class="settings-card__desc">用于 AI 对话、续写、改写等文本生成能力。</p>
 
-        <fieldset v-if="!isGuest" class="settings-field settings-fieldset">
-          <legend class="settings-label">模型来源</legend>
-          <div class="radio-group">
-            <label class="radio-option">
-              <input v-model="form.textSource" type="radio" name="text-source" value="platform" />
-              <span>WPX 公共大模型（消耗 Token）</span>
-            </label>
-            <label class="radio-option">
-              <input v-model="form.textSource" type="radio" name="text-source" value="custom" />
-              <span>使用自定义模型</span>
-            </label>
-          </div>
-        </fieldset>
-
-        <div v-if="isGuest || form.textSource === 'custom'" class="model-settings__custom-fields">
+        <!-- V1 完全免费模式：不再提供「WPX 公共大模型」单选，平台不提供免费 Token。
+             用户必须自行接入自定义模型 API。 -->
+        <div v-if="form.textSource === 'custom'" class="model-settings__custom-fields">
           <div class="settings-field">
             <label class="settings-label" for="text-endpoint">API 地址（Endpoint）</label>
             <input
@@ -322,21 +291,8 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         <h3 class="settings-card__title">图片识别模型</h3>
         <p class="settings-card__desc">用于识别图片内容、图表与截图中的文字信息。</p>
 
-        <fieldset v-if="!isGuest" class="settings-field settings-fieldset">
-          <legend class="settings-label">模型来源</legend>
-          <div class="radio-group">
-            <label class="radio-option">
-              <input v-model="form.visionSource" type="radio" name="vision-source" value="platform" />
-              <span>WPX 公共大模型（消耗 Token）</span>
-            </label>
-            <label class="radio-option">
-              <input v-model="form.visionSource" type="radio" name="vision-source" value="custom" />
-              <span>使用自定义模型</span>
-            </label>
-          </div>
-        </fieldset>
-
-        <div v-if="isGuest || form.visionSource === 'custom'" class="model-settings__custom-fields">
+        <!-- V1 完全免费模式：同上，去掉「WPX 公共大模型」单选 -->
+        <div v-if="form.visionSource === 'custom'" class="model-settings__custom-fields">
           <div class="settings-field">
             <label class="settings-label" for="vision-endpoint">API 地址（Endpoint）</label>
             <input

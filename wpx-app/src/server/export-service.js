@@ -1,3 +1,17 @@
+/**
+ * ⚠️ 已弃用（DEPRECATED）
+ *
+ * 本文件是独立的 Pandoc 导出服务（端口 3001），在 Electron 模式下不再启动。
+ * Electron 导出统一走 electron/services/export-routes.js（由 electron/local-server.js 托管）。
+ *
+ * 保留本文件仅用于以下场景：
+ *  - 非 Electron 环境下的独立部署（如 Vercel / Docker）
+ *  - 向后兼容旧版配置
+ *
+ * 如需清理，请同步检查：
+ *  - wpx-app/vite.config.js 中 '/api/export' 代理配置
+ *  - wpx-app/src/utils/localApi.js 中的 VITE_EXPORT_API_URL
+ */
 import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
@@ -10,6 +24,18 @@ const PORT = Number(process.env.EXPORT_SERVICE_PORT) || 3001
 
 function resolvePandocPath() {
   if (process.env.PANDOC_PATH) return process.env.PANDOC_PATH
+
+  // 优先使用 WPX 内置的 pandoc（位于仓库根 resources/bin/pandoc/）
+  // 这样开发者无需系统安装即可跑导出服务
+  const projectRoot = path.join(__dirname, '..', '..', '..')
+  const binaryName = process.platform === 'win32' ? 'pandoc.exe' : 'pandoc'
+  const bundledCandidates = [
+    path.join(projectRoot, 'resources', 'bin', 'pandoc', binaryName),
+    path.join(projectRoot, 'resources', 'pandoc', binaryName),
+  ]
+  for (const candidate of bundledCandidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
 
   if (process.platform === 'win32') {
     const candidates = [
