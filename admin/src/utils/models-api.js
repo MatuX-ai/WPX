@@ -4,11 +4,9 @@
  * 后端约定：
  *  - GET    /api/admin/models                  -> List<Model>
  *  - POST   /api/admin/models                  -> Model
- *  - PUT    /api/admin/models/:id              -> Model
- *  - PATCH  /api/admin/models/:id/status       -> Model    { enabled }
+ *  - PUT    /api/admin/models/:id              -> Model (含 enabled 字段)
  *  - DELETE /api/admin/models/:id              -> { code: 0 }
- *  - GET    /api/admin/models/monitor/overview -> { qps, todayTotal, successRate, perModel: [{ id, name, count }] }
- *  - GET    /api/admin/models/monitor/errors?limit=100 -> List<ErrorLog>
+ *  - GET    /api/admin/models/monitor?window=24h&groupBy=model -> 调用监控
  *
  * Model 字段：
  *   { id, name, endpoint, apiKey?, dailyFreeLimit, enabled, remark?, updatedAt }
@@ -34,16 +32,16 @@ export async function updateModel(id, payload) {
 }
 
 export async function toggleModelStatus(id, enabled) {
-  return await httpApi.patch(`/api/admin/models/${id}/status`, { enabled })
+  return await httpApi.put(`/api/admin/models/${id}`, { enabled })
 }
 
 export async function deleteModel(id) {
   return await httpApi.delete(`/api/admin/models/${id}`)
 }
 
-export async function fetchMonitorOverview() {
+export async function fetchMonitorOverview(window = '24h', groupBy = 'model') {
   try {
-    return await httpApi.get('/api/admin/models/monitor/overview')
+    return await httpApi.get('/api/admin/models/monitor', { params: { window, groupBy } })
   } catch (_e) {
     return null
   }
@@ -51,8 +49,9 @@ export async function fetchMonitorOverview() {
 
 export async function fetchErrorLogs(limit = 100) {
   try {
-    return await httpApi.get('/api/admin/models/monitor/errors', {
-      params: { limit }
+    // 后端暂未提供独立错误日志接口，可通过 monitor 接口筛选
+    return await httpApi.get('/api/admin/models/monitor', {
+      params: { window: '24h', groupBy: 'status', limit }
     })
   } catch (_e) {
     return null

@@ -175,6 +175,14 @@ const routes = [
         meta: { title: '操作日志 · WPX 管理后台', permission: 'module:logs' }
       },
 
+      // 用户反馈
+      {
+        path: 'feedbacks',
+        name: 'feedbacks',
+        component: () => import('@/views/settings/FeedbackView.vue'),
+        meta: { title: '用户反馈 · WPX 管理后台', permission: 'module:feedbacks' }
+      },
+
       // 权限不足
       {
         path: 'forbidden',

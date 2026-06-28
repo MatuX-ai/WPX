@@ -87,7 +87,8 @@ const ALL_MENUS = [
   { path: '/orders', title: 'Token 与订单', icon: '💰', permission: 'module:orders' },
   { path: '/announcements', title: '公告与版本', icon: '📢', permission: 'module:announcements' },
   { path: '/settings', title: '系统设置', icon: '⚙️', permission: 'module:settings' },
-  { path: '/logs', title: '操作日志', icon: '📋', permission: 'module:logs' }
+  { path: '/logs', title: '操作日志', icon: '📋', permission: 'module:logs' },
+  { path: '/feedbacks', title: '用户反馈', icon: '💬', permission: 'module:feedbacks' }
 ]
 
 const visibleMenus = computed(() =>

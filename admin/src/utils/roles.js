@@ -66,7 +66,10 @@ export const MODULE_PERMISSIONS = Object.freeze({
   'module:settings': [ROLES.SUPER_ADMIN],
 
   // 操作日志：超管 + 运营
-  'module:logs': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN]
+  'module:logs': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN],
+
+  // 用户反馈：超管 + 运营
+  'module:feedbacks': [ROLES.SUPER_ADMIN, ROLES.OPERATION_ADMIN]
 })
 
 /**

@@ -2,93 +2,71 @@
  * Skills 管理 API
  *
  * 后端约定：
- *
- * 内置 Skills：
- *  - GET    /api/admin/skills/builtin?category=
- *      -> List<BuiltInSkill>
- *  - PATCH  /api/admin/skills/builtin/:id/status  { enabled }
- *      -> BuiltInSkill
- *
- * 在线 Skills（CRUD + 上下架 + 统计）：
- *  - GET    /api/admin/skills/online?category=&keyword=&status=
- *      -> List<OnlineSkill>
- *  - POST   /api/admin/skills/online
- *      -> OnlineSkill
- *  - PUT    /api/admin/skills/online/:id
- *      -> OnlineSkill
- *  - PATCH  /api/admin/skills/online/:id/status  { status: 'on' | 'off' }
- *      -> OnlineSkill
- *  - DELETE /api/admin/skills/online/:id
- *      -> { code: 0 }
- *  - GET    /api/admin/skills/online/:id/stats
- *      -> { callCount, activeUsers, trend?: [{ date, calls }] }
- *
- * 社区 Skills（预留审核）：
- *  - GET    /api/admin/skills/community?status=pending|approved|rejected
- *      -> List<CommunitySkill>
- *  - POST   /api/admin/skills/community/:id/approve
- *  - POST   /api/admin/skills/community/:id/reject    { reason }
+ *  - GET    /api/admin/skills?q=&category=&enabled=&page=&pageSize=
+ *  - POST   /api/admin/skills        { id, name, code, category?, description?, systemPrompt?, enabled?, builtin?, tags?, config?, meta? }
+ *  - PUT    /api/admin/skills/:id     (部分字段更新，含 enabled, status)
  *
  * Skill 通用字段：
- *   {
- *     id, name, category, description, icon, status: 'on' | 'off',
- *     callCount?, activeUsers?, updatedAt?
- *   }
- * OnlineSkill 扩展字段：
- *   {
- *     ...通用,
- *     promptTemplate: string,
- *     inputFields: [{ name, label, type, options?, required?, placeholder? }]
- *   }
- * type ∈ 'text' | 'textarea' | 'number' | 'select'
+ *   { id, name, code, category, description, systemPrompt, enabled, builtin,
+ *     callCount?, activeUsers?, updatedAt?, tags?, config?, meta? }
+ *
+ * 分类：builtin / online / community — 通过 category 字段区分
  */
 import { httpApi } from './http'
 
 // ============ 内置 Skills ============
 export async function fetchBuiltInSkills(params = {}) {
   try {
-    return await httpApi.get('/api/admin/skills/builtin', { params })
+    return await httpApi.get('/api/admin/skills', { params: { ...params, category: 'builtin' } })
   } catch (_e) {
     return null
   }
 }
 
 export async function toggleBuiltInSkill(id, enabled) {
-  return await httpApi.patch(`/api/admin/skills/builtin/${id}/status`, {
-    enabled
-  })
+  return await httpApi.put(`/api/admin/skills/${id}`, { enabled })
 }
 
 // ============ 在线 Skills ============
 export async function fetchOnlineSkills(params = {}) {
   try {
-    return await httpApi.get('/api/admin/skills/online', { params })
+    return await httpApi.get('/api/admin/skills/online/list', { params })
   } catch (_e) {
     return null
   }
 }
 
+export async function fetchOnlineSkillDetail(id) {
+  try {
+    return await httpApi.get(`/api/admin/skills/online/${id}`)
+  } catch (_e) {
+    return null
+  }
+}
+
+export async function installOnlineSkill(id) {
+  return await httpApi.post(`/api/admin/skills/online/${id}/install`)
+}
+
 export async function createOnlineSkill(payload) {
-  return await httpApi.post('/api/admin/skills/online', payload)
+  return await httpApi.post('/api/admin/skills', { ...payload, category: 'online' })
 }
 
 export async function updateOnlineSkill(id, payload) {
-  return await httpApi.put(`/api/admin/skills/online/${id}`, payload)
+  return await httpApi.put(`/api/admin/skills/${id}`, payload)
 }
 
 export async function toggleOnlineSkill(id, status) {
-  return await httpApi.patch(`/api/admin/skills/online/${id}/status`, {
-    status
-  })
+  return await httpApi.put(`/api/admin/skills/${id}`, { enabled: status === 'on' })
 }
 
 export async function deleteOnlineSkill(id) {
-  return await httpApi.delete(`/api/admin/skills/online/${id}`)
+  return await httpApi.delete(`/api/admin/skills/${id}`)
 }
 
 export async function fetchOnlineSkillStats(id) {
   try {
-    return await httpApi.get(`/api/admin/skills/online/${id}/stats`)
+    return await httpApi.get(`/api/admin/skills/${id}/stats`)
   } catch (_e) {
     return null
   }
@@ -97,18 +75,16 @@ export async function fetchOnlineSkillStats(id) {
 // ============ 社区 Skills ============
 export async function fetchCommunitySkills(params = {}) {
   try {
-    return await httpApi.get('/api/admin/skills/community', { params })
+    return await httpApi.get('/api/admin/skills', { params: { ...params, category: 'community' } })
   } catch (_e) {
     return null
   }
 }
 
 export async function approveCommunitySkill(id) {
-  return await httpApi.post(`/api/admin/skills/community/${id}/approve`)
+  return await httpApi.put(`/api/admin/skills/${id}`, { enabled: true, category: 'community' })
 }
 
 export async function rejectCommunitySkill(id, reason = '') {
-  return await httpApi.post(`/api/admin/skills/community/${id}/reject`, {
-    reason
-  })
+  return await httpApi.delete(`/api/admin/skills/${id}`)
 }

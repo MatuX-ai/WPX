@@ -76,20 +76,20 @@ function createInstance(baseURL) {
   // 响应拦截器：统一处理错误码 + 401 跳转
   instance.interceptors.response.use(
     (response) => {
-      // 后端约定：业务错误码非 0 时也走 catch 分支
       const data = response.data
-      if (data && typeof data === 'object' && 'code' in data) {
-        if (data.code !== 0 && data.code !== 200) {
-          const err = new Error(data.message || '业务错误')
-          err.code = data.code
-          err.payload = data
-          return Promise.reject(err)
-        }
-        return data
+      // 后端约定：{ ok: false, error: { code, message } } 表示业务错误
+      if (data && typeof data === 'object' && data.ok === false) {
+        const errMsg = data.error?.message || '业务错误'
+        const errCode = data.error?.code || 'UNKNOWN'
+        const err = new Error(errMsg)
+        err.code = errCode
+        err.payload = data
+        return Promise.reject(err)
       }
       return response.data
     },
     (error) => {
+      // HTTP 层错误（网络错误 / 非 2xx）
       // 401：未登录或 token 失效
       if (error?.response?.status === 401) {
         clearToken()

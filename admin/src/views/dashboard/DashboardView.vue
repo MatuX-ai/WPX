@@ -53,11 +53,11 @@
 
     <!-- Top 列表（5 + 10） -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <!-- 字体导出 Top 5 -->
+      <!-- 字体使用 Top 5（免费字体统计） -->
       <div class="wpx-card p-4">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-sm font-semibold text-gray-900">字体导出 Top 5</h2>
-          <span class="text-xs text-gray-400">今日</span>
+          <h2 class="text-sm font-semibold text-gray-900">字体使用 Top 5</h2>
+          <span class="text-xs text-gray-300">今日（免费字体）</span>
         </div>
         <ul
           v-if="fontTop5.length"
@@ -135,7 +135,7 @@
       <div class="wpx-card p-4">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm font-semibold text-gray-900">7 日 AI 调用趋势</h2>
-          <span class="text-xs text-gray-400">免费 vs 付费</span>
+          <span class="text-xs text-gray-400">用户自配 API 调用</span>
         </div>
         <div
           ref="aiChartEl"
@@ -184,7 +184,7 @@ const overview = ref({
   dau: 0,
   newUsers: 0,
   aiCalls: 0,
-  tokenRecharge: 0,
+  totalUsers: 0,
   fontExportTop5: [],
   activeSkillsTop10: []
 })
@@ -220,23 +220,15 @@ const cards = computed(() => [
     value: formatNumber(overview.value.aiCalls),
     unit: '次',
     icon: '🤖',
-    desc: '免费 + 付费合计'
+    desc: '用户通过自配 API 调用'
   },
   {
-    key: 'token',
-    title: '今日 Token 充值',
-    value: formatNumber(overview.value.tokenRecharge),
-    unit: 'Token',
-    icon: '💰',
-    desc: '今日累计充值 Token'
-  },
-  {
-    key: 'font',
-    title: '字体导出 Top 5',
-    value: formatNumber(totalFontExports.value),
-    unit: '次',
-    icon: '🔤',
-    desc: 'Top 5 字体合计导出次数'
+    key: 'totalUsers',
+    title: '累计注册用户',
+    value: formatNumber(overview.value.totalUsers),
+    unit: '人',
+    icon: '📊',
+    desc: '平台累计注册用户数'
   },
   {
     key: 'skill',
@@ -282,7 +274,7 @@ function demoOverview() {
     dau: 1284,
     newUsers: 56,
     aiCalls: 8421,
-    tokenRecharge: 320000,
+    totalUsers: 3280,
     fontExportTop5: [
       { name: '思源黑体 CN', count: 412 },
       { name: '阿里巴巴普惠体', count: 287 },

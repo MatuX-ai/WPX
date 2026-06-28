@@ -6,13 +6,8 @@
  *      -> List<Font> | { list: Font[] }
  *  - POST   /api/admin/fonts                       (multipart: fontFile + cover + meta)
  *      -> Font
- *  - PUT    /api/admin/fonts/:id                   (json: meta; 单独上传用 PATCH /file)
- *      -> Font
- *  - PATCH  /api/admin/fonts/:id/file              (multipart: fontFile)
- *      -> Font
- *  - PATCH  /api/admin/fonts/:id/cover             (multipart: cover)
- *      -> Font
- *  - PATCH  /api/admin/fonts/:id/status            { status: 'on' | 'off' }
+ *  - PUT    /api/admin/fonts/:id              (更新元数据)
+ *  - PUT    /api/admin/fonts/:id/status       { status: 'active' | 'inactive' }
  *      -> Font
  *  - DELETE /api/admin/fonts/:id
  *      -> { code: 0 }
@@ -74,7 +69,7 @@ export async function updateFont(id, payload) {
 export async function replaceFontFile(id, file) {
   const fd = new FormData()
   fd.append('fontFile', file, file.name)
-  return await httpApi.patch(`/api/admin/fonts/${id}/file`, fd, {
+  return await httpApi.put(`/api/admin/fonts/${id}`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
@@ -85,7 +80,7 @@ export async function replaceFontFile(id, file) {
 export async function replaceFontCover(id, file) {
   const fd = new FormData()
   fd.append('cover', file, file.name)
-  return await httpApi.patch(`/api/admin/fonts/${id}/cover`, fd, {
+  return await httpApi.put(`/api/admin/fonts/${id}`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
@@ -94,7 +89,7 @@ export async function replaceFontCover(id, file) {
  * 上架 / 下架
  */
 export async function toggleFontStatus(id, status) {
-  return await httpApi.patch(`/api/admin/fonts/${id}/status`, { status })
+  return await httpApi.put(`/api/admin/fonts/${id}/status`, { status })
 }
 
 /**

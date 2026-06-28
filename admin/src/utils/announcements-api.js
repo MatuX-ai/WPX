@@ -6,9 +6,7 @@
  *      -> List<Announcement> | { list }
  *  - POST   /api/admin/announcements
  *      -> Announcement
- *  - PUT    /api/admin/announcements/:id
- *      -> Announcement
- *  - PATCH  /api/admin/announcements/:id/status  { status: 'draft' | 'published' | 'offline' }
+ *  - PUT    /api/admin/announcements/:id     (含 status 字段)
  *      -> Announcement
  *  - DELETE /api/admin/announcements/:id
  *      -> { code: 0 }
@@ -56,7 +54,7 @@ export async function updateAnnouncement(id, payload) {
 }
 
 export async function toggleAnnouncementStatus(id, status) {
-  return await httpApi.patch(`/api/admin/announcements/${id}/status`, { status })
+  return await httpApi.put(`/api/admin/announcements/${id}`, { status })
 }
 
 export async function deleteAnnouncement(id) {
@@ -81,7 +79,7 @@ export async function updateVersion(id, payload) {
 }
 
 export async function toggleVersionForce(id, forced) {
-  return await httpApi.patch(`/api/admin/versions/${id}/force`, { forced })
+  return await httpApi.put(`/api/admin/versions/${id}`, { forceUpdate: forced })
 }
 
 export async function deleteVersion(id) {
