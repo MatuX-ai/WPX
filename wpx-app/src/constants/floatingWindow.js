@@ -57,8 +57,20 @@ export const AI_CHAT_DOCKED = {
   compactW: 320,
   /** 右栏最小宽度（用户可拖动调整时使用） */
   minW: 280,
+  /** 右栏最大宽度（用户可拖动调整时使用） */
+  maxW: 720,
   /** 极窄屏阈值：低于此宽度不允许 docked 模式 */
   minViewportWidth: 720,
+  /**
+   * 键盘箭头调整宽度的步长（px）。按住 Shift 时按此值 ×4 调整。
+   */
+  keyboardStep: 16,
+  /**
+   * 拖拽 / 调整后允许的吸附宽度。拖拽结束后若距离该值 ≤ snapThreshold，
+   * 则自动吸附到该值（便于用户对齐默认宽度）。
+   */
+  snapPoints: [320, 400, 480, 560],
+  snapThreshold: 12,
 }
 
 /** 图片编辑器浮窗 */

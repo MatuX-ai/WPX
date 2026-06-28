@@ -21,6 +21,7 @@ import { shortcutTooltip, useGlobalShortcuts } from '@/composables/useGlobalShor
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useToast } from '@/composables/useToast'
 import { AI_CHAT_DOCKED } from '@/constants/floatingWindow'
+import { useDockPanelResize } from '@/composables/useDockPanelResize'
 import {
   FLOATING_WINDOW_ID,
   useFloatingWindowState,
@@ -108,8 +109,21 @@ const aiChatDockTargetRef = ref(null)
  */
 provide('aiChatDockTarget', aiChatDockTargetRef)
 
-/** 右栏宽度：根据 viewport 选择紧凑版或默认版（参考 AI_CHAT_DOCKED） */
+/** 右栏宽度：未调整时根据 viewport 选择紧凑版或默认版（参考 AI_CHAT_DOCKED）；
+ *  用户手动调整后（isCustomized）使用 composable 的 effectiveWidth。 */
+const aiDockResize = useDockPanelResize({
+  defaultWidth: AI_CHAT_DOCKED.defaultW,
+  minWidth: AI_CHAT_DOCKED.minW,
+  maxWidth: AI_CHAT_DOCKED.maxW,
+  keyboardStep: AI_CHAT_DOCKED.keyboardStep,
+  snapPoints: AI_CHAT_DOCKED.snapPoints,
+  snapThreshold: AI_CHAT_DOCKED.snapThreshold,
+})
+
 const aiDockPanelWidth = computed(() => {
+  if (aiDockResize.isCustomized.value) {
+    return aiDockResize.effectiveWidth.value
+  }
   return windowSize.isCompactWidth.value ? AI_CHAT_DOCKED.compactW : AI_CHAT_DOCKED.defaultW
 })
 
@@ -659,7 +673,27 @@ watch(
           - 只在 docked=true 且 visible=true 时渲染。
           - 子组件 AiAssistantPlaceholder 会把 AiChatWindow Teleport 到这个节点。
           - 高度与 workspace 同步，撑满垂直空间。
+        分隔条（resizer）：
+          - 鼠标拖拽改变右栏宽度（mousedown → mousemove → mouseup）。
+          - 键盘 Arrow/Home/End + Shift 加速调整。
+          - 释放后按 snapPoints 自动吸附。
       -->
+      <div
+        v-if="showAiDockPanel"
+        class="editor-layout__ai-dock-resizer"
+        :class="{ 'editor-layout__ai-dock-resizer--resizing': aiDockResize.isResizing.value }"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整 AI 助手面板宽度"
+        :aria-valuenow="aiDockPanelWidth"
+        :aria-valuemin="AI_CHAT_DOCKED.minW"
+        :aria-valuemax="AI_CHAT_DOCKED.maxW"
+        :aria-valuetext="`${aiDockPanelWidth} 像素`"
+        :title="`拖动调整 AI 助手面板宽度（${aiDockPanelWidth}px）`"
+        tabindex="0"
+        @mousedown="aiDockResize.startResize"
+        @keydown="aiDockResize.handleKeydown"
+      />
       <aside
         v-if="showAiDockPanel"
         ref="aiChatDockTargetRef"
@@ -896,5 +930,57 @@ watch(
 /* 当 docked 右栏出现时，为主编辑器区预留右侧空间 */
 .editor-layout__editor--ai-docked {
   padding-right: 8px;
+}
+
+/* ── AI 助手贴边右栏拖拽手柄（resizer）── */
+.editor-layout__ai-dock-resizer {
+  flex-shrink: 0;
+  /* 主区与右栏之间设置 4px 热区，两侧边缘预留 2px 叠加，避免出现双线。 */
+  width: 4px;
+  height: 100%;
+  margin-left: -2px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  /* 避免选中拖拽区域中的文本/子元素 */
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.editor-layout__ai-dock-resizer:hover,
+.editor-layout__ai-dock-resizer:focus-visible {
+  background: var(--theme-accent, #7c3aed);
+  outline: none;
+}
+
+.editor-layout__ai-dock-resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 28px;
+  border-radius: 1px;
+  background: var(--theme-border, #e2e8f0);
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.editor-layout__ai-dock-resizer:hover::after,
+.editor-layout__ai-dock-resizer:focus-visible::after {
+  background: rgba(255, 255, 255, 0.85);
+  opacity: 1;
+}
+
+.editor-layout__ai-dock-resizer--resizing {
+  background: var(--theme-accent, #7c3aed) !important;
+}
+
+.editor-layout__ai-dock-resizer--resizing::after {
+  background: rgba(255, 255, 255, 0.95);
+  opacity: 1;
 }
 </style>
