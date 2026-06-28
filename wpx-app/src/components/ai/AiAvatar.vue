@@ -9,6 +9,8 @@ import { shortcutTooltip } from '@/composables/useGlobalShortcuts'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useWindowStore } from '@/stores/window'
+import { useJcodeSettingsStore } from '@/stores/jcodeSettings'
+import JcodeStatusIndicator from '@/components/ai/JcodeStatusIndicator.vue'
 
 const props = defineProps({
   preset: {
@@ -36,6 +38,7 @@ const avatarAriaLabel = computed(() =>
 
 const windowSize = useWindowSize()
 const windowStore = useWindowStore()
+const jcodeStore = useJcodeSettingsStore()
 const { isOffline } = useOnlineStatus()
 const isBreathing = computed(
   () => !props.loading && windowStore.isWindowFocused && !isOffline.value,
@@ -49,6 +52,19 @@ const avatarButtonStyle = computed(() => ({
   width: `${avatarSize.value}px`,
   height: `${avatarSize.value}px`,
 }))
+
+// jcode 状态：合并 settings + runtime 为单一 status 对象供指示器使用
+const jcodeStatus = computed(() => {
+  const s = jcodeStore.settings || {}
+  const r = jcodeStore.runtime || {}
+  return {
+    installed: r.installed === true,
+    enabled: s.enabled === true,
+    state: r.state || (r.installed ? 'stopped' : 'not_installed'),
+    version: r.version || s.lastDetectedVersion || '',
+    lastError: r.lastError || '',
+  }
+})
 
 function handleToggle() {
   emit('toggle')
@@ -99,6 +115,11 @@ function handleKeydown(event) {
       v-if="isOffline"
       class="ai-avatar-host__offline-dot"
       aria-hidden="true"
+    />
+
+    <JcodeStatusIndicator
+      v-if="jcodeStatus.installed"
+      :status="jcodeStatus"
     />
   </div>
 </template>

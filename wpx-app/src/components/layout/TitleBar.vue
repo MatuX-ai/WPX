@@ -7,6 +7,9 @@ import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useAuthStore } from '@/stores/auth'
 import { useTrayStore } from '@/stores/tray'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
+import { hasHtmlImport } from '@/composables/useHtmlImporter'
+import { getActiveEditor } from '@/composables/useEditorRegistry'
+import { useHtmlFormatPromptStore } from '@/stores/htmlFormatPrompt'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import {
   detectPlatform,
@@ -53,6 +56,7 @@ const props = defineProps({
 const trayStore = useTrayStore()
 const authStore = useAuthStore()
 const userPreferencesStore = useUserPreferencesStore()
+const htmlPromptStore = useHtmlFormatPromptStore()
 const { isAuthenticated, currentUser } = storeToRefs(authStore)
 const { login, logout, isLoggingIn } = useAuth()
 const { openSettings } = useOpenSettings()
@@ -75,6 +79,13 @@ async function handleToggleFocusMode() {
   if (!focusModeAvailable.value) return
   try {
     await userPreferencesStore.toggleFocusMode()
+    // 进入 A4 阅读模式（焦点模式开启）+ 文档含 htmlSource → 触发 HTML 排版选择弹窗
+    if (userPreferencesStore.paper?.focusMode === true) {
+      const editor = getActiveEditor()
+      if (editor && hasHtmlImport(editor)) {
+        htmlPromptStore.trigger({ source: 'a4-focus-mode' })
+      }
+    }
   } catch (error) {
     console.warn('[TitleBar] Failed to toggle focus mode:', error)
   }

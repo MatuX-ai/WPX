@@ -46,6 +46,9 @@ const CloseConfirmDialog = defineAsyncComponent(() =>
 const SaveDialog = defineAsyncComponent(() =>
   import('@/components/library/SaveDialog.vue')
 )
+const PdfImportDialog = defineAsyncComponent(() =>
+  import('@/components/editor/PdfImportDialog.vue')
+)
 import { extractTitleFromMarkdown } from '@/utils/libraryApi'
 import { markdownToHtml } from '@/utils/markdownToEditor'
 import { toEditorContent } from '@/utils/aiSelection'
@@ -97,6 +100,7 @@ const closeConfirmVisible = ref(false)
 const closeSaveDialogVisible = ref(false)
 const closeFlowSaving = ref(false)
 const packing = ref(false)
+const pdfImportVisible = ref(false)
 let closeCheckInProgress = false
 let unsubscribeAiChatToggle = null
 
@@ -152,6 +156,26 @@ async function handlePackDocument(payload) {
   } finally {
     packing.value = false
   }
+}
+
+function openPdfImportDialog() {
+  pdfImportVisible.value = true
+}
+
+function handlePdfImportConfirm(payload) {
+  if (!payload?.markdown) return
+  editorStore.requestKnowledgeImport({
+    mode: 'insert',
+    content: payload.markdown,
+    title: payload.title || 'PDF 导入',
+    type: 'markdown',
+  })
+  pdfImportVisible.value = false
+  toast.success(
+    payload.mode === 'ocr'
+      ? `已 OCR 导入 ${payload.pageCount} 页 PDF`
+      : `已提取 ${payload.pageCount} 页 PDF 文本`,
+  )
 }
 
 function createNewDocument(template = null) {
@@ -549,6 +573,30 @@ watch(
             <template #toolbar-actions>
               <button
                 type="button"
+                class="editor-layout__pdf-btn wpx-btn"
+                :class="{ 'editor-layout__pdf-btn--icon-only': isToolbarIconOnly }"
+                title="导入 PDF（含扫描版 OCR）"
+                aria-label="导入 PDF（含扫描版 OCR）"
+                @click="openPdfImportDialog"
+              >
+                <svg
+                  v-if="isToolbarIconOnly"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  aria-hidden="true"
+                >
+                  <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" stroke-linejoin="round" />
+                  <path d="M14 3v5h5" stroke-linejoin="round" />
+                  <path d="M9 14h6M9 17h4" stroke-linecap="round" />
+                </svg>
+                <span v-else>导入 PDF</span>
+              </button>
+              <button
+                type="button"
                 class="editor-layout__save-btn wpx-btn"
                 :class="{ 'editor-layout__save-btn--icon-only': isToolbarIconOnly }"
                 :title="saveTooltip"
@@ -619,6 +667,12 @@ watch(
       :default-title="getDefaultTitle()"
       @close="handleCloseSaveDialogClose"
       @saved="handleCloseSaveDialogSaved"
+    />
+
+    <PdfImportDialog
+      :visible="pdfImportVisible"
+      @close="pdfImportVisible = false"
+      @confirm="handlePdfImportConfirm"
     />
   </div>
 </template>
@@ -743,6 +797,33 @@ watch(
 }
 
 .editor-layout__save-btn--icon-only {
+  width: 28px;
+  padding: 0;
+}
+
+.editor-layout__pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--theme-fg);
+  background: var(--theme-bg);
+  cursor: pointer;
+}
+
+.editor-layout__pdf-btn:hover {
+  background: var(--theme-bg-muted);
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.editor-layout__pdf-btn--icon-only {
   width: 28px;
   padding: 0;
 }

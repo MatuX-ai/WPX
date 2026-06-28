@@ -7,6 +7,8 @@ import { useModelSettingsStore } from '@/stores/modelSettings'
 import { useSkillsStore } from '@/stores/skills'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
+import { useAppStore } from '@/stores/app'
 import {
   FLOATING_WINDOW_ID,
   useFloatingWindowState,
@@ -16,6 +18,10 @@ import AiAvatar from '@/components/ai/AiAvatar.vue'
 import AiChatWindow from '@/components/ai/AiChatWindow.vue'
 import { getMessageText, useAiChat } from '@/composables/useAiChat'
 import { useSkillExecutor } from '@/composables/useSkillExecutor'
+import { useLocalCommands, getLocalCommandPlaceholders } from '@/composables/useLocalCommands'
+import { getActiveEditor } from '@/composables/useEditorRegistry'
+import { useOpenSettings } from '@/composables/useOpenSettings'
+import { useRouter } from 'vue-router'
 import SkillInputForm from '@/components/skills/SkillInputForm.vue'
 import { MISSING_CUSTOM_API } from '@/constants/aiModelMessages'
 import { FREE_QUOTA_EXHAUSTED } from '@/utils/freeQuota'
@@ -30,6 +36,27 @@ import {
   markAiAssistantOnboardingDone,
   shouldShowAiAssistantOnboarding,
 } from '@/constants/aiAssistantOnboarding'
+import {
+  formatDocument,
+  alignImages,
+  getTemplateList,
+  getTemplateById,
+  hasImagesInDoc,
+  getDefaultImageAlignMode,
+} from '@/composables/useMarkdownFormatter'
+import { useMarkdownFormatPromptStore } from '@/stores/markdownFormatPrompt'
+import {
+  formatHtmlDocument,
+  hasHtmlImport,
+  getHtmlImportMeta,
+  restoreFromHtmlSource,
+} from '@/composables/useHtmlFormatter'
+import { useHtmlFormatPromptStore } from '@/stores/htmlFormatPrompt'
+import { useHtmlFormatStore } from '@/stores/htmlFormatBar'
+import {
+  getDefaultTemplate,
+  setDefaultTemplate,
+} from '@/utils/markdownFormatPreference'
 
 const editorStore = useEditorStore()
 const settingsStore = useSettingsStore()
@@ -37,9 +64,17 @@ const modelSettingsStore = useModelSettingsStore()
 const skillsStore = useSkillsStore()
 const userPreferencesStore = useUserPreferencesStore()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
+const appStore = useAppStore()
 const { isGuest } = storeToRefs(authStore)
 const floatingWindows = useFloatingWindows()
 const aiChat = useFloatingWindowState(FLOATING_WINDOW_ID.AI_CHAT)
+const { openSettings } = useOpenSettings()
+const { processUserInput } = useLocalCommands()
+const router = useRouter()
+const formatPromptStore = useMarkdownFormatPromptStore()
+const htmlPromptStore = useHtmlFormatPromptStore()
+const htmlFormatBarStore = useHtmlFormatStore()
 
 const aiChatWindowVisible = computed(() => aiChat.visible.value)
 const aiChatWindowPinned = computed(() => aiChat.pinned.value)
@@ -129,6 +164,12 @@ const selectionPreview = computed(() => {
 
 const modelName = computed(() => modelSettingsStore.effectiveTextConfig.displayName)
 
+/**
+ * 本地指令示例占位符（提供代表性示例输入给 AI 窗的 textarea）。
+ * AiChatWindow 每 30 秒轮转一次，避免提示单调。
+ */
+const localCommandPlaceholders = computed(() => getLocalCommandPlaceholders())
+
 function handleInputFocus() {
   editorStore.setChatInputActive(true)
 }
@@ -152,6 +193,544 @@ function handleOnboardingComplete() {
   finishOnboarding()
 }
 
+/**
+ * 尝试以本地指令方式处理用户输入。
+ * 返回 true 表示已处理（无需再走 AI 流程），false 表示需要走 AI。
+ *
+ * @param {string} text 原始用户输入
+ * @param {object} activeSelection 当前选区快照 { from, to, hasSelection, text }
+ * @returns {boolean} true = 已处理，false = 未命中本地指令
+ */
+function tryLocalCommand(text, activeSelection) {
+  if (!text || typeof text !== 'string') return false
+  // 仅有引用资料时（text 为空）也跳过本地指令
+  if (!text.trim()) return false
+
+  const editor = getActiveEditor()
+  if (!editor) {
+    // 即使没有 editor 也要让窗口/视图类指令（如「设置」「暗色模式」）能命中
+  }
+
+  const sel = activeSelection || { from: null, to: null, hasSelection: false, text: '' }
+  const hasSelection = Boolean(sel.hasSelection)
+  const hasCursor = Boolean(editor && sel.from != null)
+
+  // 读取剪贴板（用于 paste 指令）。失败时降级为空串。
+  let clipboardText = ''
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+    navigator.clipboard
+      .readText()
+      .then((v) => {
+        if (typeof v === 'string' && v) clipboardText = v
+      })
+      .catch(() => {})
+  }
+
+  // 文档摘要（用于 export-* 指令判断是否为空）
+  const documentContent = editor
+    ? (editor.state?.doc?.textContent || editor.getText?.() || '')
+    : ''
+
+  const isDocumentDirty = appStore.documentSaveStatus === 'unsaved'
+
+  // 委托应用：把高频操作集中到一个对象里供 action 闭包使用
+  const context = {
+    editor,
+    hasSelection,
+    hasCursor,
+    clipboardText,
+    isDark: themeStore.isDark,
+    focusMode: userPreferencesStore.paper?.focusMode || false,
+    documentContent,
+    isDocumentDirty,
+    router: undefined, // 使用 openSettings / openFontMarket / openLibrary 委派
+    themeStore,
+    userPreferencesStore,
+    appStore,
+
+    // 路由委派
+    openSettings: () => openSettings(),
+    openFontMarket: () => router.push({ name: 'font-market' }),
+    openLibrary: () => router.push({ name: 'library' }),
+    openKnowledgePanel: () => appStore.toggleKnowledgePanel(),
+
+    // 文件操作委派
+    saveDocument: () => {
+      const md = editor ? (editor.storage?.markdown?.content || documentContent) : ''
+      appStore.openSaveDialog({ content: md, defaultTitle: appStore.documentTitle || '未命名文档' })
+    },
+    newDocument: () => {
+      appStore.requestNewDocument()
+    },
+    insertImage: () => {
+      // 复用 EditorCore 暴露的 openImageEditor
+      const ev = new CustomEvent('wpx:local-command:insert-image', { detail: { source: 'ai-chat' } })
+      window.dispatchEvent(ev)
+    },
+
+    // 视图切换
+    toggleFocusMode: () => {
+      const next = !userPreferencesStore.paper.focusMode
+      userPreferencesStore.setFocusMode(next)
+        .then(() => {
+          // 进入 A4 阅读模式 + 文档含 htmlSource → 触发 HTML 排版选择弹窗
+          if (next) {
+            const editor = getActiveEditor()
+            if (editor && hasHtmlImport(editor)) {
+              htmlPromptStore.trigger({ source: 'a4-focus-mode' })
+            }
+          }
+        })
+        .catch((error) => {
+          console.warn('[AiAssistantPlaceholder] toggleFocusMode failed:', error)
+        })
+      return next
+    },
+    toggleDarkMode: () => {
+      themeStore.toggleLightDark()
+      return themeStore.isDark
+    },
+  }
+
+  const result = processUserInput(text, context)
+  if (!result || result.type !== 'local') {
+    return false
+  }
+
+  // 命中本地指令：先把用户消息推入，再推入指令结果消息
+  displayMessages.value.push({
+    id: createMessageId(),
+    role: 'user',
+    content: text,
+  })
+
+  // ── MD 智能排版引擎: 拦截特殊 prompt 标记 ──
+  if (result.commandId === 'format-md' && result.message === '__MARKDOWN_FORMAT_PROMPT__') {
+    pushMarkdownFormatPrompt({ source: 'manual' })
+    return true
+  }
+  if (
+    result.commandId === 'align-md-images' &&
+    result.message === '__MARKDOWN_IMAGE_ALIGN_PROMPT__'
+  ) {
+    pushMarkdownImageAlignPrompt()
+    return true
+  }
+
+  // ── HTML 智能排版引擎: 拦截「网页排版」本地指令 ──
+  if (result.commandId === 'format-html' && result.message === '__HTML_FORMAT_PROMPT__') {
+    pushHtmlFormatPrompt({ source: 'manual' })
+    return true
+  }
+
+  displayMessages.value.push({
+    id: createMessageId(),
+    role: 'local',
+    content: result.message || '',
+    commandId: result.commandId,
+    category: result.category,
+    icon: result.icon,
+    localCommandSuccess: result.success !== false,
+  })
+
+  return true
+}
+
+/**
+ * 推送 Markdown 排版模板选择器消息。
+ * 触发场景：用户输入“排版/格式化/美化”且文档含 Markdown 节点，
+ * 或粘贴/导入检测到 Markdown。
+ * 若已有默认模板偏好且来源非 manual，则自动应用并跳过选择器。
+ * @param {{ source?: 'paste'|'import'|'manual'|'dragdrop', previewText?: string, hasImages?: boolean, token?: symbol|string }} [opts]
+ */
+function pushMarkdownFormatPrompt(opts = {}) {
+  const editor = getActiveEditor()
+  if (!editor) {
+    toast.info('没有可用的编辑器')
+    return
+  }
+  const source = opts.source || 'manual'
+  const previewText = opts.previewText || ''
+  const hasImages = typeof opts.hasImages === 'boolean' ? opts.hasImages : hasImagesInDoc(editor)
+
+  // 默认模板优先：非 manual 来源 → 自动应用 → 零延迟
+  if (source !== 'manual') {
+    const pref = getDefaultTemplate()
+    if (pref && pref.templateId) {
+      const result = formatDocument(editor, pref.templateId)
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result.ok ? result.message : result.message || '⚠️ 自动排版失败',
+        commandId: 'format-md',
+        category: 'format',
+        icon: result.ok ? 'success' : 'warning',
+        localCommandSuccess: result.ok,
+      })
+      if (result.ok && hasImages) {
+        const imgMode = pref.imageAlignMode || getDefaultImageAlignMode(editor)
+        const alignResult = alignImages(editor, imgMode)
+        if (alignResult.ok && alignResult.count > 0) {
+          displayMessages.value.push({
+            id: createMessageId(),
+            role: 'local',
+            content: `✅ 已自动对齐 ${alignResult.count} 张图片`,
+            commandId: 'align-md-images',
+            category: 'format',
+            icon: 'success',
+            localCommandSuccess: true,
+          })
+        }
+      }
+      return
+    }
+  }
+
+  displayMessages.value.push({
+    id: createMessageId(),
+    role: 'local',
+    content:
+      source === 'manual'
+        ? '请选择排版模板：'
+        : '检测到 Markdown 格式，需要我帮你排版吗？',
+    commandId: 'format-md',
+    category: 'format',
+    icon: 'info',
+    localCommandSuccess: true,
+    localCommandMode: 'selector',
+    localCommandTemplates: getTemplateList(),
+    localCommandPreview: previewText,
+    localCommandPayload: { source },
+    localCommandShowKeepOriginal: true,
+  })
+}
+
+/**
+ * 推送图片对齐选择器消息。
+ * 触发场景：用户输入“对齐图片/整理图片”且文档含图片。
+ */
+function pushMarkdownImageAlignPrompt() {
+  displayMessages.value.push({
+    id: createMessageId(),
+    role: 'local',
+    content: '文档中的图片需要自动对齐吗？',
+    commandId: 'align-md-images',
+    category: 'format',
+    icon: 'info',
+    localCommandSuccess: true,
+    localCommandMode: 'image-align',
+    localCommandPayload: {},
+  })
+}
+
+/**
+ * 推送 HTML 排版模板选择器消息。
+ * 触发场景：
+ *  - 用户输入“网页排版/HTML排版”手动指令
+ *  - 焦点模式开启时文档含 htmlSource（pushHtmlFormatPrompt via store watch）
+ *  - 点击顶部“换模板”按钮
+ *
+ * 要求：
+ *  - 必须有活跃 editor 且 hasHtmlImport(editor) === true
+ *  - 有默认偏好且 source !== 'manual' / 'change-template' 时自动应用并跳过弹窗
+ *
+ * @param {{ source?: 'a4-focus-mode'|'manual'|'change-template'|'paste'|'file' }} [opts]
+ */
+function pushHtmlFormatPrompt(opts = {}) {
+  const editor = getActiveEditor()
+  if (!editor) {
+    toast.info('没有可用的编辑器')
+    return
+  }
+  if (!hasHtmlImport(editor)) {
+    toast.info('当前文档未含网页内容，无需 HTML 排版')
+    return
+  }
+
+  const source = opts.source || 'manual'
+  const meta = getHtmlImportMeta(editor) || {}
+
+  // 默认偏好优先：source 为 a4-focus-mode / paste / file → 自动应用 → 零延迟
+  if (source === 'a4-focus-mode' || source === 'paste' || source === 'file') {
+    const pref = getDefaultHtmlTemplate()
+    if (pref && pref.templateId) {
+      const result = formatHtmlDocument(editor, pref.templateId)
+      if (result.ok) {
+        htmlFormatBarStore.show({
+          templateId: result.templateId,
+          templateLabel: result.templateLabel,
+          formattedAt: Date.now(),
+        })
+        displayMessages.value.push({
+          id: createMessageId(),
+          role: 'local',
+          content: result.message,
+          commandId: 'format-html',
+          category: 'format',
+          icon: 'success',
+          localCommandSuccess: true,
+        })
+        return
+      }
+      // 失败：降级为弹窗
+    }
+  }
+
+  displayMessages.value.push({
+    id: createMessageId(),
+    role: 'local',
+    content:
+      source === 'manual' || source === 'change-template'
+        ? '请选择排版模板：'
+        : '检测到网页内容，是否按模板排版？',
+    commandId: 'format-html',
+    category: 'format',
+    icon: 'info',
+    localCommandSuccess: true,
+    localCommandMode: 'html-format-selector',
+    localCommandTemplates: getTemplateList(),
+    localCommandPreview: meta.sourceUrl || '',
+    localCommandShowKeepOriginal: true,
+    localCommandWebpageMeta: meta,
+    localCommandPayload: { source },
+  })
+}
+
+/**
+ * 读取 HTML 默认模板偏好。与 MD 偏好独立存储（需求：HTML 排版是独立选择）。
+ * 若用户从未设置过 HTML 偏好，默认推荐 webpage-archive。
+ */
+function getDefaultHtmlTemplate() {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null
+    const raw = window.localStorage.getItem('wpx-html-format-preference')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.templateId === 'string') {
+      return { templateId: parsed.templateId }
+    }
+  } catch {
+    /* noop */
+  }
+  return null
+}
+
+function setDefaultHtmlTemplate(templateId) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    window.localStorage.setItem(
+      'wpx-html-format-preference',
+      JSON.stringify({ templateId, savedAt: Date.now(), version: 1 }),
+    )
+  } catch {
+    /* noop */
+  }
+}
+
+/**
+ * 处理来自 AiChatWindow 的 LocalCommandMessage 交互事件。
+ * AiChatWindow 会发出 { commandId, payload }，payload.kind 区分 template / imageAlign / dismiss。
+ * @param {{ commandId: string, payload: { kind: string, [k: string]: any } }} event
+ */
+function handleLocalCommandSelect(event) {
+  if (!event || typeof event !== 'object') return
+  const { commandId } = event
+  const payload = event.payload || {}
+  const { kind } = payload
+  const editor = getActiveEditor()
+  if (!editor) return
+
+  if (commandId === 'format-md' && kind === 'template') {
+    const result = formatDocument(editor, payload.templateId)
+    if (result?.ok) {
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result.message,
+        commandId: 'format-md',
+        category: 'format',
+        icon: 'success',
+        localCommandSuccess: true,
+      })
+      // 模板应用成功后：含图片 → 推入图片对齐提示；不含图片 → 推入偏好提示
+      if (result.hasImages) {
+        displayMessages.value.push({
+          id: createMessageId(),
+          role: 'local',
+          content: '文档中的图片需要自动对齐吗？',
+          commandId: 'align-md-images',
+          category: 'format',
+          icon: 'info',
+          localCommandSuccess: true,
+          localCommandMode: 'image-align',
+          localCommandPayload: { templateId: payload.templateId },
+        })
+      } else {
+        const tplLabel = result.templateLabel || getTemplateById(payload.templateId)?.label || ''
+        displayMessages.value.push({
+          id: createMessageId(),
+          role: 'local',
+          content: `以后是不是都按【${tplLabel}】排版？`,
+          commandId: 'format-md',
+          category: 'format',
+          icon: 'info',
+          localCommandSuccess: true,
+          localCommandMode: 'preference',
+          localCommandPayload: { key: 'template', data: { templateId: payload.templateId } },
+        })
+      }
+    } else {
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result?.message || '⚠️ 排版失败',
+        commandId: 'format-md',
+        category: 'format',
+        icon: 'warning',
+        localCommandSuccess: false,
+      })
+    }
+    return
+  }
+
+  if (commandId === 'align-md-images' && kind === 'imageAlign') {
+    const result = alignImages(editor, payload.mode)
+    if (result?.ok) {
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result.message,
+        commandId: 'align-md-images',
+        category: 'format',
+        icon: 'success',
+        localCommandSuccess: true,
+      })
+      // 图片对齐完成后：推入偏好提示
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: '以后是不是都按此方式对齐图片？',
+        commandId: 'align-md-images',
+        category: 'format',
+        icon: 'info',
+        localCommandSuccess: true,
+        localCommandMode: 'preference',
+        localCommandPayload: { key: 'imageAlign', data: { imageAlignMode: payload.mode } },
+      })
+    } else {
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result?.message || '⚠️ 图片对齐失败',
+        commandId: 'align-md-images',
+        category: 'format',
+        icon: 'warning',
+        localCommandSuccess: false,
+      })
+    }
+    return
+  }
+
+  // preference 模式：确认/跳过
+  if (kind === 'preference-confirm') {
+    const data = payload?.data || {}
+    const key = payload?.key
+    if (key === 'template' && data.templateId) {
+      setDefaultTemplate(data.templateId, null)
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: '✅ 已记住：以后自动按此模板排版',
+        commandId: 'format-md',
+        category: 'format',
+        icon: 'success',
+        localCommandSuccess: true,
+      })
+    } else if (key === 'imageAlign' && data.imageAlignMode) {
+      const pref = getDefaultTemplate()
+      if (pref) {
+        setDefaultTemplate(pref.templateId, data.imageAlignMode)
+      }
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: '✅ 已记住：以后自动按此方式对齐图片',
+        commandId: 'align-md-images',
+        category: 'format',
+        icon: 'success',
+        localCommandSuccess: true,
+      })
+    }
+    return
+  }
+  // preference-skip / keep-original / dismiss：静默处理
+  // format-html 命令分支：模板选择
+  if (commandId === 'format-html' && kind === 'template') {
+    const result = formatHtmlDocument(editor, payload.templateId)
+    if (result?.ok) {
+      // 显示恢复提示条
+      htmlFormatBarStore.show({
+        templateId: result.templateId,
+        templateLabel: result.templateLabel,
+        formattedAt: Date.now(),
+      })
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result.message,
+        commandId: 'format-html',
+        category: 'format',
+        icon: 'success',
+        localCommandSuccess: true,
+      })
+      // 偏好询问
+      const tplLabel = result.templateLabel || getTemplateById(payload.templateId)?.label || ''
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: `以后是不是都按【${tplLabel}】排版网页？`,
+        commandId: 'format-html',
+        category: 'format',
+        icon: 'info',
+        localCommandSuccess: true,
+        localCommandMode: 'preference',
+        localCommandPayload: { key: 'htmlTemplate', data: { templateId: payload.templateId } },
+      })
+    } else {
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'local',
+        content: result?.message || '⚠️ 网页排版失败',
+        commandId: 'format-html',
+        category: 'format',
+        icon: 'warning',
+        localCommandSuccess: false,
+      })
+    }
+    return
+  }
+
+  // format-html + keep-original：静默
+  if (commandId === 'format-html' && kind === 'keep-original') {
+    return
+  }
+
+  // format-html + preference-confirm: htmlTemplate
+  if (kind === 'preference-confirm' && payload?.key === 'htmlTemplate' && payload?.data?.templateId) {
+    setDefaultHtmlTemplate(payload.data.templateId)
+    displayMessages.value.push({
+      id: createMessageId(),
+      role: 'local',
+      content: '✅ 已记住：以后自动按此模板排版网页',
+      commandId: 'format-html',
+      category: 'format',
+      icon: 'success',
+      localCommandSuccess: true,
+    })
+    return
+  }
+}
+
 async function handleSend(payload) {
   const text = typeof payload === 'string' ? payload : payload.text
   const references = typeof payload === 'string' ? [] : payload.references || []
@@ -160,6 +739,14 @@ async function handleSend(payload) {
     filename: item.filename,
     content: item.content,
   }))
+
+  // ── Step -1: 本地指令拦截层 ──
+  // 在所有 AI 流程之前优先匹配确定性操作，毫秒级响应、零 Token 消耗、离线可用。
+  const localResult = tryLocalCommand(text, activeSelection)
+  if (localResult) {
+    // 本地指令已处理：不需要走 AI 流程
+    return
+  }
 
   displayMessages.value.push({
     id: createMessageId(),
@@ -346,6 +933,34 @@ watch(isLoading, (loading, wasLoading) => {
   }
 })
 
+// 监听 MD 排版提示 Store：粘贴/拖拽/导入检测到 MD 时自动推入模板选择器
+watch(
+  () => formatPromptStore.pending,
+  (pending) => {
+    if (!pending) return
+    pushMarkdownFormatPrompt({
+      source: pending.source,
+      previewText: pending.previewText,
+      hasImages: pending.hasImages,
+      token: pending.token,
+    })
+    formatPromptStore.clear()
+  },
+)
+
+// 监听 HTML 排版提示 Store：进入 A4 模式且含 htmlSource 时自动推入模板选择器
+watch(
+  () => htmlPromptStore.pending,
+  (pending) => {
+    if (!pending) return
+    pushHtmlFormatPrompt({
+      source: pending.source,
+      templateId: pending.templateId,
+    })
+    htmlPromptStore.clear()
+  },
+)
+
 watch(
   () => [modelSettingsStore.hydrated, modelSettingsStore.hasStoredTextApiKey, isGuest.value],
   ([hydrated, hasKey]) => {
@@ -366,6 +981,7 @@ watch(
     :model-name="modelName"
     :messages="displayMessages"
     :selection-context="selectionPreview"
+    :local-command-placeholders="localCommandPlaceholders"
     @send="handleSend"
     @close="handleClose"
     @pin-change="handlePinChange"
@@ -375,6 +991,7 @@ watch(
     @onboarding-complete="handleOnboardingComplete"
     @regenerate="retrySkillCall"
     @insert-slide-deck="handleInsertSlideDeck"
+    @local-command-select="handleLocalCommandSelect"
   />
 
   <AiAvatar

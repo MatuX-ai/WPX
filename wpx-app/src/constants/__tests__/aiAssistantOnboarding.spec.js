@@ -22,23 +22,20 @@ describe('aiAssistantOnboarding', () => {
     expect(localStorage.getItem(AI_ASSISTANT_ONBOARDING_KEY)).toBe('done')
   })
 
-  it('访客 onboarding 含设置与账号两条消息', () => {
-    const messages = createAiOnboardingMessages({
-      isGuest: true,
+  it('V1 完全免费模式：无论访客/登录，仅展示接入大模型 API 一条 setup 消息', () => {
+    const guestMessages = createAiOnboardingMessages({
       createMessageId: () => 'msg-1',
     })
-    expect(messages).toHaveLength(2)
-    expect(messages[0].onboardingKind).toBe('setup')
-    expect(messages[1].onboardingKind).toBe('account')
-  })
+    expect(guestMessages).toHaveLength(1)
+    expect(guestMessages[0].onboardingKind).toBe('setup')
 
-  it('已登录用户仅展示设置引导', () => {
-    const messages = createAiOnboardingMessages({
-      isGuest: false,
+    const userMessages = createAiOnboardingMessages({
       createMessageId: () => 'msg-1',
     })
-    expect(messages).toHaveLength(1)
-    expect(messages[0].onboardingKind).toBe('setup')
+    expect(userMessages).toHaveLength(1)
+    expect(userMessages[0].onboardingKind).toBe('setup')
+    // V1 不再提供 account 类型的引导消息
+    expect(userMessages.find((m) => m.onboardingKind === 'account')).toBeUndefined()
   })
 
   it('markAiAssistantOnboardingDone 后不再展示', () => {

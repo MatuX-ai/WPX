@@ -1,10 +1,11 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Vue3DraggableResizable from 'vue3-draggable-resizable'
 import { DraggableContainer } from 'vue3-draggable-resizable'
 import { useFocusTrap } from '@vueuse/integrations/useFocusTrap'
 import AiMarkdownContent from '@/components/ai/AiMarkdownContent.vue'
+import LocalCommandMessage from '@/components/ai/LocalCommandMessage.vue'
 import { useAuth } from '@/composables/useAuth'
 import {
   AI_AVATAR,
@@ -24,6 +25,7 @@ import { usePPTWorkflow, PPT_STEP } from '@/composables/usePPTWorkflow'
 import {
   downloadSlidesAsHtml,
   downloadSlidesAsPptx,
+  downloadSlidesAsPdf,
 } from '@/utils/slideExport'
 
 const props = defineProps({
@@ -51,6 +53,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  localCommandPlaceholders: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -63,10 +69,38 @@ const emit = defineEmits([
   'onboarding-complete',
   'regenerate',
   'insert-slide-deck',
+  'local-command-select',
+  'local-command-dismiss',
 ])
 
+/**
+ * 本地指令交互：用户选择某项（如模板、对齐模式）
+ * @param {object} message 当前 message 实体
+ * @param {{ kind: string, [k: string]: any }} payload
+ */
+function onLocalCommandSelect(message, payload) {
+  if (!message || !payload) return
+  emit('local-command-select', {
+    commandId: message.commandId,
+    payload,
+  })
+}
+
+/**
+ * 本地指令交互：用户主动关闭（如点击 ×）
+ * @param {object} message 当前 message 实体
+ */
+function onLocalCommandDismiss(message) {
+  if (!message) return
+  emit('local-command-dismiss', {
+    commandId: message.commandId,
+  })
+}
+
 const router = useRouter()
-const { login, register, isLoggingIn } = useAuth()
+// V1 完全免费模式：AI 助手不提供注册/登录入口，不再需要 login/register。
+// 保留 useAuth 解构仅为兼容模板中可能被调用的 isLoggingIn 状态。
+const { isLoggingIn } = useAuth()
 
 const {
   resizeHandles: RESIZE_HANDLES,
@@ -137,6 +171,51 @@ const inputValue = ref('')
 const messageListRef = ref(null)
 const textareaRef = ref(null)
 const chatPanelRef = ref(null)
+
+/* ── 本地指令示例轮转 ── */
+// 轮换 index：每 30 秒换一条示例，避免输入提示过于单一
+const placeholderIndex = ref(0)
+let placeholderTimer = null
+
+function startPlaceholderRotation() {
+  if (placeholderTimer) return
+  if (!Array.isArray(props.localCommandPlaceholders) || props.localCommandPlaceholders.length <= 1) {
+    return
+  }
+  placeholderTimer = setInterval(() => {
+    const len = props.localCommandPlaceholders.length
+    if (len > 0) {
+      placeholderIndex.value = (placeholderIndex.value + 1) % len
+    }
+  }, 30000)
+}
+
+function stopPlaceholderRotation() {
+  if (placeholderTimer) {
+    clearInterval(placeholderTimer)
+    placeholderTimer = null
+  }
+}
+
+// 当占位符数组本身变化（如从空变为非空）时重启轮转
+watch(
+  () => props.localCommandPlaceholders,
+  (next) => {
+    stopPlaceholderRotation()
+    placeholderIndex.value = 0
+    if (Array.isArray(next) && next.length > 1) {
+      startPlaceholderRotation()
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  startPlaceholderRotation()
+})
+onBeforeUnmount(() => {
+  stopPlaceholderRotation()
+})
 
 const { activate: activateFocusTrap, deactivate: deactivateFocusTrap } =
   useFocusTrap(chatPanelRef, {
@@ -366,7 +445,11 @@ defineExpose({
 })
 
 function handleSend() {
-  if (isOffline.value || mentionOpen.value) return
+  // 注意：本地指令需要离线可用，因此不再在发送入口拦截 isOffline。
+  // isOffline 时的处理交给父组件（AiAssistantPlaceholder.handleSend）判断：
+  //   - 命中本地指令 → 直接执行（不需要网络）
+  //   - 未命中本地指令 → 调用 AI 时会失败，由 useAiChat 内部处理
+  if (mentionOpen.value) return
 
   const message = inputValue.value.trim()
   const hasReferences = referencedItems.value.length > 0
@@ -438,10 +521,6 @@ function handleInputBlur() {
   emit('input-blur')
 }
 
-async function handleQuotaLogin() {
-  await login()
-}
-
 function handleQuotaRecharge() {
   // V1.1 完全免费模式：不再提供平台 Token 充值。
   // 跳转到“设置 → 我的模型”，提示用户自行接入大模型。
@@ -459,24 +538,6 @@ function completeOnboarding() {
 async function handleOnboardingSetup() {
   completeOnboarding()
   handleGoToModelSettings()
-}
-
-async function handleOnboardingRegister() {
-  completeOnboarding()
-  try {
-    await register()
-  } catch (error) {
-    console.warn('[AiChatWindow] register failed:', error)
-  }
-}
-
-async function handleOnboardingLogin() {
-  completeOnboarding()
-  try {
-    await login()
-  } catch (error) {
-    console.warn('[AiChatWindow] login failed:', error)
-  }
 }
 
 /* ───────── PPT 工作流面板（按步骤展示不同 UI） ───────── */
@@ -620,6 +681,31 @@ async function handleExportPptx() {
   } catch (e) {
     console.error('[AiChatWindow] 导出 PPTX 失败：', e)
     toast.error('导出 PPTX 失败：' + (e?.message || String(e)))
+  }
+}
+
+function handleExportPdf() {
+  if (!wfHasSlides.value) {
+    toast.warning('当前没有可导出的幻灯片')
+    return
+  }
+  try {
+    const result = downloadSlidesAsPdf(pptWorkflow.state.slides, {
+      theme: wfTheme.value,
+      title: deriveWorkflowTitle(),
+    })
+    if (result?.ok) {
+      if (result.method === 'browser-print') {
+        toast.success(`已弹出打印对话框，请选择"另存为 PDF"：${result.filename}`)
+      } else {
+        toast.success(`已生成可打印 HTML：${result.filename}`)
+      }
+    } else {
+      toast.error('导出 PDF 失败：' + (result?.error || '未知错误'))
+    }
+  } catch (e) {
+    console.error('[AiChatWindow] 导出 PDF 失败：', e)
+    toast.error('导出 PDF 失败：' + (e?.message || String(e)))
   }
 }
 
@@ -822,33 +908,7 @@ watch(
                     </button>
                   </div>
                 </div>
-                <div
-                  v-else-if="message.onboardingKind === 'account'"
-                  class="ai-chat-window__onboarding"
-                >
-                  <AiMarkdownContent
-                    class="ai-chat-window__message-md ai-chat-window__message-md--onboarding"
-                    :content="message.content"
-                  />
-                  <div class="ai-chat-window__onboarding-actions">
-                    <button
-                      type="button"
-                      class="ai-chat-window__quota-action ai-chat-window__quota-action--secondary wpx-btn"
-                      :disabled="isLoggingIn"
-                      @click="handleOnboardingRegister"
-                    >
-                      {{ isLoggingIn ? '跳转中…' : '注册' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="ai-chat-window__quota-action wpx-btn"
-                      :disabled="isLoggingIn"
-                      @click="handleOnboardingLogin"
-                    >
-                      {{ isLoggingIn ? '跳转中…' : '登录' }}
-                    </button>
-                  </div>
-                </div>
+                <!-- V1 完全免费模式：移除「注册/登录」账户引导分支（onboardingKind === 'account'） -->
                 <div
                   v-else-if="message.needsModelConfig"
                   class="ai-chat-window__quota-exhausted"
@@ -861,15 +921,7 @@ watch(
                   >
                     去配置
                   </button>
-                  <button
-                    v-if="message.isGuest"
-                    type="button"
-                    class="ai-chat-window__quota-action ai-chat-window__quota-action--secondary wpx-btn"
-                    :disabled="isLoggingIn"
-                    @click="handleQuotaLogin"
-                  >
-                    {{ isLoggingIn ? '登录中…' : '注册 / 登录' }}
-                  </button>
+                  <!-- V1 完全免费模式：不再提供访客「注册 / 登录」跳转按钮 -->
                 </div>
                 <div
                   v-else-if="message.quotaExhausted"
@@ -893,6 +945,24 @@ watch(
                     去配置大模型
                   </button>
                 </div>
+                <!-- 本地指令结果：在用户消息之后、Skill/AI 之前优先展示 -->
+                <LocalCommandMessage
+                  v-else-if="message.role === 'local'"
+                  :success="message.localCommandSuccess !== false"
+                  :message="message.content"
+                  :command-id="message.commandId"
+                  :category="message.category"
+                  :icon="message.icon"
+                  :mode="message.localCommandMode || 'status'"
+                  :templates="message.localCommandTemplates"
+                  :show-keep-original="Boolean(message.localCommandShowKeepOriginal)"
+                  :preview-text="message.localCommandPreview"
+                  :payload="message.localCommandPayload || {}"
+                  @select="onLocalCommandSelect(message, $event)"
+                  @dismiss="onLocalCommandDismiss(message)"
+                  @preference-confirm="onLocalCommandSelect(message, { kind: 'preference-confirm', ...$event })"
+                  @preference-skip="onLocalCommandSelect(message, { kind: 'preference-skip', ...$event })"
+                />
                 <!-- Skill 调用结果 -->
                 <div v-else-if="message.skillResult" class="ai-chat-window__skill-result">
                   <div class="ai-chat-window__skill-result-header">
@@ -1098,6 +1168,13 @@ watch(
                 </button>
                 <button
                   type="button"
+                  class="ai-chat-window__workflow-btn wpx-btn"
+                  @click="handleExportPdf"
+                >
+                  导出 PDF
+                </button>
+                <button
+                  type="button"
                   class="ai-chat-window__workflow-btn ai-chat-window__workflow-btn--primary wpx-btn"
                   @click="handleContinueEdit"
                 >
@@ -1182,8 +1259,8 @@ watch(
                   isOffline
                     ? '离线模式下无法使用 AI 对话'
                     : selectionContext
-                      ? '输入修改指令，Enter 发送（输入 @ 引用资料）'
-                      : '输入消息，Enter 发送，Shift+Enter 换行，输入 @ 引用资料'
+                      ? `${localCommandPlaceholders[placeholderIndex] || '输入修改指令，Enter 发送（输入 @ 引用资料）'}`
+                      : `${localCommandPlaceholders[placeholderIndex] || '输入消息，Enter 发送，Shift+Enter 换行，输入 @ 引用资料'}`
                 "
                 @focus="handleInputFocus"
                 @blur="handleInputBlur"
@@ -1221,6 +1298,8 @@ watch(
 
 .ai-chat-window-host :deep(.vdr-container) {
   /* 浮窗自身特性：阴影 / 圆角 / 背景 / 边框 */
+  /* pointer-events: auto 必须保留：祖先 .floating-host 通常为 none，否则点击穿透到底层编辑器会误触发关闭逻辑 */
+  pointer-events: auto;
   border: 1px solid #ddd;
   box-shadow: var(--fw-shadow, 0 12px 40px rgba(15, 23, 42, 0.18));
   border-radius: var(--fw-radius, 16px);
@@ -1400,6 +1479,14 @@ watch(
 .ai-chat-window-host--dark .ai-chat-window__message--assistant {
   background: #2d2d2d;
   color: #e0e0e0;
+}
+
+.ai-chat-window__message--local {
+  /* 本地指令结果：无背景、左对齐、跟随内嵌 LocalCommandMessage 自身的样式 */
+  align-self: flex-start;
+  background: transparent;
+  padding: 0;
+  max-width: 100%;
 }
 
 .ai-chat-window__message-refs {

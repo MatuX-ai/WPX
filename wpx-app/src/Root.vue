@@ -36,9 +36,19 @@ function resolveHeaders() {
 </script>
 
 <template>
+  <!--
+    CopilotKit Provider 配置：
+    - runtimeUrl 默认指向 wpx-app/src/server/copilotkit-runtime.js (端口 3006)
+      可通过 VITE_COPILOTKIT_URL 环境变量覆盖
+    - 不显式开启 use-single-endpoint：让客户端走 auto 检测模式
+      ① 先 GET `${runtimeUrl}/info` 做健康检查（multi-route 模式服务器返回 200）
+      ② 成功后用 rest transport 走 /api/ck/agent/default/run
+      若显式设为 true，客户端会直接 POST `${runtimeUrl}` 单端点，与
+      copilotkit-runtime.js 的 multi-route 不兼容，导致 404
+    - headers 使用函数式，每次请求读取最新响应式状态
+  -->
   <CopilotKitProvider
     :runtime-url="runtimeUrl"
-    :use-single-endpoint="true"
     :headers="resolveHeaders"
   >
     <App />
