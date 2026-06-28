@@ -12,7 +12,7 @@ import { ref } from 'vue'
  * 2. pending 是一次性事件快照，AiAssistantPlaceholder watch 到后立刻 clear，避免重复消费
  * 3. token 字段使用 Symbol 类型，保证不同次触发的语义隔离（即使对象被复用也不会被错配）
  *
- * @typedef {'paste' | 'import' | 'manual' | 'dragdrop'} MarkdownPromptSource
+ * @typedef {'paste' | 'import' | 'manual' | 'dragdrop' | 'a4-focus-mode'} MarkdownPromptSource
  *
  * @typedef {Object} MarkdownPromptPayload
  * @property {MarkdownPromptSource} source 触发来源
