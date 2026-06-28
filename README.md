@@ -156,12 +156,12 @@ V1.1 起，WPX 调整业务模式：
 | Node.js | **>= 18.0.0** | 推荐 20 LTS |
 | npm | **>= 9** | 或 pnpm / yarn |
 | Git | 任意 | 克隆仓库 |
-| Pandoc | **>= 3.0** | PDF / DOCX 导出依赖 |
+| ~~Pandoc~~ | 已内置 | PDF / DOCX 导出无需额外安装（`resources/bin/pandoc/pandoc.exe`） |
 | Windows | Win10+ / Server 2019+ | 构建需配置 ELECTRON_MIRROR（国内） |
 | macOS | 10.15+ | Apple Silicon / Intel 均支持 |
 | Linux | x64 | 需 glibc 2.31+ |
 
-> 💡 Pandoc 未安装时应用首次启动会弹出引导提示；不安装也不影响纯 Markdown / HTML 编辑与导出。
+> 💡 Pandoc 3.x 已随安装包内置，docx / html 导出开箱即用；**仅** PDF 导出依赖 LaTeX 引擎（MiKTeX / TeX Live），因体积过大未集成，需用户按需安装。
 
 ### 1. 克隆仓库
 

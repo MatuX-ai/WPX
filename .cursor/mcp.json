@@ -4,6 +4,10 @@
       "command": "node",
       "args": [".cursor/mcp/wpx-dev-server.mjs"]
     },
+    "wpx-jcode": {
+      "command": "node",
+      "args": [".cursor/mcp/wpx-jcode-server.mjs"]
+    },
     "playwright": {
       "command": "npx",
       "args": [

@@ -11,8 +11,9 @@ description: >-
 
 - **壳**：Electron 42 + electron-builder
 - **前端**：Vue 3 + Pinia + Vite + Tailwind 4 + TipTap
-- **AI**：Vercel AI SDK（经 `ai-proxy-service` 代理）
-- **本地服务**：Node（export、ai-proxy）+ Python FastAPI（knowledge、library、remove-bg）
+- **AI**：Vercel AI SDK（经 `ai-proxy-service` 代理）；可选 jcode 本地高性能引擎（`/api/jcode`）
+- **本地服务**：Node（export、ai-proxy、jcode-routes）+ Python FastAPI（knowledge、library、remove-bg）
+- **jcode 集成**：可选外挂引擎，由用户自行安装；WPX 探测/按需唤醒/空闲休眠/AI 路由/状态指示器，详见 `wpx-jcode` MCP 与 `jcode-integration` skill。
 
 ## 分层
 
@@ -50,6 +51,18 @@ Vue 渲染进程 (wpx-app/src/)
 
 浮动窗状态由 `useFloatingWindowState` 管理；注意 Ref 解包问题。
 
+## AI 路由（jcode · 可选）
+
+`wpx-app/src/server/ai-router.js` 提供 `shouldUseJcode` 纯函数 + `routeTask` HTTP 客户端：
+
+- 复杂任务（命中 PPT / 论文 / 教案 / 文献综述 / 资料库分析 / 多章节 / > 200 字 / 多步骤）→ jcode
+- 简单任务（润色 / 改写 / 翻译 / 总结 / 字体 / 颜色）→ 云端 API
+- 用户强制（`forceJcode`） → jcode
+- jcode 不可用 / HTTP 错误 / 超时 → 透明降级到云端，对用户不可见
+
+`/api/ck/route` 是 CopilotKit 内的内部端点，前端 Composable 可显式询问路由决策。
+零侵入：不安装 jcode 时所有行为与现状完全一致。
+
 ## 知识库 / 素材库
 
 - Knowledge：`/api/knowledge` → ChromaDB + 文档解析（pypdf、docx、trafilatura）
@@ -73,6 +86,7 @@ Vue 渲染进程 (wpx-app/src/)
 | `docs/WPX 多窗口独立编辑器架构设计.md` | 多窗口 |
 | `docs/WPX桌面端 UIUX 设计规范 V1.0.md` | UI/UX |
 | `docs/WPX 文件压缩解压缩功能需求文档.md` | 压缩功能（待实现） |
+| `docs/WPX 集成 jcode 高性能 AI 引擎需求文档.md` | jcode 引擎集成 |
 
 用 `wpx_list_docs` MCP 获取最新列表与摘要。
 

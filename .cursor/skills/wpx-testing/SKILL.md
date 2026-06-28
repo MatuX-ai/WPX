@@ -30,8 +30,14 @@ npm run test:watch    # 监听模式
 | AiAvatar | `components/ai/__tests__/AiAvatar.spec.js` | toggle、loading、头像 |
 | AiChatWindow | `components/ai/__tests__/AiChatWindow.spec.js` | 开关、钉住、消息、拖拽 |
 | EditorCore | `components/editor/__tests__/EditorCore.spec.js` | 选中、AI 替换、表格 |
+| AI 调度中心 | `wpx-app/src/server/__tests__/ai-router.test.js` | `shouldUseJcode` 规则、`routeTask` 降级 |
+| jcode 状态指示器 | `wpx-app/src/components/ai/__tests__/JcodeStatusIndicator.spec.js` | 5 种状态颜色 / tooltip |
+| jcode 偏好 store | `wpx-app/src/stores/__tests__/jcodeSettings.spec.js` | hydrate / update / 状态广播 |
+| jcode 探测 (Electron) | `electron/__tests__/jcode-detector.test.js` | 跨平台 `which` / `where`、semver |
+| jcode 启动器 (Electron) | `electron/__tests__/jcode-launcher.test.js` | 状态机、空闲休眠 |
 
 每个 spec 需包含：正常渲染、事件触发、边界条件。
+jcode 相关测试可以单独跑：`npx vitest run --config electron/vitest.config.js electron/__tests__/jcode-*` 或 `npx vitest run src/components/ai/__tests__/JcodeStatusIndicator.spec.js src/stores/__tests__/jcodeSettings.spec.js src/server/__tests__/ai-router.test.js`。
 
 ## E2E 测试（Playwright）
 

@@ -41,8 +41,12 @@ PowerShell 用 `;` 分隔命令，不要用 `&&`。
 | knowledge | 3003 | `/api/knowledge` |
 | library | 3004 | `/api/library` |
 | ai-proxy | 3005 | `/api/ai` |
+| copilotkit | 3006 | `/api/ck` |
+| local-server（含 jcode） | 3007（dev 固定） / 动态（生产） | `/api/jcode` |
+| jcode 子进程 | 8765（默认） | 仅主进程内访问 |
 
 前端通过 Vite proxy 访问，不要硬编码 `localhost:300x`（除 E2E mock 外）。
+jcode 集成在 dev 模式下要求 `electron/run-dev.js` 注入 `WPX_LOCAL_SERVER_PORT=3007` + `WPX_LOCAL_SERVER_URL`，Vite proxy 才能命中 local-server。
 
 ## MCP 工具
 

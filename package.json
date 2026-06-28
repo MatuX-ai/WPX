@@ -1,6 +1,6 @@
 {
   "name": "wpx",
-  "version": "0.1.6",
+  "version": "0.1.10",
   "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
   "author": {
     "name": "WPX Team",
@@ -32,6 +32,7 @@
       "wpx-app/dist/**/*",
       "electron/**/*",
       "resources/bin/**/*",
+      "!resources/bin/pandoc/**",
       "package.json",
       "!wpx-app/node_modules/**",
       "!wpx-app/src/**",
@@ -48,6 +49,10 @@
       {
         "from": "resources/fonts",
         "to": "fonts"
+      },
+      {
+        "from": "resources/bin/pandoc",
+        "to": "bin/pandoc"
       }
     ],
     "asarUnpack": [
@@ -121,7 +126,14 @@
     "linux": {
       "target": "AppImage",
       "icon": "wpx-app/public/icon.png"
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://prowpx.com/releases",
+        "channel": "latest"
+      }
+    ]
   },
   "devDependencies": {
     "concurrently": "^10.0.3",
@@ -145,6 +157,8 @@
     "mammoth": "^1.12.0",
     "multer": "^2.2.0",
     "pdf-parse": "^2.4.5",
-    "subset-font": "^2.5.0"
+    "pdfjs-dist": "4.10.38",
+    "subset-font": "^2.5.0",
+    "tesseract.js": "5.1.1"
   }
 }
