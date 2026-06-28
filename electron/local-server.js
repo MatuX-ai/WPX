@@ -34,7 +34,22 @@ async function startLocalServer() {
   const expressApp = express()
   const upload = multer({ storage: multer.memoryStorage() })
 
-  expressApp.use(cors({ origin: true, credentials: true }))
+  // 安全约束：
+  // - 仅允许来自 http://localhost:* 和 http://127.0.0.1:* 的请求（本地 Electron 渲染进程）
+  // - 使用 origin 函数动态匹配，避免 origin: true 反射任意 Origin 头
+  // - 同时服务监听地址硬编码为 127.0.0.1，外部网络无法访问
+  expressApp.use(cors({
+    origin: (origin, callback) => {
+      // 无 origin 头（同源请求或 Electron file:// 协议）直接放行
+      if (!origin) return callback(null, true)
+      // 仅允许本地地址
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true)
+      }
+      callback(null, false)
+    },
+    credentials: true,
+  }))
   expressApp.use(express.json({ limit: '50mb' }))
 
   await initTokenStore(app.getPath('userData'))

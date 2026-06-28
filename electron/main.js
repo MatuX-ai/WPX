@@ -566,9 +566,14 @@ function configureContentSecurityPolicy() {
   // 生产：收紧 connect-src
   // 注意：必须保留 http://localhost:* 因为 CopilotKit runtime 在打包后仍
   // 通过 http://localhost:PORT 通信（详见 wpx-app/src/Root.vue runtimeUrl）
-  // 说明：保留 'unsafe-eval' 是必需的 —— Tiptap（基于 ProseMirror）和 Vue 的部分
-  // 运行时（Vue Router 守卫、@tiptap/core 内部代码生成器、Pinia stores）会在
-  // 生产构建中调用 eval()，禁用会导致白屏并报 "unsafe-eval is not an allowed source"。
+  //
+  // 安全审查结论（2026-06-28）：保留 'unsafe-eval' 是必需的妥协 ——
+  // Tiptap（基于 ProseMirror）和 Vue 的部分运行时（Vue Router 守卫、
+  // @tiptap/core 内部代码生成器、Pinia stores）会在生产构建中调用 eval()，
+  // 禁用会导致应用白屏并报 "unsafe-eval is not an allowed source"。
+  // 剩余 CSP 指令已全部收紧（object-src 'none' / frame-ancestors 'none' /
+  // base-uri 'self' / form-action 'self'），整体安全防护等级仍然较高。
+  // 后续优化方向：探索基于 hash/nonce 的动态 CSP 替代 'unsafe-eval'。
   const prodCsp = "default-src 'self'; " +
       "script-src 'self' 'unsafe-eval'; " +
       "style-src 'self' 'unsafe-inline' https://fonts.loli.net; " +

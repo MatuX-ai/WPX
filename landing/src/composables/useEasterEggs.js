@@ -103,6 +103,7 @@ function createOverlay() {
 
 function removeOverlay() {
   const el = document.getElementById('__wpx_egg_host')
+  // 安全：innerHTML = '' 仅用于清空容器，不涉及用户输入
   if (el) el.innerHTML = ''
 }
 
@@ -244,6 +245,7 @@ function renderSnakeGame() {
   placeFood()
 
   // 容器：固定底部
+  // 安全：以下 innerHTML 使用均来自硬编码 HTML 模板，不包含用户可控输入
   const stage = document.createElement('div')
   stage.className = 'wpx-snake-stage'
   stage.innerHTML = `
@@ -270,6 +272,7 @@ function renderSnakeGame() {
     snake.forEach((seg, i) => {
       cells.push(`<span class="wpx-snake-cell ${i === 0 ? 'wpx-snake-head' : 'wpx-snake-body'}" style="grid-column:${seg.x + 1};grid-row:${seg.y + 1}">${i === 0 ? '🐍' : ''}</span>`)
     })
+    // 安全：cells 数组中的所有值均来自游戏内部状态（纯数字坐标），无用户输入
     grid.innerHTML = cells.join('')
     scoreEl.textContent = String(score)
   }
@@ -329,6 +332,7 @@ function renderSnakeGame() {
         close()
       })
     } else {
+      // 安全：score 是内部游戏数字变量，无 XSS 风险
       grid.innerHTML = `<div class="wpx-snake-gameover">💥 GAME OVER<br /><small>得分: ${score} / ${NEED}</small><br /><button class="wpx-snake-retry">再来一次</button></div>`
       const retry = grid.querySelector('.wpx-snake-retry')
       retry?.addEventListener('click', () => renderSnakeGame())
@@ -338,6 +342,7 @@ function renderSnakeGame() {
 }
 
 function showAchievement(text, onClose) {
+  // 安全：text 参数来自硬编码字符串（如 '你已消灭 10 个广告弹窗！'），不包含用户输入
   const host = createOverlay()
   const box = document.createElement('div')
   box.className = 'wpx-achievement'
@@ -374,6 +379,7 @@ function renderKonamiDialog() {
   host.appendChild(pixelBg)
 
   // 8-bit 对话框
+  // 安全：innerHTML 内容完全硬编码，无用户输入
   const dlg = document.createElement('div')
   dlg.className = 'wpx-konami-dialog'
   dlg.innerHTML = `
@@ -414,6 +420,7 @@ function renderUnicornToast(payload) {
   const host = createOverlay()
   const box = document.createElement('div')
   box.className = 'wpx-unicorn-toast'
+  // 安全：payload.phrase 来自硬编码 UNICORN_PHRASES 数组（line 174），无 XSS 风险
   box.innerHTML = `
     <span class="wpx-unicorn-emoji">🦄</span>
     <span class="wpx-unicorn-text">${payload?.phrase || '你发现了一只独角兽！WPX 祝你今天愉快。'}</span>
@@ -440,6 +447,7 @@ function mountUnicornIcon() {
   wrap.className = 'wpx-unicorn-fab'
   wrap.setAttribute('aria-label', '神秘彩蛋')
   wrap.title = '神秘彩蛋'
+  // 安全：innerHTML 为纯静态 Unicode emoji，无用户输入
   wrap.innerHTML = `<span aria-hidden="true">🦄</span>`
   document.body.appendChild(wrap)
 }

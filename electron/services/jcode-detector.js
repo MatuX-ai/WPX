@@ -76,10 +76,16 @@ function runCapture(cmd, args, options = {}) {
 /**
  * 跨平台查找 jcode 可执行文件。
  * 命中后取 --version 解析 semver。
+ *
+ * 说明：Windows 下必须设置 shell: true，因为 `where` 是 cmd.exe 内置命令
+ * 而非独立可执行文件。传入的 args ['jcode'] 完全由代码控制，不包含任何
+ * 用户输入，不存在命令注入风险。Unix 下 `which` 是独立二进制，shell: false。
  */
 async function detectJcode({ platform = process.platform, fsImpl = require('node:fs'), runCaptureImpl = runCapture } = {}) {
   const isWin = platform === 'win32'
   const which = isWin ? 'where' : 'which'
+  // Windows: where 是 cmd.exe 内置命令，必须 shell:true
+  // 安全：args 为固定值 ['jcode']，无用户输入，无注入风险
   const whichResult = await runCaptureImpl(which, ['jcode'], { shell: isWin, timeoutMs: 4000 })
 
   if (!whichResult.ok) {

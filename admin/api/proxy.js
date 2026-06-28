@@ -6,8 +6,37 @@
 //
 // 环境变量（在 Vercel 控制台配置）：
 //   API_TARGET = https://api.prowpx.com/admin   （默认）
+//   ALLOWED_ORIGINS = https://prowpx.com        （逗号分隔）
 
 const TARGET = process.env.API_TARGET || 'https://api.prowpx.com/admin'
+
+// 允许触发反代的来源白名单（逗号分隔）。为空时默认允许同源请求。
+// 防止本反代函数被外部站点滥用为开放 HTTP 代理。
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://prowpx.com')
+  .split(',')
+  .map((s) => s.trim().toLowerCase().replace(/\/$/, ''))
+  .filter(Boolean)
+
+// 允许反代的路径前缀白名单。仅 admin 业务 API 需要经过此代理，
+// 拒绝对未知路径的请求，降低被用作通用 HTTP 代理的风险。
+const FORWARDABLE_PATH_PREFIXES = [
+  'auth/',
+  'admin/',
+  'users/',
+  'models/',
+  'fonts/',
+  'skills/',
+  'orders/',
+  'announcements/',
+  'settings/',
+  'logs/',
+  'feedbacks/',
+  'dashboard/',
+  'token/',
+]
+
+// 请求超时（毫秒）
+const REQUEST_TIMEOUT = 25000
 
 // 不透传的请求头（hop-by-hop + 主机头）
 const HOP_BY_HOP = new Set([
@@ -54,10 +83,37 @@ function buildTargetUrl(req) {
   return `${TARGET}/${path}${tail}`
 }
 
+function validateOrigin(req) {
+  if (ALLOWED_ORIGINS.length === 0) return true
+  const origin = (req.headers.origin || req.headers.referer || '').trim().toLowerCase().replace(/\/$/, '')
+  if (!origin) return true // 同源请求通常不带 origin，放行
+  return ALLOWED_ORIGINS.some((allowed) => origin.startsWith(allowed))
+}
+
+function validatePath(path) {
+  if (!path) return false
+  const normalized = path.replace(/^\/+/, '')
+  return FORWARDABLE_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
+
 module.exports = async (req, res) => {
   // CORS 预检直接放行（同源不会出现，但安全起见保留）
   if (req.method === 'OPTIONS') {
     res.status(204).end()
+    return
+  }
+
+  const path = (req.query && req.query.path) || ''
+
+  // 安全校验：拒绝非授权来源的请求
+  if (!validateOrigin(req)) {
+    res.status(403).json({ code: 403, message: 'Forbidden: origin not allowed' })
+    return
+  }
+
+  // 安全校验：拒绝未知路径的请求，防止被用作开放代理
+  if (!validatePath(path)) {
+    res.status(403).json({ code: 403, message: 'Forbidden: path not allowed' })
     return
   }
 
@@ -82,7 +138,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const upstream = await fetch(url, init)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
+    const upstream = await fetch(url, { ...init, signal: controller.signal })
+    clearTimeout(timer)
 
     // 透传响应头（去除 hop-by-hop + 禁用 CORS 相关头）
     const headers = upstream.headers
@@ -111,9 +170,12 @@ module.exports = async (req, res) => {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/proxy] error:', err)
-    res.status(502).json({
-      code: 502,
-      message: 'API gateway error: ' + (err && err.message ? err.message : 'unknown')
+    const isTimeout = err && err.name === 'AbortError'
+    res.status(isTimeout ? 504 : 502).json({
+      code: isTimeout ? 504 : 502,
+      message: isTimeout
+        ? 'API gateway timeout'
+        : 'API gateway error'
     })
   }
 }

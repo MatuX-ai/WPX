@@ -87,6 +87,8 @@ const routes = [
       },
 
       // Skills 管理（内置 / 在线 / 社区审核 三个 Tab）
+      // 注：/skills/online 和 /skills/community 作为 redirect 占位路由存在，
+      // 实际内容通过 SkillsManageView 内部的 Tab 切换展示，路由保留以支持 URL 深层导航。
       {
         path: 'skills',
         redirect: '/skills/builtin'
@@ -107,6 +109,8 @@ const routes = [
       },
 
       // Token 与订单（充值订单 / 消费记录 / 收入统计 三个 Tab）
+      // 注：下方 /orders/consumption 和 /orders/revenue 为 Tab 深层导航占位，
+      // 实际内容均在 TokenOrdersView 内部通过 Tab 切换展示。
       {
         path: 'orders',
         redirect: '/orders/recharge'
@@ -148,6 +152,7 @@ const routes = [
       },
 
       // 系统设置（系统配置 / CDN / 管理员账号 三个 Tab）
+      // 注：/settings/cdn 和 /settings/admins 为 Tab 导航占位，实际通过 SystemSettingsView 内部 Tab 切换展示。
       {
         path: 'settings',
         redirect: '/settings/basic'
