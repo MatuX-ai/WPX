@@ -129,6 +129,30 @@ export const HtmlSourceExtension = Extension.create({
           tr.replaceWith(0, doc.content.size, newDoc)
           return true
         },
+
+      /**
+       * 仅更新 doc.attrs.htmlSource 字段，不替换文档内容。
+       * 用于 HTML 源码编辑模式：用户在左侧源码面板编辑源码后，
+       * 将新源码写入 attrs.htmlSource，但不在此处触发 setContent
+       * （由调用方负责调用 setContent 重渲染右侧 Tiptap）。
+       *
+       * 该命令保证 htmlSource 与编辑器当前渲染内容最终保持一致，
+       * 即便调用方先 setContent 再 updateHtmlSource 也不会出错。
+       *
+       * @param {string|null} htmlSource 新的 HTML 源码；传 null 表示清空
+       */
+      updateHtmlSource:
+        (htmlSource) =>
+        ({ tr, dispatch }) => {
+          if (!tr || !tr.doc) return false
+          const doc = tr.doc
+          const next = { ...doc.attrs }
+          next.htmlSource = typeof htmlSource === 'string' ? htmlSource : null
+          const newDoc = doc.type.create(next, doc.content, doc.marks)
+          if (!dispatch) return true
+          tr.replaceWith(0, doc.content.size, newDoc)
+          return true
+        },
     }
   },
 })

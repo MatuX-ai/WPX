@@ -45,6 +45,9 @@ test-write.txt
 push.*
 !push.bat
 
+# Pandoc / LaTeX 中间产物（tex2pdf.<hash>/）
+tex2pdf.-*/
+
 # Built-in fonts (large binaries — see README.md)
 resources/fonts/**/*.ttf
 resources/fonts/**/*.otf

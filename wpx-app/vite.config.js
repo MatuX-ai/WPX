@@ -97,6 +97,18 @@ export default defineConfig(({ mode }) => {
       include: [
         '@copilotkit/vue',
         '@copilotkit/vue/v2',
+        // CodeMirror 6 源码编辑器：HTML 源码编辑模式依赖
+        // 显式声明确保 Vite/esbuild 在 dev 启动时把它们预打包为 ESM，
+        // 避免浏览器原生 ESM 解析子路径时失败。
+        'codemirror',
+        '@codemirror/state',
+        '@codemirror/view',
+        '@codemirror/commands',
+        '@codemirror/language',
+        '@codemirror/lang-html',
+        '@codemirror/search',
+        '@lezer/highlight',
+        '@lezer/lr',
         // 显式声明 echarts，让 Vite/esbuild 在 dev 启动时把它预打包为 ESM。
         // ChartSlide.vue 通过 `import('echarts')` 动态加载，Vite 8 的 import-analysis
         // 在编译期无法解析到该包时会把 'echarts' 编译为裸 specifier，浏览器原生 ESM
@@ -160,11 +172,14 @@ export default defineConfig(({ mode }) => {
               return 'vendor-vue'
             }
 
-            // 编辑器核心（Tiptap / ProseMirror）
+            // 编辑器核心（Tiptap / ProseMirror / CodeMirror）
             if (
               id.includes('node_modules/@tiptap') ||
               id.includes('node_modules/prosemirror') ||
-              id.includes('node_modules/markdown-it')
+              id.includes('node_modules/markdown-it') ||
+              id.includes('node_modules/codemirror') ||
+              id.includes('node_modules/@codemirror') ||
+              id.includes('node_modules/@lezer')
             ) {
               return 'vendor-editor'
             }

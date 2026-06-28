@@ -6,6 +6,12 @@ import { useEditorStore } from '@/stores/editor'
 import { useTrayStore } from '@/stores/tray'
 import { useUserHabitsStore } from '@/stores/userHabits'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
+import {
+  useHtmlSourcePanelStore,
+  DEFAULT_HTML_SOURCE_PANEL_WIDTH,
+} from '@/stores/htmlSourcePanel'
+import { useHtmlSourcePanelResize } from '@/composables/useHtmlSourcePanelResize'
+import { hasHtmlImport } from '@/composables/useHtmlImporter'
 import { provideEditorOverlay } from '@/composables/useEditorOverlay'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useElectronFileOpen } from '@/composables/useElectronFileOpen'
@@ -17,7 +23,7 @@ import {
 } from '@/composables/useDocumentFocusRefresh'
 import { useUserHabits } from '@/composables/useUserHabits'
 import { useEditorFonts } from '@/composables/useEditorFonts'
-import { shortcutTooltip, useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
+import { shortcutTooltip, getShortcutLabel, useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useToast } from '@/composables/useToast'
 import { AI_CHAT_DOCKED } from '@/constants/floatingWindow'
@@ -28,6 +34,7 @@ import {
   useFloatingWindows,
 } from '@/composables/useFloatingWindows'
 import EditorCore from '@/components/editor/EditorCore.vue'
+import HtmlSourceEditor from '@/components/editor/HtmlSourceEditor.vue'
 import ExportMenu from '@/components/export/ExportMenu.vue'
 import ExportTemplateIndicator from '@/components/export/ExportTemplateIndicator.vue'
 import PackMenu from '@/components/zip/PackMenu.vue'
@@ -93,6 +100,11 @@ const {
 } = overlay
 
 const saveTooltip = shortcutTooltip('保存到文库', 'save')
+const htmlSourceToggleTooltip = computed(() => {
+  const baseLabel = htmlSourcePanelVisible.value ? '关闭 HTML 源码面板' : '编辑 HTML 源码'
+  const hint = getShortcutLabel('toggleHtmlSourcePanel')
+  return hint ? `${baseLabel} (${hint})` : baseLabel
+})
 const windowSize = useWindowSize()
 const { isToolbarIconOnly } = windowSize
 
@@ -135,6 +147,55 @@ const showAiDockPanel = computed(
 const editorRef = ref(null)
 provide('editorHostRef', editorRef)
 const editorOutput = ref({ html: '', json: null, markdown: '' })
+
+/**
+ * HTML 源码编辑面板：
+ *  - 仅在 currentEditor 含 htmlSource 时才显示 <>> 按钮
+ *  - 点击按钮 toggle 面板可见性
+ *  - 宽度通过 useHtmlSourcePanelResize 控制（同步到 store）
+ *  - 切换文档时自动 syncWithDocument（hasHtmlSource=false → 关闭面板）
+ */
+const htmlSourcePanelStore = useHtmlSourcePanelStore()
+const htmlSourceResize = useHtmlSourcePanelResize()
+
+const htmlSourceAvailable = computed(() => {
+  const ed = editorRef.value?.getEditor?.()
+  return hasHtmlImport(ed)
+})
+
+const htmlSourcePanelVisible = computed(() => {
+  return htmlSourceAvailable.value && htmlSourcePanelStore.visible
+})
+
+const htmlSourceEditorInstance = computed(() => editorRef.value?.getEditor?.() || null)
+const htmlSourceInitialHtml = computed(
+  () => htmlSourceEditorInstance.value?.state?.doc?.attrs?.htmlSource || '',
+)
+
+function toggleHtmlSourcePanel() {
+  if (!htmlSourceAvailable.value) {
+    // 快捷键可能绕过 UI 可见性，这里补一条降级提示
+    toast.warning('当前文档未导入 HTML，无法编辑源码')
+    return
+  }
+  htmlSourcePanelStore.toggle()
+}
+
+/**
+ * 容器宽度 CSS 变量：仅在面板可见时生效。
+ */
+const workspaceStyle = computed(() => ({
+  ...editorContainerStyle.value,
+  '--wpx-html-source-panel-width': `${htmlSourcePanelVisible.value ? htmlSourceResize.effectiveWidth.value : DEFAULT_HTML_SOURCE_PANEL_WIDTH}px`,
+}))
+
+/**
+ * 监听编辑器变化，文档无 htmlSource 时自动隐藏面板。
+ */
+watch(htmlSourceAvailable, (available) => {
+  htmlSourcePanelStore.syncWithDocument(available)
+})
+
 const closeConfirmVisible = ref(false)
 const closeSaveDialogVisible = ref(false)
 const closeFlowSaving = ref(false)
@@ -355,6 +416,7 @@ useGlobalShortcuts({
   onSave: openSaveDialog,
   onToggleAiChat: () => toggleAiPanel(),
   onOpenImageEditor: () => editorRef.value?.openImageEditor?.(),
+  onToggleHtmlSourcePanel: toggleHtmlSourcePanel,
   getEditor: () => editorRef.value?.getEditor?.(),
 })
 
@@ -588,12 +650,33 @@ watch(
 <template>
   <div
     class="editor-layout"
-    :style="editorContainerStyle"
+    :style="workspaceStyle"
     :data-focus-mode="focusModeActive ? 'true' : 'false'"
     :data-paper-size="userPreferencesStore.paper?.paperSize || 'none'"
     :data-ai-docked="showAiDockPanel ? 'true' : 'false'"
+    :data-html-source-panel="htmlSourcePanelVisible ? 'true' : 'false'"
   >
     <div class="editor-layout__workspace">
+      <HtmlSourceEditor
+        v-if="htmlSourcePanelVisible"
+        :editor="htmlSourceEditorInstance"
+        :initial-html="htmlSourceInitialHtml"
+      />
+      <div
+        v-if="htmlSourcePanelVisible"
+        class="editor-layout__source-resizer"
+        :class="{ 'editor-layout__source-resizer--resizing': htmlSourceResize.isResizing.value }"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整 HTML 源码面板宽度"
+        :aria-valuenow="htmlSourceResize.effectiveWidth.value"
+        :aria-valuemin="htmlSourceResize.minWidth"
+        :aria-valuemax="htmlSourceResize.maxWidth"
+        tabindex="0"
+        data-testid="html-source-resizer"
+        @mousedown="htmlSourceResize.startResize"
+        @keydown="htmlSourceResize.handleKeydown"
+      />
       <main class="editor-layout__main">
         <div
           class="editor-layout__editor"
@@ -646,6 +729,20 @@ watch(
               >
                 <Save v-if="isToolbarIconOnly" :size="16" aria-hidden="true" />
                 <span v-else>保存</span>
+              </button>
+              <button
+                v-if="htmlSourceAvailable"
+                type="button"
+                class="editor-toolbar__btn editor-toolbar__btn--html-source"
+                :class="{ 'editor-toolbar__btn--active': htmlSourcePanelVisible }"
+                :title="htmlSourceToggleTooltip"
+                :aria-label="htmlSourceToggleTooltip"
+                :aria-pressed="htmlSourcePanelVisible ? 'true' : 'false'"
+                data-testid="html-source-toggle"
+                @click="toggleHtmlSourcePanel"
+              >
+                <span aria-hidden="true">&lt;/&gt;</span>
+                <span v-if="!isToolbarIconOnly" class="ml-1">源码</span>
               </button>
               <ExportMenu
                 :get-markdown="getMarkdown"

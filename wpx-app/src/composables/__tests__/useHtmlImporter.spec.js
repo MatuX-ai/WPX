@@ -22,6 +22,7 @@ import {
   hasHtmlImport,
   importHtmlString,
   clearHtmlAttrs,
+  updateHtmlSource,
   restoreFromHtmlSource,
   getFormatState,
 } from '@/composables/useHtmlImporter'
@@ -65,6 +66,11 @@ function buildMockEditor(initialAttrs = {}) {
             editor.state.doc.attrs.lastFormattedAt = payload.formattedAt
           }
         }
+        return true
+      }),
+      updateHtmlSource: vi.fn((htmlSource) => {
+        callLog.push({ method: 'updateHtmlSource', htmlSource })
+        editor.state.doc.attrs.htmlSource = htmlSource
         return true
       }),
     },
@@ -338,5 +344,65 @@ describe('getFormatState', () => {
     expect(state.templateId).toBe('article')
     expect(state.formattedAt).toBe('2024-01-01T00:01:00Z')
     expect(state.htmlSource).toBe('<p>x</p>')
+  })
+})
+
+describe('updateHtmlSource', () => {
+  it('null editor 返回错误', () => {
+    const result = updateHtmlSource(null, '<p>x</p>')
+    expect(result.ok).toBe(false)
+    expect(result.error).toBe('editor-unavailable')
+  })
+
+  it('非字符串 htmlSource 返回错误', () => {
+    const { editor } = buildMockEditor()
+    expect(updateHtmlSource(editor, null).ok).toBe(false)
+    expect(updateHtmlSource(editor, undefined).ok).toBe(false)
+    expect(updateHtmlSource(editor, 42).ok).toBe(false)
+    expect(updateHtmlSource(editor, {}).ok).toBe(false)
+  })
+
+  it('正常调用 editor.commands.updateHtmlSource 并写入 attrs.htmlSource', () => {
+    const { editor, callLog } = buildMockEditor({
+      htmlSource: '<p>old</p>',
+      sourceUrl: 'https://x.com',
+      importedAt: '2024-01-01T00:00:00Z',
+    })
+    const newHtml = '<p>new</p>'
+    const result = updateHtmlSource(editor, newHtml)
+    expect(result.ok).toBe(true)
+    const call = callLog.find((c) => c.method === 'updateHtmlSource')
+    expect(call).toBeTruthy()
+    expect(call.htmlSource).toBe(newHtml)
+    // attrs.htmlSource 已被写入新值
+    expect(editor.state.doc.attrs.htmlSource).toBe(newHtml)
+    // 其它元数据保留（不会重置）
+    expect(editor.state.doc.attrs.sourceUrl).toBe('https://x.com')
+    expect(editor.state.doc.attrs.importedAt).toBe('2024-01-01T00:00:00Z')
+  })
+
+  it('editor.commands.updateHtmlSource 返回 false 时标记 command-rejected', () => {
+    const { editor } = buildMockEditor()
+    editor.commands.updateHtmlSource = vi.fn(() => false)
+    const result = updateHtmlSource(editor, '<p>x</p>')
+    expect(result.ok).toBe(false)
+    expect(result.error).toBe('command-rejected')
+  })
+
+  it('editor.commands.updateHtmlSource 抛错时返回错误', () => {
+    const { editor } = buildMockEditor()
+    editor.commands.updateHtmlSource = vi.fn(() => {
+      throw new Error('boom')
+    })
+    const result = updateHtmlSource(editor, '<p>x</p>')
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('更新源码失败')
+  })
+
+  it('不会触发 setContent（与 importHtmlString 的关键区别）', () => {
+    const { editor, callLog } = buildMockEditor()
+    updateHtmlSource(editor, '<p>x</p>')
+    expect(callLog.some((c) => c.method === 'setContent')).toBe(false)
+    expect(callLog.some((c) => c.method === 'updateHtmlSource')).toBe(true)
   })
 })

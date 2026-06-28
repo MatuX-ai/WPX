@@ -201,6 +201,47 @@ export function clearHtmlAttrs(editor) {
 }
 
 /**
+ * 仅更新 doc.attrs.htmlSource 字段，不替换文档内容。
+ * 用于 HTML 源码编辑模式：用户在左侧源码面板编辑源码后，
+ * 将新源码写入 attrs.htmlSource（不触发 setContent，由调用方负责重渲染）。
+ *
+ * 与 importHtmlString 的区别：
+ *  - importHtmlString: 替换 doc 内容 + 写入 htmlSource（用于初次导入）
+ *  - updateHtmlSource:  不替换 doc 内容，仅更新 htmlSource（用于源码面板编辑）
+ *  - 调用 updateHtmlSource 不会重置 sourceUrl / importedAt / importSource
+ *
+ * 与 restoreFromHtmlSource 的区别：
+ *  - restoreFromHtmlSource: 用保存的源码重渲染文档（保留原样）
+ *  - updateHtmlSource: 仅保存源码，不改变文档（编辑后保存）
+ *
+ * @param {import('@tiptap/core').Editor | null} editor
+ * @param {string|null} htmlSource 新的 HTML 源码；传 null 或空字符串表示清空
+ * @returns {{ ok: boolean, error?: string, message?: string }}
+ */
+export function updateHtmlSource(editor, htmlSource) {
+  if (!editor) {
+    return { ok: false, error: 'editor-unavailable', message: '编辑器不可用' }
+  }
+  if (typeof htmlSource !== 'string') {
+    return { ok: false, error: 'invalid-html-source', message: 'HTML 源码必须是字符串' }
+  }
+  try {
+    const result = editor.commands.updateHtmlSource(htmlSource)
+    if (result === false) {
+      return { ok: false, error: 'command-rejected', message: 'Tiptap 拒绝更新源码' }
+    }
+    return { ok: true }
+  } catch (error) {
+    console.error('[useHtmlImporter] updateHtmlSource failed:', error)
+    return {
+      ok: false,
+      error: error?.message || String(error),
+      message: '更新源码失败：' + (error?.message || '未知错误'),
+    }
+  }
+}
+
+/**
  * 从保存的 htmlSource 重新渲染为 Tiptap 文档（"恢复原样"调用）。
  * 注意：本函数会**覆盖**当前文档内容为原始 HTML 渲染结果，
  *       并保留 htmlSource / sourceUrl / importedAt / importSource 不变。
@@ -266,6 +307,7 @@ export function useHtmlImporter() {
     getHtmlImportMeta,
     hasHtmlImport,
     clearHtmlAttrs,
+    updateHtmlSource,
     restoreFromHtmlSource,
     getFormatState,
   }
@@ -279,6 +321,7 @@ export default {
   getHtmlImportMeta,
   hasHtmlImport,
   clearHtmlAttrs,
+  updateHtmlSource,
   restoreFromHtmlSource,
   getFormatState,
   useHtmlImporter,

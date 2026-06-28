@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { isEditorRoute } from '@/utils/windowContext'
 
-/** @typedef {'newDocument' | 'save' | 'toggleAiChat' | 'openImageEditor' | 'bold' | 'italic'} ShortcutId */
+/** @typedef {'newDocument' | 'save' | 'toggleAiChat' | 'openImageEditor' | 'bold' | 'italic' | 'toggleHtmlSourcePanel'} ShortcutId */
 
 /** @type {Record<ShortcutId, { win: string, mac: string }>} */
 export const GLOBAL_SHORTCUTS = {
@@ -13,6 +13,7 @@ export const GLOBAL_SHORTCUTS = {
   openImageEditor: { win: 'Ctrl+Shift+I', mac: '⌘⇧I' },
   bold: { win: 'Ctrl+B', mac: '⌘B' },
   italic: { win: 'Ctrl+I', mac: '⌘I' },
+  toggleHtmlSourcePanel: { win: 'Ctrl+Shift+H', mac: '⌘⇧H' },
 }
 
 function isApplePlatform() {
@@ -86,6 +87,7 @@ function hasModifier(event) {
  * @param {() => void} [handlers.onSave]
  * @param {() => void} [handlers.onToggleAiChat]
  * @param {() => void} [handlers.onOpenImageEditor]
+ * @param {() => void} [handlers.onToggleHtmlSourcePanel]
  * @param {() => import('@tiptap/core').Editor | null | undefined} [handlers.getEditor]
  */
 export function useGlobalShortcuts(handlers = {}) {
@@ -118,6 +120,12 @@ export function useGlobalShortcuts(handlers = {}) {
         event.preventDefault()
         handlers.onOpenImageEditor?.()
       }
+      return
+    }
+
+    if (event.shiftKey && key === 'h') {
+      event.preventDefault()
+      handlers.onToggleHtmlSourcePanel?.()
       return
     }
 
