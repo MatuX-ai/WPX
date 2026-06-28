@@ -12,6 +12,8 @@ import {
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useModelSettingsStore } from '@/stores/modelSettings'
+import { isElectron } from '@/utils/electron'
+import { routeTask, shouldUseJcode } from '@/server/ai-router'
 import {
   checkFreeQuota,
   consumeFreeQuotaTokens,
@@ -279,6 +281,46 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     }
   }
 
+  /**
+   * jcode 路由检查（透明降级提示）
+   *
+   * - 简单任务不唤醒 jcode
+   * - 仅桌面端尝试；Web 环境下静默走云端
+   * - 调用 ai-router.routeTask：
+   *     · ok:true 命中 jcode 或 skippedJcode → 不打扰
+   *     · ok:false + fallbackReason → toast.warning 把后端 message 透传出去
+   * - fire-and-forget：不等结果，不影响 sendMessage 主流程
+   * - 任何异常都被吞掉,绝不能阻塞主聊天
+   *
+   * @param {string} text
+   */
+  function tryJcodeRoute(text) {
+    if (!shouldUseJcode(text)) return
+    if (!isElectron()) return
+
+    void (async () => {
+      try {
+        const result = await routeTask(
+          {
+            task: 'ai_chat',
+            params: { userMessage: text },
+          },
+          {
+            // 路由检查只是“要不要走 jcode”的探针,不应阻塞用户感知;
+            // 实际执行交给 CopilotKit runtime 的 /api/ck/route 端点
+            timeoutMs: 3_000,
+          },
+        )
+        if (!result.ok && result.fallbackReason && result.message) {
+          toast.warning(result.message)
+        }
+      } catch (err) {
+        // 路由检查异常不影响主聊天流程
+        console.warn('[useAiChat] jcode 路由检查失败:', err?.message || err)
+      }
+    })()
+  }
+
   async function sendMessage({ text, context }) {
     const aiConfig = await resolveAiConfig()
 
@@ -310,6 +352,9 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
         suggestConfigure: true,
       }
     }
+
+    // ── jcode 路由检查（仅复杂任务 · 仅桌面端 · 不阻塞主流程） ──
+    tryJcodeRoute(text)
 
     // ── Step 0: 手动指定 Skill（parseSkillCommand）──
     if (skillExecutor && skillsStore) {

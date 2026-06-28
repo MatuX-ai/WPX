@@ -21,6 +21,7 @@ import { useEscapeKey } from '@/composables/useEscapeKey'
 import { useToast } from '@/composables/useToast'
 import { useEditorStore } from '@/stores/editor'
 import { isElectron } from '@/utils/electron'
+import { extractPreviewImages, hasPreviewImages } from '@/utils/knowledgePreview'
 
 const props = defineProps({
   open: {
@@ -95,6 +96,14 @@ const hasUrlImport = computed(() => urlImportOpen.value)
 const canImportToEditor = computed(
   () => Boolean(preview.value?.content?.trim()) && !previewLoading.value,
 )
+
+// 预览面板的图片/文本分离：
+// 资料库里有 HTML/Markdown 资料会用 <img src="data:image/png;base64,..."> 内联图。
+// 原 <pre> 会把整串 base64 原文喷到屏幕。把图片单独抽出渲染，其余文本保持 <pre> 可读。
+const previewParts = computed(() => extractPreviewImages(preview.value?.content || ''))
+const previewText = computed(() => previewParts.value.textPreview)
+const previewImages = computed(() => previewParts.value.images)
+const previewHasImages = computed(() => hasPreviewImages(preview.value?.content || ''))
 
 function buildImportPayload(mode) {
   return {
@@ -540,7 +549,18 @@ onUnmounted(() => {
           </header>
           <div class="knowledge-preview__body">
             <p v-if="previewLoading" class="knowledge-preview__loading">加载中…</p>
-            <pre v-else class="knowledge-preview__content">{{ preview.content }}</pre>
+            <template v-else>
+              <div v-if="previewHasImages" class="knowledge-preview__gallery" data-testid="knowledge-preview-gallery">
+                <figure
+                  v-for="(src, idx) in previewImages"
+                  :key="idx"
+                  class="knowledge-preview__thumb"
+                >
+                  <img :src="src" :alt="`预览图 ${idx + 1}`" loading="lazy" />
+                </figure>
+              </div>
+              <pre class="knowledge-preview__content">{{ previewText }}</pre>
+            </template>
           </div>
         </section>
       </Transition>
@@ -1008,6 +1028,34 @@ onUnmounted(() => {
   margin: 0;
   font-size: 13px;
   color: #94a3b8;
+}
+
+.knowledge-preview__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.knowledge-preview__thumb {
+  margin: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.knowledge-preview__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
 }
 
 .knowledge-preview__content {

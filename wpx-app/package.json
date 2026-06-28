@@ -51,6 +51,7 @@
     "@vueuse/integrations": "^14.3.0",
     "ai": "^6.0.208",
     "cors": "^2.8.6",
+    "echarts": "^5.4.3",
     "express": "^5.2.1",
     "focus-trap": "^8.2.2",
     "markdown-it": "^14.2.0",

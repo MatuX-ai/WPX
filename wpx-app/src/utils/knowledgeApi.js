@@ -107,9 +107,19 @@ function normalizeImportText(text) {
     .trim()
 }
 
+/** 按 CommonMark 规范转义 Markdown 链接/图片 URL 中的 ( ) \\ */
+function escapeMarkdownUrl(url) {
+  return String(url || '').replace(/[()\\]/g, '\\$&')
+}
+
+/** 按 CommonMark 规范转义图片 alt 中的 \ 与 [ ] */
+function escapeMarkdownAlt(alt) {
+  return String(alt || '').replace(/[\\[\]]/g, '\\$&')
+}
+
 function imageMarkdownLine(image, index) {
   const alt = normalizeImportText(image.alt || '') || `图片 ${index + 1}`
-  return `![${alt}](${image.url})`
+  return `![${escapeMarkdownAlt(alt)}](${escapeMarkdownUrl(image.url)})`
 }
 
 /** 将图片均匀插入段落之间，便于编辑区图文混排 */

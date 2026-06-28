@@ -420,6 +420,85 @@ async def clear_knowledge_cache():
     return {"success": True}
 
 
+@app.post("/api/knowledge/search")
+async def search_knowledge(
+    query: str = Form(...),
+    top_k: int = Form(5),
+):
+    """
+    语义搜索知识库。
+
+    请求：POST /api/knowledge/search
+      - query (str): 搜索查询文本
+      - top_k (int): 返回的最相关片段数（默认 5，最大 20）
+
+    响应：
+      {
+        "results": [
+          {
+            "chunk_id": "xxx_0",
+            "doc_id": "xxx",
+            "filename": "xxx.pdf",
+            "text": "匹配的文本片段...",
+            "score": 0.85
+          },
+          ...
+        ],
+        "query": "原始查询",
+        "backend": "sentence-transformers",
+        "total_indexed": 42
+      }
+    """
+    if not query or not query.strip():
+        raise HTTPException(status_code=400, detail="query 不能为空")
+
+    k = max(1, min(20, int(top_k)))
+
+    try:
+        collection = get_chroma_collection()
+        results = collection.query(
+            query_texts=[query.strip()],
+            n_results=k,
+            include=["documents", "metadatas", "distances"],
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"向量检索失败：{exc}"
+        ) from exc
+
+    if not results or not results.get("ids") or not results["ids"][0]:
+        return {
+            "results": [],
+            "query": query.strip(),
+            "backend": _embedding_backend,
+            "total_indexed": len(load_manifest()),
+        }
+
+    items = []
+    ids = results["ids"][0]
+    docs = results.get("documents", [[]])[0]
+    metas = results.get("metadatas", [[]])[0]
+    dists = results.get("distances", [[]])[0]
+
+    for i in range(len(ids)):
+        meta = metas[i] if i < len(metas) else {}
+        items.append({
+            "chunk_id": ids[i],
+            "doc_id": meta.get("doc_id", ""),
+            "filename": meta.get("filename", ""),
+            "type": meta.get("type", ""),
+            "text": docs[i] if i < len(docs) else "",
+            "score": round(1.0 - dists[i], 4) if i < len(dists) and dists[i] is not None else None,
+        })
+
+    return {
+        "results": items,
+        "query": query.strip(),
+        "backend": _embedding_backend,
+        "total_indexed": len(load_manifest()),
+    }
+
+
 @app.post("/api/knowledge/upload")
 async def upload_document(
     file: UploadFile | None = File(None),
@@ -466,6 +545,237 @@ async def http_exception_handler(_request, exc: HTTPException):
         status_code=exc.status_code,
         content={"error": message, "detail": detail},
     )
+
+
+# =========================
+# 标签提取与自动索引
+# =========================
+
+# 中文常见停用词
+_STOPWORDS = set(
+    "的 了 在 是 我 有 和 就 不 人 都 一 一个 上 也 很 到 说 要 去 你 "
+    "会 着 没有 看 好 自己 这 他 她 它 们 那 些 什么 而 为 所以 因为 "
+    "但是 如果 虽然 可以 这个 那个 这些 那些 我们 他们 她们 它们 "
+    "已经 知道 觉得 认为 应该 能够 需要 对于 关于 通过 根据 按照 "
+    "之后 以前 以后 现在 当时 目前 最近 主要 一般 比较 非常 "
+    "还是 只是 然后 不过 以及 并且 或者 此外 另外 比如 例如 "
+    "其中 其他 所有 每个 整个 部分 方面 问题 情况 作用 结果 "
+    "关系 过程 方法 方式 内容 形式 目的 意义 原因 条件 基础 "
+    "发展 形成 进行 使用 利用 具有 存在 出现 产生 发生 成为 "
+    "不是 没有 不能 不会 可能 是否 是否 更加 越来越 等等".split()
+)
+
+
+def extract_tags(content: str, top_n: int = 10) -> list[dict[str, Any]]:
+    """从文档内容中提取关键词标签（基于词频）"""
+    if not content:
+        return []
+
+    text = re.sub("[，。！？、；：\u201c\u201d\u2018\u2019（）\\[\\]【】《》\\s]+", " ", content)
+
+    # 提取中文 2-4 字词和英文 3+ 字母词
+    cn_words = re.findall(r"[\u4e00-\u9fff]{2,4}", text)
+    en_words = re.findall(r"[a-zA-Z]{3,}", text.lower())
+
+    freq: dict[str, int] = {}
+    for w in cn_words:
+        if w not in _STOPWORDS and len(w) >= 2:
+            freq[w] = freq.get(w, 0) + 1
+    for w in en_words:
+        if w not in _STOPWORDS:
+            freq[w] = freq.get(w, 0) + 1
+
+    # 按词频排序
+    sorted_tags = sorted(freq.items(), key=lambda x: -x[1])[:top_n]
+    max_freq = sorted_tags[0][1] if sorted_tags else 1
+
+    return [
+        {"tag": word, "count": count, "weight": round(count / max_freq, 2)}
+        for word, count in sorted_tags
+    ]
+
+
+def detect_cross_references(
+    current_doc_id: str,
+    content: str,
+    all_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """检测文档中引用的其他文档（通过文件名提及检测）"""
+    refs = []
+    for item in all_items:
+        if item["id"] == current_doc_id:
+            continue
+        filename = item.get("filename", "")
+        if not filename:
+            continue
+        # 去掉扩展名的文件名
+        basename = Path(filename).stem
+        if len(basename) >= 2 and basename in content:
+            refs.append({
+                "doc_id": item["id"],
+                "filename": filename,
+                "type": item.get("type", ""),
+                "mentions": content.count(basename),
+            })
+    return sorted(refs, key=lambda x: -x["mentions"])
+
+
+@app.get("/api/knowledge/tags")
+async def get_tag_cloud():
+    """
+    获取标签云 — 所有文档的关键词聚合
+    响应: { tags: [{ tag, count, weight, docCount }], totalDocs: int }
+    """
+    items = load_manifest()
+    all_tags: dict[str, dict[str, Any]] = {}
+
+    for item in items:
+        doc_path = DOCS_DIR / f"{item['id']}.txt"
+        if not doc_path.exists():
+            continue
+        try:
+            content = doc_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        doc_tags = extract_tags(content, top_n=10)
+        for t in doc_tags:
+            tag = t["tag"]
+            if tag not in all_tags:
+                all_tags[tag] = {"tag": tag, "count": 0, "weight": 0, "docCount": 0}
+            all_tags[tag]["count"] += t["count"]
+            all_tags[tag]["weight"] = max(all_tags[tag]["weight"], t["weight"])
+            all_tags[tag]["docCount"] += 1
+
+    sorted_tags = sorted(all_tags.values(), key=lambda x: -x["count"])[:50]
+    return {"tags": sorted_tags, "totalDocs": len(items)}
+
+
+@app.get("/api/knowledge/index")
+async def get_auto_index():
+    """
+    自动索引页 — 按标签分组显示文档
+    响应: { groups: [{ tag, docs: [{ id, filename, type, uploadedAt, tags }] }] }
+    """
+    items = load_manifest()
+    tag_groups: dict[str, list[dict[str, Any]]] = {}
+
+    for item in items:
+        doc_path = DOCS_DIR / f"{item['id']}.txt"
+        if not doc_path.exists():
+            continue
+        try:
+            content = doc_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        doc_tags = extract_tags(content, top_n=5)
+        doc_info = {
+            "id": item["id"],
+            "filename": item["filename"],
+            "type": item.get("type", ""),
+            "uploadedAt": item["uploadedAt"],
+            "charCount": len(content),
+            "tags": [t["tag"] for t in doc_tags[:3]],
+        }
+
+        for t in doc_tags[:3]:
+            tag = t["tag"]
+            if tag not in tag_groups:
+                tag_groups[tag] = []
+            # 避免同一文档在同一标签下重复
+            if not any(d["id"] == doc_info["id"] for d in tag_groups[tag]):
+                tag_groups[tag].append(doc_info)
+
+    # 按组内文档数量排序
+    groups = [
+        {"tag": tag, "docs": docs}
+        for tag, docs in sorted(tag_groups.items(), key=lambda x: -len(x[1]))[:20]
+    ]
+    return {"groups": groups, "totalDocs": len(items)}
+
+
+@app.get("/api/knowledge/{doc_id}/links")
+async def get_document_links(doc_id: str):
+    """
+    获取文档的跨文档引用关系
+    响应: { docId, references: [{ doc_id, filename, type, mentions }] }
+    """
+    items = load_manifest()
+    item = next((i for i in items if i["id"] == doc_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="资料不存在")
+
+    doc_path = DOCS_DIR / f"{doc_id}.txt"
+    if not doc_path.exists():
+        return {"docId": doc_id, "references": []}
+
+    content = doc_path.read_text(encoding="utf-8")
+    refs = detect_cross_references(doc_id, content, items)
+    return {"docId": doc_id, "filename": item["filename"], "references": refs}
+
+
+@app.post("/api/knowledge/fulltext-search")
+async def fulltext_search(
+    query: str = Form(...),
+    limit: int = Form(20),
+):
+    """
+    全文搜索 — 在所有文档中进行简单的文本匹配（非语义）
+    用于补充语义搜索，在精确关键词匹配场景更有效
+
+    请求: POST /api/knowledge/fulltext-search
+      - query (str): 搜索关键词
+      - limit (int): 最大返回数
+    """
+    if not query or not query.strip():
+        raise HTTPException(status_code=400, detail="query 不能为空")
+
+    q = query.strip()
+    items = load_manifest()
+    results = []
+
+    for item in items:
+        doc_path = DOCS_DIR / f"{item['id']}.txt"
+        if not doc_path.exists():
+            continue
+        try:
+            content = doc_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        # 简单的关键词匹配分数
+        score = content.lower().count(q.lower())
+        if score == 0:
+            # 分词匹配
+            words = q.split()
+            score = sum(content.lower().count(w.lower()) for w in words)
+
+        if score > 0:
+            # 提取匹配片段
+            idx = content.lower().find(q.lower())
+            if idx < 0 and len(q.split()) > 1:
+                idx = content.lower().find(q.split()[0].lower())
+            snippet_start = max(0, idx - 100) if idx >= 0 else 0
+            snippet = content[snippet_start:snippet_start + 300]
+
+            results.append({
+                "doc_id": item["id"],
+                "filename": item["filename"],
+                "type": item.get("type", ""),
+                "uploadedAt": item["uploadedAt"],
+                "charCount": len(content),
+                "matchCount": score,
+                "snippet": snippet,
+            })
+
+    results.sort(key=lambda x: -x["matchCount"])
+    return {
+        "results": results[:limit],
+        "query": q,
+        "totalHits": len(results),
+        "totalIndexed": len(items),
+    }
 
 
 if __name__ == "__main__":

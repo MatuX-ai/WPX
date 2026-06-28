@@ -21,6 +21,7 @@ import cors from 'cors'
 import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
+import { routeTask } from './ai-router.js'
 
 const PORT = Number(process.env.COPILOTKIT_PORT || 3006)
 const DEEPSEEK_BASE_URL = (
@@ -81,20 +82,39 @@ function buildTemplateConfirm(template) {
 
 /* ───────── 运行时环境：尝试动态加载 CopilotKit ───────── */
 
+/**
+ * v1.61.1 的运行后端 API 全部在 @copilotkit/runtime/v2 子路径下。
+ * 历史包袱里错误地引用了 `@copilotkit/agent`，该包在 npm 上不存在
+ * （v2 时代 BuiltInAgent/InMemoryAgentRunner 被合并进 runtime 的 /v2 子路径），
+ * 需全部从 @copilotkit/runtime/v2 取。
+ *
+ * 此外，createCopilotEndpointSingleRouteExpress 已被废弃，且默认走
+ * "single-route" 模式，会忽略 /info /agent/:id/run 等子路径。
+ * 前端 v2 客户端 fetchRuntimeInfoSingle 直接 GET `${runtimeUrl}/info` 做健康检查，
+ * 需走 "multi-route" 模式（fetch-router.mjs 中 matchRoute 把 /info 路由到 handleGetRuntimeInfo）。
+ * 故此处改用 createCopilotExpressHandler 并显式指定 mode: "multi-route"。
+ */
 async function loadCopilotKitModules() {
-  const tasks = [
-    import('@copilotkit/runtime').catch(() => null),
-    import('@copilotkit/agent').catch(() => null),
-  ]
-  const [runtime, agent] = await Promise.all(tasks)
-  if (!runtime || !agent) {
+  const mod = await import('@copilotkit/runtime/v2').catch((e) => {
+    console.error('[copilotkit-runtime] 加载 @copilotkit/runtime/v2 失败', e?.message || e)
+    return null
+  })
+  if (!mod) return null
+  const {
+    CopilotRuntime,
+    InMemoryAgentRunner,
+    createCopilotExpressHandler,
+    BuiltInAgent,
+  } = mod
+  if (!CopilotRuntime || !InMemoryAgentRunner || !createCopilotExpressHandler || !BuiltInAgent) {
+    console.error('[copilotkit-runtime] @copilotkit/runtime/v2 未提供必需导出')
     return null
   }
   return {
-    CopilotRuntime: runtime.CopilotRuntime,
-    InMemoryAgentRunner: runtime.InMemoryAgentRunner,
-    createCopilotEndpointSingleRouteExpress: runtime.createCopilotEndpointSingleRouteExpress,
-    BuiltInAgent: agent.BuiltInAgent,
+    CopilotRuntime,
+    InMemoryAgentRunner,
+    createCopilotExpressHandler,
+    BuiltInAgent,
   }
 }
 
@@ -111,7 +131,7 @@ async function main() {
     process.exit(1)
   }
 
-  const { CopilotRuntime, InMemoryAgentRunner, createCopilotEndpointSingleRouteExpress, BuiltInAgent } =
+  const { CopilotRuntime, InMemoryAgentRunner, createCopilotExpressHandler, BuiltInAgent } =
     modules
 
   // 初始化 Agent：默认使用 DeepSeek 的 OpenAI 兼容端点
@@ -140,6 +160,42 @@ async function main() {
       defaultModel: DEEPSEEK_DEFAULT_MODEL,
       defaultBaseUrl: DEEPSEEK_BASE_URL,
     })
+  })
+
+  /* ── AI 路由端点（jcode 集成 · 零侵入） ──
+   * 前端 / Composable 可以在不打断 CopilotKit 默认 /api/ck 流程的前提下，
+   * 通过 POST /api/ck/route 显式询问「这次任务是否走 jcode」。
+   * 命中 jcode + 引擎可用：routeTask 内部走 /api/jcode/swarm；
+   * 未命中 / 引擎不可用：routeTask 透明返回 { engine: 'cloud', skippedJcode } 或
+   * { ok: false, fallbackReason }，调用方按正常云端流程继续即可。
+   *
+   * 请求体：{ task, sessionId, params, context, forceJcode? }
+   * 响应体：{ ok, engine, skippedJcode?, data?, fallbackReason?, message? }
+   */
+  app.post('/api/ck/route', (req, res) => {
+    const body = req.body || {}
+    // 支持两种强制方式：URL 路径 /api/ck/route?force=1 或 body.forceJcode
+    const forceJcode =
+      body.forceJcode === true ||
+      String(req.query.force || '').trim() === '1'
+    // localServerUrl 优先从请求体传入（前端可从 window.electronAPI 拿），
+    // 其次回退到 process.env.WPX_LOCAL_SERVER_URL
+    const localServerUrl =
+      body.localServerUrl || process.env.WPX_LOCAL_SERVER_URL || undefined
+    // fetchImpl 透传服务端 globalThis.fetch（Node 18+ 默认支持）
+    routeTask(body, { forceJcode, localServerUrl })
+      .then((result) => {
+        res.json(result)
+      })
+      .catch((error) => {
+        // 任何未捕获异常都包装为透明降级：不影响 CopilotKit 默认流程
+        console.warn('[copilotkit-runtime] /api/ck/route 未捕获异常:', error?.message || error)
+        res.status(500).json({
+          ok: false,
+          fallbackReason: 'route_error',
+          message: error?.message || String(error),
+        })
+      })
   })
 
   /* ── 头部中间件：每次请求前根据前端 header 动态切换 Agent 模型 ── */
@@ -175,15 +231,31 @@ async function main() {
     } catch (error) {
       console.warn('[copilotkit-runtime] Failed to rebuild agent for request:', error?.message || error)
     }
+
+    // ── jcode 任务提示（零侵入 · 仅记录） ──
+    // 前端可以通过 `x-wpx-task-hint: 'complex' | 'simple' | 'force-jcode'` 标记当前任务的复杂度。
+    // 为了不影响 CopilotKit 默认 /api/ck 流，此处仅将提示记录在 req 与运行时上下文中，
+    // 实际路由决策由前端调用 /api/ck/route 端点决定并按需降级到云端。
+    const taskHint = String(req.headers['x-wpx-task-hint'] || '').trim().toLowerCase()
+    if (taskHint) {
+      req.wpxTaskHint = taskHint
+      runtime.agents = runtime.agents || {}
+      runtime.agents.__wpxMeta = { ...(runtime.agents.__wpxMeta || {}), lastTaskHint: taskHint }
+      if (process.env.WPX_DEBUG_ROUTING === '1') {
+        console.log(`[copilotkit-runtime] x-wpx-task-hint=${taskHint}`)
+      }
+    }
     next()
   })
 
-  /* ── 挂载 CopilotKit 单端点 ── */
+  /* ── 挂载 CopilotKit 多路由模式端点 ── */
   app.use(
     '/api/ck',
-    createCopilotEndpointSingleRouteExpress({
+    createCopilotExpressHandler({
       runtime,
       basePath: '/',
+      mode: 'multi-route',
+      cors: true,
     }),
   )
 
