@@ -53,6 +53,8 @@ const statsModel = require('../models/stats');
 const aiModel = require('../models/ai-model');
 const fontModel = require('../models/font');
 const skillModel = require('../models/skill');
+const skillStatsModel = require('../models/skill-stats');
+const skillHubAdapter = require('../adapters/skillhub-adapter');
 const tokenModel = require('../models/token');
 const announcementModel = require('../models/announcement');
 const versionModel = require('../models/version');
@@ -200,6 +202,17 @@ const updateModel = asyncHandler(async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/models/:id
+ */
+const deleteModel = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!id) throw new BadRequestError('缺少模型 id');
+  const deleted = await aiModel.remove(id);
+  if (!deleted) throw new NotFoundError('模型不存在');
+  return ok(res, { deleted: true });
+});
+
+/**
  * GET /api/admin/models/monitor
  * Query: window=1h|24h|7d（默认 24h）, groupBy=model|kind|status（默认 model）
  */
@@ -326,6 +339,134 @@ const updateSkill = asyncHandler(async (req, res) => {
     }
     throw err;
   }
+});
+
+/**
+ * GET /api/admin/skills/:id/stats
+ * 获取单个技能的调用统计
+ */
+const getSkillStats = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!id) throw new BadRequestError('缺少技能 id');
+  const days = parseInt(req.query.days || '30', 10);
+  const data = await skillStatsModel.getSkillStats(id, { days });
+  return ok(res, data);
+});
+
+/**
+ * GET /api/admin/skills/top/usage
+ * 获取使用排行（Top N），用于仪表盘
+ * Query: days=1&limit=10
+ */
+const getTopSkillUsage = asyncHandler(async (req, res) => {
+  const days = parseInt(req.query.days || '1', 10);
+  const limit = parseInt(req.query.limit || '10', 10);
+  const data = await skillStatsModel.getTopSkills({ days, limit });
+  return ok(res, data);
+});
+
+/**
+ * POST /api/admin/skills/log-usage
+ * Body: { skillId, userId, context?, durationMs?, success? }
+ * 记录技能调用（由前端/AI Router 在技能执行后调用）
+ */
+const logSkillUsage = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  if (!body.skillId) throw new BadRequestError('缺少 skillId');
+  await skillStatsModel.logUsage({
+    skillId: body.skillId,
+    userId: body.userId || req.user?.accountId || 'anonymous',
+    context: body.context,
+    durationMs: body.durationMs,
+    success: body.success !== false
+  });
+  return ok(res, { logged: true });
+});
+
+// =========================
+// SkillHub 在线 Skills
+// =========================
+
+/**
+ * GET /api/admin/skills/online/list
+ * 浏览在线 Skills（从 skillhub.prowpx.com 代理）
+ */
+const listOnlineSkills = asyncHandler(async (req, res) => {
+  const { q, category, page, pageSize, sort } = req.query;
+  const data = await skillHubAdapter.listOnlineSkills({ q, category, page, pageSize, sort });
+  if (!data) {
+    return ok(res, { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+  }
+  return ok(res, data);
+});
+
+/**
+ * GET /api/admin/skills/online/:id
+ * 获取在线 Skill 详情
+ */
+const getOnlineSkill = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const data = await skillHubAdapter.getOnlineSkillDetail(id);
+  if (!data) throw new NotFoundError('在线 Skill 不存在或不可用');
+  return ok(res, data);
+});
+
+/**
+ * POST /api/admin/skills/online/:id/install
+ * 从 SkillHub 下载并安装在线 Skill
+ */
+const installOnlineSkill = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const config = await skillHubAdapter.getSkillInstallConfig(id);
+  if (!config) throw new BadRequestError('无法获取 Skill 安装配置，请检查 SkillHub 是否可用');
+
+  // 检查是否已安装（同 code）
+  const existing = await skillModel.findById(config.code || id);
+  if (existing) {
+    // 已安装：更新
+    const updated = await skillModel.update(existing.id, {
+      name: config.name,
+      description: config.description,
+      systemPrompt: config.systemPrompt,
+      config: config.config,
+      tags: config.tags,
+      enabled: true
+    });
+    return ok(res, { skill: updated, action: 'updated' });
+  }
+
+  // 新安装
+  const created = await skillModel.create({
+    id: config.code || `online-${id}`,
+    name: config.name,
+    code: config.code || id,
+    category: config.category || 'general',
+    description: config.description,
+    systemPrompt: config.systemPrompt,
+    enabled: true,
+    builtin: false,
+    tags: config.tags || [],
+    config: config.config || {},
+    meta: { source: 'skillhub', skillhubId: id, installedAt: new Date().toISOString() }
+  });
+  return ok(res, { skill: created, action: 'installed' });
+});
+
+/**
+ * GET /api/admin/skills/online/check-updates
+ * 检测已安装在线 Skills 的更新
+ */
+const checkSkillUpdates = asyncHandler(async (req, res) => {
+  // 获取所有在线安装的 skills (meta.source === 'skillhub')
+  const params = { page: 1, pageSize: 200 };
+  const localSkills = await skillModel.list(params);
+  const onlineSkills = (localSkills.items || []).filter(
+    s => s.meta && s.meta.source === 'skillhub'
+  );
+  const updates = await skillHubAdapter.checkUpdates(
+    onlineSkills.map(s => ({ id: s.meta.skillhubId || s.code, version: s.meta.version }))
+  );
+  return ok(res, { updates });
 });
 
 // =========================
@@ -651,6 +792,32 @@ const exportLogs = asyncHandler(async (req, res) => {
   return res.status(200).send(buf);
 });
 
+// =========================
+// AnySearch 统计
+// =========================
+
+const anysearchAdapter = require('../adapters/anysearch-adapter');
+
+/**
+ * GET /api/admin/stats/anysearch
+ * 返回 AnySearch 调用统计
+ */
+const getAnysearchStats = asyncHandler(async (req, res) => {
+  const stats = anysearchAdapter.getStats();
+  return ok(res, {
+    todayCalls: stats.todayCalls,
+    todayLimit: stats.dailyLimit,
+    remaining: Math.max(0, stats.dailyLimit - stats.todayCalls),
+    totalCalls: stats.totalCalls,
+    userKeyCalls: stats.userKeyCalls || 0,
+    platformKeyCalls: stats.platformKeyCalls || 0,
+    cacheHits: stats.cacheHits || 0,
+    degradedCount: stats.degradedCount || 0,
+    dailyHistory: stats.dailyHistory || [],
+    domainDistribution: stats.domainDistribution || {}
+  });
+});
+
 module.exports = {
   listUsers,
   getUser,
@@ -661,6 +828,7 @@ module.exports = {
   listModels,
   createModel,
   updateModel,
+  deleteModel,
   getModelMonitor,
   listFonts,
   createFont,
@@ -670,6 +838,13 @@ module.exports = {
   listSkills,
   createSkill,
   updateSkill,
+  getSkillStats,
+  getTopSkillUsage,
+  logSkillUsage,
+  listOnlineSkills,
+  getOnlineSkill,
+  installOnlineSkill,
+  checkSkillUpdates,
   listTokenOrders,
   refundTokenOrder,
   listTokenConsumptions,
@@ -692,5 +867,6 @@ module.exports = {
   updateAdmin,
   deleteAdmin,
   listLogs,
-  exportLogs
+  exportLogs,
+  getAnysearchStats
 };

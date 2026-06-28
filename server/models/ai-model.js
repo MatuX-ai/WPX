@@ -208,11 +208,17 @@ async function monitor({ window: win = '24h', groupBy = 'model' } = {}) {
   };
 }
 
+async function remove(id) {
+  const res = await db.query(`DELETE FROM ${TABLE} WHERE id = $1`, [id]);
+  return res.rowCount > 0;
+}
+
 module.exports = {
   ALLOWED_TYPE,
   list,
   findById,
   create,
   update,
+  remove,
   monitor
 };

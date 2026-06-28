@@ -190,6 +190,7 @@ async function stats(id, { window: win = '7d', kind } = {}) {
   const summary = summaryRes.rows[0] || {};
 
   // 每日趋势
+  const dailyInterval = win === '1h' || win === '24h' ? "INTERVAL '1 day'" : win === '7d' ? "INTERVAL '6 days'" : "INTERVAL '29 days'"
   const dailySql = `
     SELECT
       created_at::date AS date,
@@ -197,7 +198,7 @@ async function stats(id, { window: win = '7d', kind } = {}) {
       COUNT(DISTINCT account_id)::int AS users
     FROM ${LOG_TABLE}
     WHERE font_id = $1
-      AND created_at::date >= CURRENT_DATE - (INTERVAL '${win === '1h' ? '1 day' : (win === '24h' ? '1 day' : (win === '7d' ? '6 days' : '29 days'))}')::interval
+      AND created_at::date >= CURRENT_DATE - ${dailyInterval}
       ${kindClause.join(' ')}
     GROUP BY 1
     ORDER BY 1

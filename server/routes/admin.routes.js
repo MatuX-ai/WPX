@@ -17,6 +17,7 @@ router.delete('/users/:id', requireAuth, requireRole('admin'), ctrl.deleteUser);
 // 统计
 router.get('/stats/dashboard', requireAuth, requireRole('admin'), ctrl.getDashboard);
 router.get('/stats/trends', requireAuth, requireRole('admin'), ctrl.getTrends);
+router.get('/stats/anysearch', requireAuth, requireRole('admin'), ctrl.getAnysearchStats);
 
 // 模型管理
 // 注意：/monitor 必须在 /:id 之前注册，避免被参数路由抢走
@@ -24,6 +25,7 @@ router.get('/models/monitor', requireAuth, requireRole('admin'), ctrl.getModelMo
 router.get('/models', requireAuth, requireRole('admin'), ctrl.listModels);
 router.post('/models', requireAuth, requireRole('admin'), ctrl.createModel);
 router.put('/models/:id', requireAuth, requireRole('admin'), ctrl.updateModel);
+router.delete('/models/:id', requireAuth, requireRole('admin'), ctrl.deleteModel);
 
 // 字体管理
 router.get('/fonts', requireAuth, requireRole('admin'), ctrl.listFonts);
@@ -33,8 +35,16 @@ router.put('/fonts/:id/status', requireAuth, requireRole('admin'), ctrl.updateFo
 router.get('/fonts/:id/stats', requireAuth, requireRole('admin'), ctrl.getFontStats);
 
 // Skills 管理
+// 注意：/stats /top /online 等具体路径必须在 /:id 之前注册
+router.get('/skills/online/list', requireAuth, requireRole('admin'), ctrl.listOnlineSkills);
+router.get('/skills/online/check-updates', requireAuth, requireRole('admin'), ctrl.checkSkillUpdates);
+router.get('/skills/online/:id', requireAuth, requireRole('admin'), ctrl.getOnlineSkill);
+router.post('/skills/online/:id/install', requireAuth, requireRole('admin'), ctrl.installOnlineSkill);
+router.get('/skills/top/usage', requireAuth, requireRole('admin'), ctrl.getTopSkillUsage);
+router.post('/skills/log-usage', requireAuth, requireRole('admin'), ctrl.logSkillUsage);
 router.get('/skills', requireAuth, requireRole('admin'), ctrl.listSkills);
 router.post('/skills', requireAuth, requireRole('admin'), ctrl.createSkill);
+router.get('/skills/:id/stats', requireAuth, requireRole('admin'), ctrl.getSkillStats);
 router.put('/skills/:id', requireAuth, requireRole('admin'), ctrl.updateSkill);
 
 // Token 管理

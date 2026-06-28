@@ -5,6 +5,12 @@
 
 const db = require('./db');
 
+// 索引优化提示（如果出现性能问题，建议添加复合索引）：
+//   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_status_created
+//     ON payments (status, created_at);
+//   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_events_kind_created
+//     ON usage_events (kind, created_at);
+
 /**
  * 顶部卡片数据
  *   - dau:           24h 内活跃用户数（按 usage_events 去重）

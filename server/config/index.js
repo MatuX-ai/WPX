@@ -91,6 +91,12 @@ const config = {
   }
 };
 
+// 生产环境禁止 bypass 认证
+if (config.env === 'production' && config.auth.bypass) {
+  console.error('[config] FATAL: AUTH_BYPASS=true 不允许在生产环境使用，拒绝启动');
+  process.exit(1);
+}
+
 // 启动时打印关键配置（隐藏敏感字段）
 function describe() {
   const safe = JSON.parse(JSON.stringify(config));

@@ -18,8 +18,8 @@ function format(level, msg, meta) {
     ...(meta && typeof meta === 'object' ? meta : {})
   };
   if (entry.msg instanceof Error) {
-    entry.msg = entry.msg.message;
     entry.stack = entry.msg.stack;
+    entry.msg = entry.msg.message;
   }
   return JSON.stringify(entry);
 }
