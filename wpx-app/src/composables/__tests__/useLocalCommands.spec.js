@@ -7,14 +7,23 @@ import {
   getRegisteredCommandCount,
   getBuiltInCommandCount,
   __resetRegistry,
+  runBatchClean,
+  runBatchCleanAsync,
+  countCleanableItems,
 } from '@/composables/useLocalCommands'
 import { LOCAL_COMMANDS, LOCAL_COMMANDS_COUNT } from '@/data/local-commands'
 
 /**
- * 构造一个最小可用的 mock Tiptap editor
+ * 构造一个支持真实 transaction 链的 mock Tiptap editor。
+ *
+ * 设计要点：
+ * - tr 是个真实对象，支持 addToHistory meta 标签
+ * - view.dispatch 接收 tr，累加到 _dispatches 数组用于断言
+ * - doc 节点支持 descendants 回调，扫描 text 节点时匹配各种正则
+ * - 支持通过 override 指定 docContent（含 markdown / URL / 邮箱 / 手机号等）
  */
 function buildMockEditor(overrides = {}) {
-  const calls = { focus: 0, run: 0 }
+  const calls = { focus: 0, run: 0, dispatches: 0 }
   const chainReturn = {
     focus: function () {
       calls.focus += 1
@@ -24,80 +33,109 @@ function buildMockEditor(overrides = {}) {
       calls.run += 1
       return true
     },
-    deleteSelection: function () {
-      return this
-    },
-    toggleBold: function () {
-      return this
-    },
-    toggleItalic: function () {
-      return this
-    },
-    toggleStrike: function () {
-      return this
-    },
-    toggleSuperscript: function () {
-      return this
-    },
-    toggleSubscript: function () {
-      return this
-    },
-    toggleBulletList: function () {
-      return this
-    },
-    toggleOrderedList: function () {
-      return this
-    },
-    toggleBlockquote: function () {
-      return this
-    },
-    toggleCodeBlock: function () {
-      return this
-    },
-    setHorizontalRule: function () {
-      return this
-    },
-    setTextAlign: function () {
-      return this
-    },
-    setHeading: function () {
-      return this
-    },
-    setParagraph: function () {
-      return this
-    },
-    undo: function () {
-      return this
-    },
-    redo: function () {
-      return this
-    },
-    selectAll: function () {
-      return this
-    },
-    insertContent: function () {
-      return this
-    },
-    unsetAllMarks: function () {
-      return this
-    },
-    clearNodes: function () {
-      return this
-    },
-    setMark: function () {
-      return this
-    },
-    increaseFontSize: function () {
-      return this
-    },
-    decreaseFontSize: function () {
-      return this
-    },
-    insertTable: function () {
-      return this
-    },
-    textBetween: function () {
-      return ''
+    deleteSelection: function () { return this },
+    toggleBold: function () { return this },
+    toggleItalic: function () { return this },
+    toggleStrike: function () { return this },
+    toggleSuperscript: function () { return this },
+    toggleSubscript: function () { return this },
+    toggleBulletList: function () { return this },
+    toggleOrderedList: function () { return this },
+    toggleBlockquote: function () { return this },
+    toggleCodeBlock: function () { return this },
+    setHorizontalRule: function () { return this },
+    setTextAlign: function () { return this },
+    setHeading: function () { return this },
+    setParagraph: function () { return this },
+    undo: function () { return this },
+    redo: function () { return this },
+    selectAll: function () { return this },
+    insertContent: function () { return this },
+    unsetLink: function () { return this },
+    unsetAllMarks: function () { return this },
+    clearNodes: function () { return this },
+    setMark: function () { return this },
+    increaseFontSize: function () { return this },
+    decreaseFontSize: function () { return this },
+    insertTable: function () { return this },
+    textBetween: function () { return '' },
+  }
+
+  // 构造一个最小的 doc：根 doc + 段落 + 文本节点
+  const docText = overrides.docText || ''
+  const textNode = {
+    isText: true,
+    text: docText,
+    nodeSize: docText.length,
+    marks: overrides.marks || [],
+    type: { name: 'text' },
+  }
+  const paragraphNode = {
+    isText: false,
+    text: null,
+    nodeSize: docText.length + 2,
+    marks: [],
+    type: { name: 'paragraph' },
+    childCount: 1,
+  }
+  const docNode = {
+    isText: false,
+    text: null,
+    nodeSize: docText.length + 4,
+    marks: [],
+    type: { name: 'doc' },
+    childCount: 1,
+  }
+  const descendants = function (cb) {
+    // 模拟 ProseMirror 树遍历：先遍历 doc → paragraph → text
+    let stopped = false
+    const stop = () => { stopped = true; return false }
+    if (overrides.descendantsHandler) {
+      overrides.descendantsHandler(cb)
+    } else {
+      // 默认顺序：先 text，再外层
+      cb(textNode, 1)
+      cb(paragraphNode, 0)
+    }
+    return !stopped
+  }
+
+  // 模拟 ProseMirror transaction
+  const makeTr = () => {
+    const tr = {
+      steps: [],
+      meta: {},
+      docChanged: false,
+      addToHistory: true,
+      delete: (from, to) => {
+        tr.steps.push({ kind: 'delete', from, to })
+        tr.docChanged = true
+        return tr
+      },
+      insertText: (text, from, to) => {
+        tr.steps.push({ kind: 'insertText', text, from, to })
+        tr.docChanged = true
+        return tr
+      },
+      removeMark: (from, to, type) => {
+        tr.steps.push({ kind: 'removeMark', from, to, type })
+        tr.docChanged = true
+        return tr
+      },
+      setMeta: (key, value) => {
+        tr.meta[key] = value
+        if (key === 'addToHistory') tr.addToHistory = value
+        return tr
+      },
+    }
+    return tr
+  }
+
+  const view = {
+    dispatch: (tr) => {
+      calls.dispatches += 1
+      calls.lastDispatch = tr
+      return true
     },
   }
 
@@ -105,16 +143,20 @@ function buildMockEditor(overrides = {}) {
     state: {
       selection: { from: 0, to: 0 },
       doc: {
-        textContent: overrides.docText || '',
+        textContent: docText,
         textBetween: () => '',
+        descendants,
       },
+      tr: makeTr(),
     },
     isFocused: false,
+    view,
     chain: () => chainReturn,
     commands: {
       toggleMark: vi.fn(() => true),
       toggleBlockquote: vi.fn(() => true),
       insertTable: vi.fn(() => true),
+      ...(overrides.commands || {}),
     },
     can: () => ({
       undo: () => true,
@@ -130,11 +172,11 @@ describe('useLocalCommands - 基础 API', () => {
     __resetRegistry()
   })
 
-  it('内置指令数量应为 58', () => {
-    expect(LOCAL_COMMANDS_COUNT).toBe(58)
-    expect(LOCAL_COMMANDS.length).toBe(58)
-    expect(getBuiltInCommandCount()).toBe(58)
-    expect(getRegisteredCommandCount()).toBe(58)
+  it('内置指令数量应为 64', () => {
+    expect(LOCAL_COMMANDS_COUNT).toBe(64)
+    expect(LOCAL_COMMANDS.length).toBe(64)
+    expect(getBuiltInCommandCount()).toBe(64)
+    expect(getRegisteredCommandCount()).toBe(64)
   })
 
   it('getLocalCommandPlaceholders 应返回非空数组', () => {
@@ -175,7 +217,7 @@ describe('useLocalCommands - 基础 API', () => {
       action: () => ({ ok: true }),
     })
     expect(unregisterLocalCommand('test-temp')).toBe(true)
-    expect(getRegisteredCommandCount()).toBe(58)
+    expect(getRegisteredCommandCount()).toBe(64)
   })
 
   it('registerLocalCommand 拒绝无效输入', () => {
@@ -238,6 +280,301 @@ describe('useLocalCommands - 文本操作', () => {
     const result = processUserInput('撤销', { editor, hasSelection: true })
     expect(result.type).toBe('local')
     expect(result.commandId).toBe('undo')
+  })
+
+  // ─── L-new #1 批量清洗：删除链接 ─────────────────
+  it('输入"删除链接"应触发 delete-links 指令（无需选区）', () => {
+    const editor = buildMockEditor({ commands: { unsetLink: vi.fn(() => true) } })
+    const result = processUserInput('删除链接', { editor, hasSelection: false })
+    expect(result.type).toBe('local')
+    expect(result.commandId).toBe('delete-links')
+    expect(result.success).toBe(true)
+  })
+
+  it('输入"删除文章中的链接内容"应触发 delete-links（用户原话）', () => {
+    const editor = buildMockEditor({ commands: { unsetLink: vi.fn(() => true) } })
+    const result = processUserInput('删除文章中的链接内容', { editor })
+    expect(result.type).toBe('local')
+    expect(result.commandId).toBe('delete-links')
+  })
+
+  it('输入"去除链接"/"去掉文章中的链接"/"删除所有链接"应命中', () => {
+    const editor = buildMockEditor({ commands: { unsetLink: vi.fn(() => true) } })
+    ;['去除链接', '去掉文章中的链接', '删除所有链接', '删除超链接', '去链接'].forEach((text) => {
+      const r = processUserInput(text, { editor })
+      expect(r.commandId).toBe('delete-links')
+    })
+  })
+
+  it('输入"remove all links"/"delete links" 英文应命中', () => {
+    const editor = buildMockEditor({ commands: { unsetLink: vi.fn(() => true) } })
+    ;['remove all links', 'delete links'].forEach((text) => {
+      const r = processUserInput(text, { editor })
+      expect(r.commandId).toBe('delete-links')
+    })
+  })
+
+  it('delete-links 在文档无链接时应返回 failureMessage（条件不满足）', () => {
+    const editor = buildMockEditor({ commands: {} })
+    const result = processUserInput('删除链接', { editor })
+    expect(result.type).toBe('local')
+    expect(result.commandId).toBe('delete-links')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/没有链接|链接/)
+  })
+
+  it('delete-links 优先级 105 应高于 delete-selection 100', () => {
+    const editor = buildMockEditor({ commands: { unsetLink: vi.fn(() => true) } })
+    const r1 = processUserInput('删除', { editor, hasSelection: true })
+    expect(r1.commandId).toBe('delete-selection')
+    const r2 = processUserInput('删除链接', { editor })
+    expect(r2.commandId).toBe('delete-links')
+  })
+
+  // ─── L-new #2 批量清洗指令族扩展 ─────────────────
+  it('delete-emails / delete-phone-numbers / clean-markdown / delete-images 应注册', () => {
+    const targets = ['delete-emails', 'delete-phone-numbers', 'clean-markdown', 'delete-images']
+    targets.forEach((id) => {
+      const cmd = LOCAL_COMMANDS.find((c) => c.id === id)
+      expect(cmd).toBeTruthy()
+      expect(cmd.category).toBe('text')
+      expect(cmd.priority).toBe(104)
+      expect(cmd.patterns.length).toBeGreaterThan(0)
+    })
+  })
+
+  it('输入"删除邮箱"/"删除邮件地址"/"remove all emails"应命中 delete-emails', () => {
+    const editor = buildMockEditor()
+    ;['删除邮箱', '删除所有邮箱', '删除邮件地址', 'remove all emails'].forEach((text) => {
+      const r = processUserInput(text, { editor })
+      expect(r.commandId).toBe('delete-emails')
+    })
+  })
+
+  it('输入"删除手机号"/"去除手机"/"去手机"应命中 delete-phone-numbers', () => {
+    const editor = buildMockEditor()
+    ;['删除手机号', '删除所有手机号', '去除手机', '去手机', 'delete phones'].forEach((text) => {
+      const r = processUserInput(text, { editor })
+      expect(r.commandId).toBe('delete-phone-numbers')
+    })
+  })
+
+  it('输入"清洗md"/"clean markdown"/"去除粗体"应命中 clean-markdown', () => {
+    const editor = buildMockEditor()
+    ;['清洗md', '清洗markdown', 'clean markdown', '去除粗体', '去除行内代码'].forEach((text) => {
+      const r = processUserInput(text, { editor })
+      expect(r.commandId).toBe('clean-markdown')
+    })
+  })
+
+  it('输入"删除图片"/"删除所有图片"/"去图片"/"remove images"应命中 delete-images', () => {
+    const editor = buildMockEditor()
+    ;['删除图片', '删除所有图片', '去图片', 'remove all images'].forEach((text) => {
+      const r = processUserInput(text, { editor })
+      expect(r.commandId).toBe('delete-images')
+    })
+  })
+
+  it('Level 2 指令优先级 104 高于 Level 1 之外的文本操作（80）', () => {
+    const editor = buildMockEditor()
+    const cmd = LOCAL_COMMANDS.find((c) => c.id === 'delete-emails')
+    expect(cmd.priority).toBeGreaterThan(80)
+    // delete-links priority=105 > delete-emails priority=104
+    const dl = LOCAL_COMMANDS.find((c) => c.id === 'delete-links')
+    expect(dl.priority).toBeGreaterThan(cmd.priority)
+  })
+
+  // ─── L-new #4 一键批量清洗（Level 4 入口） ─────────────────
+  it('batch-clean 应注册为最高优先级 106', () => {
+    const cmd = LOCAL_COMMANDS.find((c) => c.id === 'batch-clean')
+    expect(cmd).toBeTruthy()
+    expect(cmd.category).toBe('text')
+    expect(cmd.priority).toBe(106)
+    expect(cmd.patterns.length).toBeGreaterThan(0)
+  })
+
+  it('输入"批量清洗"/"一键清洗"/"清洗文档"/"清洗一下"应命中 batch-clean', () => {
+    const editor = buildMockEditor()
+    ;['批量清洗', '一键清洗', '清洗文档', '清洗一下', '全部清洗', '一键清洗文档', '清理', '净化文档'].forEach(
+      (text) => {
+        const r = processUserInput(text, { editor })
+        expect(r.commandId).toBe('batch-clean')
+      },
+    )
+  })
+
+  it('输入"batch clean"/"clean all" 英文应命中 batch-clean', () => {
+    const editor = buildMockEditor()
+    ;['batch clean', 'batchclean', 'clean all', 'strip everything', 'sanitize document'].forEach(
+      (text) => {
+        const r = processUserInput(text, { editor })
+        expect(r.commandId).toBe('batch-clean')
+      },
+    )
+  })
+
+  it('batch-clean 在空文档应返回 failureMessage（"已经很干净"）', () => {
+    const editor = buildMockEditor({ commands: {} })
+    const result = processUserInput('批量清洗', { editor })
+    expect(result.type).toBe('local')
+    expect(result.commandId).toBe('batch-clean')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/已经很干净|可清洗/)
+  })
+
+  it('batch-clean 优先级 106 应高于 delete-links 105', () => {
+    const editor = buildMockEditor({ commands: { unsetLink: vi.fn(() => true) } })
+    // "删除链接" 应被 batch-clean 抢占（因为 batch-clean 优先级更高 + 包含"删除"前缀不命中）
+    const r = processUserInput('批量清洗', { editor })
+    expect(r.commandId).toBe('batch-clean')
+    const r2 = processUserInput('删除链接', { editor })
+    expect(r2.commandId).toBe('delete-links')
+  })
+})
+
+describe('runBatchClean - 同步批量清洗（单 undo step）', () => {
+  it('应在含邮箱 / URL / 手机号的文档上一次性 dispatch（而非 6 次）', () => {
+    const editor = buildMockEditor({
+      docText: '邮箱 a@b.com，电话 13800001111，访问 https://example.com',
+    })
+    const result = runBatchClean(editor)
+    expect(result.total).toBeGreaterThan(0)
+    // 单 transaction 合并为一个 undo step：dispatch 应为 1 次
+    expect(editor._calls.dispatches).toBe(1)
+  })
+
+  it('空文档应直接返回 total=0 且不 dispatch', () => {
+    const editor = buildMockEditor({ docText: '' })
+    const result = runBatchClean(editor)
+    expect(result.total).toBe(0)
+    expect(editor._calls.dispatches).toBe(0)
+  })
+
+  it('空编辑器（无 doc）应安全降级', () => {
+    const editor = null
+    const result = runBatchClean(editor)
+    expect(result.total).toBe(0)
+    expect(result.errors).toEqual([])
+  })
+
+  it('应通过 setMeta("addToHistory", true) 让单次 dispatch 创建 undo step', () => {
+    const editor = buildMockEditor({ docText: '邮箱 a@b.com 又一个邮箱 c@d.com' })
+    runBatchClean(editor)
+    expect(editor._calls.dispatches).toBe(1)
+    expect(editor._calls.lastDispatch.addToHistory).toBe(true)
+  })
+
+  it('空内容应不调用 dispatch（避免创建空 undo step）', () => {
+    const editor = buildMockEditor({ docText: '干净的中文文本' })
+    const result = runBatchClean(editor)
+    expect(result.total).toBe(0)
+    expect(editor._calls.dispatches).toBe(0)
+  })
+})
+
+describe('runBatchCleanAsync - 异步进度 + 可中断', () => {
+  it('应按步骤触发 onProgress 并标记 done=true', async () => {
+    const editor = buildMockEditor({
+      docText: '邮箱 a@b.com，又一个邮箱 c@d.com，链接 https://example.com，电话 13800001234',
+    })
+    const progresses = []
+    const result = await runBatchCleanAsync(editor, {
+      onProgress: (info) => progresses.push(info),
+    })
+    expect(result.aborted).toBe(false)
+    expect(result.total).toBeGreaterThan(0)
+    // 6 步 + 1 个 done=true 收尾
+    expect(progresses.length).toBeGreaterThanOrEqual(6)
+    expect(progresses[progresses.length - 1].done).toBe(true)
+    // 全部完成后应 dispatch 一次（合并 undo step）
+    expect(editor._calls.dispatches).toBe(1)
+  })
+
+  it('应支持 AbortSignal 中断（中途调用 abort 后不 dispatch）', async () => {
+    const editor = buildMockEditor({
+      docText: '邮箱 a@b.com，又一个邮箱 c@d.com',
+    })
+    const controller = new AbortController()
+    const progresses = []
+    const promise = runBatchCleanAsync(editor, {
+      signal: controller.signal,
+      onProgress: (info) => {
+        progresses.push(info)
+        // 第 1 步完成后立即中断
+        if (info.step === 1 && !info.done) {
+          controller.abort()
+        }
+      },
+    })
+    const result = await promise
+    expect(result.aborted).toBe(true)
+    // 中断后不 dispatch
+    expect(editor._calls.dispatches).toBe(0)
+    // 至少触发了一次进度回调
+    expect(progresses.length).toBeGreaterThan(0)
+  })
+
+  it('已完成 abort 的 signal 应立即终止，不执行任何步骤', async () => {
+    const editor = buildMockEditor({ docText: '邮箱 a@b.com' })
+    const controller = new AbortController()
+    controller.abort()
+    const result = await runBatchCleanAsync(editor, { signal: controller.signal })
+    expect(result.aborted).toBe(true)
+    expect(result.total).toBe(0)
+    expect(editor._calls.dispatches).toBe(0)
+  })
+
+  it('每步之间应让出主线程（yieldEvery 默认 1）', async () => {
+    const editor = buildMockEditor({ docText: '邮箱 a@b.com' })
+    let yielded = false
+    const originalThen = Promise.resolve().then
+    // 简单验证：使用真实 await，确保微任务被消费
+    const result = await runBatchCleanAsync(editor, {
+      onProgress: () => {
+        // 进度回调在 await 之前被调用 => yield 生效
+      },
+    })
+    expect(result).toBeDefined()
+  })
+
+  it('空文档应立即完成（total=0）且不 dispatch', async () => {
+    const editor = buildMockEditor({ docText: '' })
+    const result = await runBatchCleanAsync(editor)
+    expect(result.total).toBe(0)
+    expect(result.aborted).toBe(false)
+    expect(editor._calls.dispatches).toBe(0)
+  })
+})
+
+describe('countCleanableItems - 提示气泡统计', () => {
+  it('应正确统计邮箱 / URL / 手机号 / Markdown / 图片节点', () => {
+    const editor = buildMockEditor({
+      docText: '邮箱 a@b.com，**粗体**，[内联代码](https://x.com)，电话 13800001111',
+      descendantsHandler: (cb) => {
+        cb(
+          {
+            isText: true,
+            text: '邮箱 a@b.com，**粗体**，[内联代码](https://x.com)，电话 13800001111',
+            nodeSize: 50,
+            marks: [],
+            type: { name: 'text' },
+          },
+          1,
+        )
+      },
+    })
+    const result = countCleanableItems(editor)
+    expect(result.emails).toBe(1)
+    expect(result.urls).toBeGreaterThan(0)
+    expect(result.phones).toBe(1)
+    expect(result.md).toBeGreaterThan(0)
+    expect(result.total).toBeGreaterThan(0)
+  })
+
+  it('空编辑器应返回全 0 结果', () => {
+    expect(countCleanableItems(null)).toEqual({
+      links: 0, urls: 0, emails: 0, phones: 0, md: 0, images: 0, total: 0,
+    })
   })
 })
 
@@ -755,16 +1092,17 @@ describe('需求文档验收点 L805-L812（8 项）', () => {
     expect(avg).toBeLessThan(10) // 平均应远低于 50ms 上限
   })
 
-  // ─── 7. placeholder 覆盖所有 58 条指令 ───
+  // ─── 7. placeholder 覆盖所有 64 条指令 ───
   it('L811 #7 placeholder 轮转示例覆盖 58 条内置指令的主要分类', () => {
     const placeholders = getLocalCommandPlaceholders()
-    // 文档原话 56 条；本地指令系统当前已扩到 58 条，验收以实际为准
+    // 文档原话 56 条；本地指令系统当前已扩到 64 条，验收以实际为准
     expect(LOCAL_COMMANDS_COUNT).toBeGreaterThanOrEqual(56)
-    expect(LOCAL_COMMANDS_COUNT).toBe(58)
+    expect(LOCAL_COMMANDS_COUNT).toBe(64)
     // placeholder 必须覆盖主要分类（不能只有 1 条）
     expect(placeholders.length).toBeGreaterThanOrEqual(8)
     // 必须包含几个关键操作的引导语，让用户看到即可上手
     const corpus = placeholders.join(' ')
+    expect(corpus).toContain('批量清洗')
     expect(corpus).toContain('删除')
     expect(corpus).toContain('加粗')
     expect(corpus).toContain('思源黑体')

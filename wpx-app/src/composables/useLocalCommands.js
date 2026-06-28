@@ -16,6 +16,9 @@ import {
   LOCAL_COMMANDS,
   LOCAL_COMMAND_PLACEHOLDERS,
   LOCAL_COMMANDS_COUNT,
+  countCleanableItems,
+  runBatchClean,
+  runBatchCleanAsync,
 } from '@/data/local-commands'
 
 /**
@@ -263,6 +266,12 @@ export function __resetRegistry() {
   registry.splice(0, registry.length, ...LOCAL_COMMANDS)
 }
 
+export {
+  countCleanableItems,
+  runBatchClean,
+  runBatchCleanAsync,
+}
+
 /**
  * 便捷 hook：在 Vue 组件中使用
  */
@@ -274,6 +283,9 @@ export function useLocalCommands() {
     getRegisteredCommandCount,
     getLocalCommandPlaceholders,
     getBuiltInCommandCount,
+    countCleanableItems,
+    runBatchClean,
+    runBatchCleanAsync,
   }
 }
 
@@ -284,5 +296,8 @@ export default {
   getRegisteredCommandCount,
   getLocalCommandPlaceholders,
   getBuiltInCommandCount,
+  countCleanableItems,
+  runBatchClean,
+  runBatchCleanAsync,
   useLocalCommands,
 }

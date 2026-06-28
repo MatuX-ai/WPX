@@ -1,7 +1,7 @@
-/**
+﻿/**
  * WPX AI 本地指令数据定义
  *
- * 定义 56 个本地指令的结构化元数据：
+ * 定义 64 个本地指令的结构化元数据：
  * - id        唯一标识
  * - category  分类
  * - patterns  匹配正则数组（任一命中即触发）
@@ -59,9 +59,578 @@ function hasContent(ctx) {
   return false
 }
 
-// ── 文本操作（CMD-001 ~ CMD-007）─────────────────────
+// ── 批量清洗工具：删除链接（保留链接文字）────────────
+
+/**
+ * 移除文档中所有 link mark（保留链接文字）。
+ *
+ * 支持两种调用模式：
+ * - 默认模式：自创建 transaction → dispatch → 产生独立的 undo step
+ * - 共享模式（options.sharedTransaction != null）：仅把操作追加到共享 tr，不 dispatch
+ *   由调用方统一负责 dispatch 与 undo history 合并。
+ *
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ sharedTransaction?: object, skipDispatch?: boolean }} [options]
+ * @returns {number} 移除的 link mark 数量
+ */
+function stripAllLinks(editor, options = {}) {
+  let removed = 0
+  if (!editor || !editor.state || !editor.state.doc) return 0
+  const { state, view } = editor
+  const tr = options.sharedTransaction || state.tr
+  state.doc.descendants((node, pos) => {
+    if (node && node.isText) {
+      const linkMarks = (node.marks || []).filter((m) => m && m.type && m.type.name === 'link')
+      linkMarks.forEach((m) => {
+        tr.removeMark(pos, pos + node.nodeSize, m.type)
+        removed += 1
+      })
+    }
+    return true
+  })
+  if (removed > 0 && !options.sharedTransaction && !options.skipDispatch) {
+    view.dispatch(tr)
+  }
+  return removed
+}
+
+/**
+ * 删除文档中所有 URL 纯文本（如 https://example.com/foo）。支持共享 transaction。
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ sharedTransaction?: object, skipDispatch?: boolean }} [options]
+ * @returns {number} 删除的 URL 数量
+ */
+const URL_PATTERN = /https?:\/\/[^\s)）\]】」>]+/g
+function stripAllUrls(editor, options = {}) {
+  if (!editor || !editor.state || !editor.state.doc) return 0
+  const { state, view } = editor
+  const tr = options.sharedTransaction || state.tr
+  const ranges = []
+  state.doc.descendants((node, pos) => {
+    if (!node || !node.isText || !node.text) return true
+    URL_PATTERN.lastIndex = 0
+    let m
+    while ((m = URL_PATTERN.exec(node.text)) !== null) {
+      ranges.push({ from: pos + m.index, to: pos + m.index + m[0].length })
+    }
+    return true
+  })
+  // 从后往前删，避免位置漂移
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    tr.delete(ranges[i].from, ranges[i].to)
+  }
+  if (ranges.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
+    view.dispatch(tr)
+  }
+  return ranges.length
+}
+
+// ── 批量清洗工具集（Level 2 扩展）───────────────────────
+
+/**
+ * 删除文档中所有邮箱地址。支持共享 transaction。
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ sharedTransaction?: object, skipDispatch?: boolean }} [options]
+ * @returns {number} 删除数量
+ */
+const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+function stripAllEmails(editor, options = {}) {
+  if (!editor || !editor.state || !editor.state.doc) return 0
+  const { state, view } = editor
+  const tr = options.sharedTransaction || state.tr
+  const ranges = []
+  state.doc.descendants((node, pos) => {
+    if (!node || !node.isText || !node.text) return true
+    EMAIL_PATTERN.lastIndex = 0
+    let m
+    while ((m = EMAIL_PATTERN.exec(node.text)) !== null) {
+      ranges.push({ from: pos + m.index, to: pos + m.index + m[0].length })
+    }
+    return true
+  })
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    tr.delete(ranges[i].from, ranges[i].to)
+  }
+  if (ranges.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
+    view.dispatch(tr)
+  }
+  return ranges.length
+}
+
+/**
+ * 删除文档中所有中国大陆手机号（11 位、1[3-9] 开头，前后无数字）。支持共享 transaction。
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ sharedTransaction?: object, skipDispatch?: boolean }} [options]
+ * @returns {number} 删除数量
+ */
+const PHONE_PATTERN = /(?<!\d)1[3-9]\d{9}(?!\d)/g
+function stripAllPhoneNumbers(editor, options = {}) {
+  if (!editor || !editor.state || !editor.state.doc) return 0
+  const { state, view } = editor
+  const tr = options.sharedTransaction || state.tr
+  const ranges = []
+  state.doc.descendants((node, pos) => {
+    if (!node || !node.isText || !node.text) return true
+    PHONE_PATTERN.lastIndex = 0
+    let m
+    while ((m = PHONE_PATTERN.exec(node.text)) !== null) {
+      ranges.push({ from: pos + m.index, to: pos + m.index + m[0].length })
+    }
+    return true
+  })
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    tr.delete(ranges[i].from, ranges[i].to)
+  }
+  if (ranges.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
+    view.dispatch(tr)
+  }
+  return ranges.length
+}
+
+/**
+ * 清洗 Markdown 标记（去掉 ** / # / ` / ~~ / 引用等），保留文字。
+ * 使用正则按行处理，避免破坏正文。支持共享 transaction。
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ sharedTransaction?: object, skipDispatch?: boolean }} [options]
+ * @returns {number} 修改的行数
+ */
+const MD_INLINE_PATTERNS = [
+  /\*\*([^*]+)\*\*/g,   // **粗体**
+  /(?<!\*)\*(?!\*)([^*]+)\*(?!\*)/g, // *斜体*
+  /~~([^~]+)~~/g,          // ~~删除线~~
+  /`([^`]+)`/g,            // `行内代码`
+]
+function stripMarkdownSyntax(editor, options = {}) {
+  if (!editor || !editor.state || !editor.state.doc) return 0
+  const { state, view } = editor
+  const tr = options.sharedTransaction || state.tr
+  const ranges = []
+  state.doc.descendants((node, pos) => {
+    if (!node || !node.isText || !node.text) return true
+    const text = node.text
+    // 收集所有替换区间（含模式 + 标题标记 #）
+    MD_INLINE_PATTERNS.forEach((p) => {
+      p.lastIndex = 0
+      let m
+      while ((m = p.exec(text)) !== null) {
+        // 替换为第 1 个捕获组（不带包裹符号）
+        ranges.push({ from: pos + m.index, to: pos + m.index + m[0].length, replacement: m[1] || '' })
+      }
+    })
+    return true
+  })
+  // 倒序替换
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    const r = ranges[i]
+    tr.insertText(r.replacement, r.from, r.to)
+  }
+  if (ranges.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
+    view.dispatch(tr)
+  }
+  return ranges.length
+}
+
+/**
+ * 删除文档中所有图片节点。支持共享 transaction。
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ sharedTransaction?: object, skipDispatch?: boolean }} [options]
+ * @returns {number} 删除数量
+ */
+function stripAllImages(editor, options = {}) {
+  if (!editor || !editor.state || !editor.state.doc) return 0
+  const { state, view } = editor
+  const tr = options.sharedTransaction || state.tr
+  const positions = []
+  state.doc.descendants((node, pos) => {
+    if (node && node.type && node.type.name === 'image') {
+      positions.push(pos)
+    }
+    return true
+  })
+  for (let i = positions.length - 1; i >= 0; i -= 1) {
+    tr.delete(positions[i], positions[i] + 1)
+  }
+  if (positions.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
+    view.dispatch(tr)
+  }
+  return positions.length
+}
+
+// ── 批量清洗聚合工具（Level 3 提示气泡配套）─────────
+
+/**
+ * 统计文档中"可被批量清洗"的项目数量。
+ * 返回结构便于 UI 聚合提示：「检测到 N 处链接 / M 处邮箱 ...」。
+ *
+ * 注意：这是只读统计，不修改文档；调用方需自行节流以避免大文档卡顿。
+ *
+ * @param {import('@tiptap/core').Editor | null} editor
+ * @returns {{ links: number, urls: number, emails: number, phones: number, md: number, images: number, total: number }}
+ */
+function countCleanableItems(editor) {
+  const result = { links: 0, urls: 0, emails: 0, phones: 0, md: 0, images: 0, total: 0 }
+  if (!editor || !editor.state || !editor.state.doc) return result
+
+  const { state } = editor
+  state.doc.descendants((node) => {
+    if (!node) return true
+    // 文本节点：扫描 URL / 邮箱 / 手机号 / Markdown 标记
+    if (node.isText && node.text) {
+      const text = node.text
+      // 邮箱
+      EMAIL_PATTERN.lastIndex = 0
+      let m
+      while ((m = EMAIL_PATTERN.exec(text)) !== null) result.emails += 1
+      // 手机号
+      PHONE_PATTERN.lastIndex = 0
+      while ((m = PHONE_PATTERN.exec(text)) !== null) result.phones += 1
+      // URL 纯文本
+      URL_PATTERN.lastIndex = 0
+      while ((m = URL_PATTERN.exec(text)) !== null) result.urls += 1
+      // Markdown 行内标记
+      MD_INLINE_PATTERNS.forEach((p) => {
+        p.lastIndex = 0
+        while ((m = p.exec(text)) !== null) result.md += 1
+      })
+    }
+    // Link mark 数量
+    if (node.isText && Array.isArray(node.marks)) {
+      node.marks.forEach((mk) => {
+        if (mk && mk.type && mk.type.name === 'link') result.links += 1
+      })
+    }
+    // 图片节点
+    if (node.type && node.type.name === 'image') {
+      result.images += 1
+    }
+    return true
+  })
+
+  result.total =
+    result.links + result.urls + result.emails + result.phones + result.md + result.images
+  return result
+}
+
+/**
+ * 同步版 runBatchClean：一次性累积 6 个清洗步骤到同一个 transaction，
+ * 最后一次性 dispatch。整个批处理作为「单个 undo step」，Ctrl+Z 可一键全部撤销。
+ *
+ * @param {import('@tiptap/core').Editor} editor
+ * @returns {{ links: number, urls: number, emails: number, phones: number, md: number, images: number, total: number, errors: string[] }}
+ */
+function runBatchClean(editor) {
+  const counts = { links: 0, urls: 0, emails: 0, phones: 0, md: 0, images: 0, total: 0 }
+  const errors = []
+  if (!editor || !editor.state || !editor.state.doc) {
+    return { ...counts, errors }
+  }
+  const safeRun = (label, fn) => {
+    try {
+      const n = fn(editor)
+      return Number(n) || 0
+    } catch (err) {
+      errors.push(`${label}: ${err?.message || String(err)}`)
+      return 0
+    }
+  }
+
+  // 创建一个共享 transaction，所有修改都附加到这个 tr 上
+  const tr = editor.state.tr
+  // 中间步骤（除最后一次）不创建新的 undo step，保证一键 Ctrl+Z 能全部撤销
+  tr.setMeta('addToHistory', false)
+  counts.links = safeRun('链接', (ed) => stripAllLinks(ed, { sharedTransaction: tr, skipDispatch: true }))
+  counts.urls = safeRun('URL', (ed) => stripAllUrls(ed, { sharedTransaction: tr, skipDispatch: true }))
+  counts.emails = safeRun('邮箱', (ed) => stripAllEmails(ed, { sharedTransaction: tr, skipDispatch: true }))
+  counts.phones = safeRun('手机号', (ed) => stripAllPhoneNumbers(ed, { sharedTransaction: tr, skipDispatch: true }))
+  counts.md = safeRun('Markdown', (ed) => stripMarkdownSyntax(ed, { sharedTransaction: tr, skipDispatch: true }))
+  counts.images = safeRun('图片', (ed) => stripAllImages(ed, { sharedTransaction: tr, skipDispatch: true }))
+
+  counts.total =
+    counts.links +
+    counts.urls +
+    counts.emails +
+    counts.phones +
+    counts.md +
+    counts.images
+
+  // 只有在 tr 有实际修改时才 dispatch，井作为一个 undo step 入栈
+  if (tr.docChanged && editor.view) {
+    // 取消 addToHistory=false，让此次 dispatch 创建新的 undo step（与其他输入步骊同仓）
+    tr.setMeta('addToHistory', true)
+    editor.view.dispatch(tr)
+  }
+  return { ...counts, errors }
+}
+
+/**
+ * 异步版 runBatchClean：逐步执行清洗步骤，每步之间让出主线程，
+ * 支持进度回调与 AbortSignal 中断。
+ *
+ * 注意：异步模式下 6 步仍合并到同一 undo step；仅在 「中途被 abort」 时丢弃
+ * 已应用的修改（不会 dispatch）。调用方应该在自己的 UI 中显示进度与「中断」按钮。
+ *
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{
+ *   signal?: AbortSignal,
+ *   onProgress?: (info: { step: number, totalSteps: number, label: string, count: number, done: boolean }) => void,
+ *   yieldEvery?: number,  // 每多少步让出一次主线程（默认 1）
+ * }} [options]
+ * @returns {Promise<{ links: number, urls: number, emails: number, phones: number, md: number, images: number, total: number, errors: string[], aborted: boolean }>}
+ */
+async function runBatchCleanAsync(editor, options = {}) {
+  const { signal, onProgress, yieldEvery = 1 } = options
+  const counts = { links: 0, urls: 0, emails: 0, phones: 0, md: 0, images: 0, total: 0 }
+  const errors = []
+  if (!editor || !editor.state || !editor.state.doc) {
+    return { ...counts, errors, aborted: !!signal?.aborted }
+  }
+  const steps = [
+    { key: 'links', label: '链接', fn: stripAllLinks },
+    { key: 'urls', label: 'URL', fn: stripAllUrls },
+    { key: 'emails', label: '邮箱', fn: stripAllEmails },
+    { key: 'phones', label: '手机号', fn: stripAllPhoneNumbers },
+    { key: 'md', label: 'Markdown', fn: stripMarkdownSyntax },
+    { key: 'images', label: '图片', fn: stripAllImages },
+  ]
+  const totalSteps = steps.length
+
+  // 共享 transaction：所有步骤的修改都追加到同一个 tr
+  const tr = editor.state.tr
+  tr.setMeta('addToHistory', false)
+
+  let aborted = false
+  let executedSteps = 0
+
+  for (let i = 0; i < steps.length; i += 1) {
+    if (signal?.aborted) {
+      aborted = true
+      break
+    }
+    const step = steps[i]
+    let n = 0
+    try {
+      n = step.fn(editor, { sharedTransaction: tr, skipDispatch: true })
+      n = Number(n) || 0
+    } catch (err) {
+      errors.push(`${step.label}: ${err?.message || String(err)}`)
+    }
+    counts[step.key] = n
+    counts.total += n
+    executedSteps += 1
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress({
+          step: i + 1,
+          totalSteps,
+          label: step.label,
+          count: n,
+          done: false,
+        })
+      } catch {
+        /* 进度回调不应中断主流程 */
+      }
+    }
+    // 让出主线程以保证进度可被渲染
+    if ((i + 1) % yieldEvery === 0) {
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.resolve()
+    }
+  }
+
+  counts.total = counts.links + counts.urls + counts.emails + counts.phones + counts.md + counts.images
+
+  if (aborted || !tr.docChanged) {
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress({ step: executedSteps, totalSteps, label: '', count: 0, done: true })
+      } catch { /* ignore */ }
+    }
+    return { ...counts, errors, aborted }
+  }
+
+  // 创建一个独立的 undo step（一键撤销）
+  tr.setMeta('addToHistory', true)
+  if (editor.view) {
+    editor.view.dispatch(tr)
+  }
+
+  if (typeof onProgress === 'function') {
+    try {
+      onProgress({ step: totalSteps, totalSteps, label: '', count: 0, done: true })
+    } catch { /* ignore */ }
+  }
+  return { ...counts, errors, aborted: false }
+}
+
+// ── 文本操作（CMD-001 ~ CMD-012）─────────────────────
 
 const textCommands = [
+  defineCommand({
+    id: 'delete-emails',
+    category: 'text',
+    patterns: [
+      /^(删除|去掉|去除|移除|清除)(文章|文档|全文|正文)?(中的|里的|中)?(所有|全部)?(邮箱|邮件|email)(地址)?$/,
+      /^(删除|去掉|去除|移除|清除)(所有|全部)?(邮箱|邮件)$/,
+      /^(strip|remove|delete)\s*(all\s*)?emails?$/i,
+    ],
+    priority: 104,
+    condition: editorAvailable,
+    action: (ctx) => {
+      try {
+        const n = stripAllEmails(ctx.editor)
+        if (n === 0) return { ok: false, message: '⚠️ 当前文档中没有邮箱地址' }
+        return { ok: true, message: `✅ 已删除文档中的 ${n} 处邮箱` }
+      } catch (err) {
+        return { ok: false, message: '⚠️ 删除邮箱失败：' + (err?.message || String(err)) }
+      }
+    },
+    successMessage: '✅ 已删除文档中的所有邮箱',
+    failureMessage: '⚠️ 编辑器不可用',
+  }),
+  defineCommand({
+    id: 'delete-phone-numbers',
+    category: 'text',
+    patterns: [
+      /^(删除|去掉|去除|移除|清除)(文章|文档|全文|正文)?(中的|里的|中)?(所有|全部)?(手机号|手机|电话号码|电话)$/,
+      /^(删除|去掉|去除|移除|清除)(所有|全部)?(手机号|手机)$/,
+      /^(strip|remove|delete)\s*(all\s*)?phones?$/i,
+      /^去手机$/,
+    ],
+    priority: 104,
+    condition: editorAvailable,
+    action: (ctx) => {
+      try {
+        const n = stripAllPhoneNumbers(ctx.editor)
+        if (n === 0) return { ok: false, message: '⚠️ 当前文档中没有手机号' }
+        return { ok: true, message: `✅ 已删除文档中的 ${n} 处手机号` }
+      } catch (err) {
+        return { ok: false, message: '⚠️ 删除手机号失败：' + (err?.message || String(err)) }
+      }
+    },
+    successMessage: '✅ 已删除文档中的所有手机号',
+    failureMessage: '⚠️ 编辑器不可用',
+  }),
+  defineCommand({
+    id: 'clean-markdown',
+    category: 'text',
+    patterns: [
+      /^(清洗|去掉)(markdown|md|格式)(标记|符号|语法)?$/,
+      /^clean\s*(markdown|md)$/i,
+      /^去除(粗体|斜体|删除线|行内代码)$/,
+    ],
+    priority: 104,
+    condition: editorAvailable,
+    action: (ctx) => {
+      try {
+        const n = stripMarkdownSyntax(ctx.editor)
+        if (n === 0) return { ok: false, message: '⚠️ 当前文档没有 Markdown 标记' }
+        return { ok: true, message: `✅ 已清洗文档中的 ${n} 处 Markdown 标记` }
+      } catch (err) {
+        return { ok: false, message: '⚠️ 清洗失败：' + (err?.message || String(err)) }
+      }
+    },
+    successMessage: '✅ 已清洗文档中的 Markdown 标记',
+    failureMessage: '⚠️ 编辑器不可用',
+  }),
+  defineCommand({
+    id: 'delete-images',
+    category: 'text',
+    patterns: [
+      /^(删除|去掉|去除|移除|清除)(文章|文档|全文)?(中的|里的|中)?(所有|全部)?(图片|图像)$/,
+      /^(删除|去掉|去除|移除|清除)(所有|全部)?(图片|图像)$/,
+      /^(strip|remove|delete)\s*(all\s*)?images?$/i,
+      /^去图片$/,
+    ],
+    priority: 104,
+    condition: editorAvailable,
+    action: (ctx) => {
+      try {
+        const n = stripAllImages(ctx.editor)
+        if (n === 0) return { ok: false, message: '⚠️ 当前文档中没有图片' }
+        return { ok: true, message: `✅ 已删除文档中的 ${n} 张图片` }
+      } catch (err) {
+        return { ok: false, message: '⚠️ 删除图片失败：' + (err?.message || String(err)) }
+      }
+    },
+    successMessage: '✅ 已删除文档中的所有图片',
+    failureMessage: '⚠️ 编辑器不可用',
+  }),
+  defineCommand({
+    id: 'delete-links',
+    category: 'text',
+    patterns: [
+      /^(删除|去掉|去除|移除|清除)(文章|文档|全文|正文)?(中的|里的|中)?(所有|全部)?(超)?链接(内容|文字|文本|部分)?$/,
+      /^(删除|去掉|去除|移除|清除)(所有|全部)?(超)?链接$/,
+      /^(strip|remove|delete)\s*(all\s*)?links?$/i,
+      /^去链接$/,
+    ],
+    priority: 105,
+    condition: editorAvailable,
+    action: (ctx) => {
+      const editor = ctx.editor
+      try {
+        // 路径 1：Tiptap 已挂载 Link 扩展
+        if (editor.commands && typeof editor.commands.unsetLink === 'function') {
+          editor.chain().focus().selectAll().unsetLink().run()
+          return { ok: true, message: '✅ 已删除文档中的链接（保留链接文字）' }
+        }
+        // 路径 2：手动移除 link mark
+        const removedMarks = stripAllLinks(editor)
+        if (removedMarks > 0) {
+          return { ok: true, message: '✅ 已删除文档中的链接（保留链接文字）' }
+        }
+        // 路径 3：纯文本 URL（Markdown 粘贴产生的 URL 文本）
+        const removedUrls = stripAllUrls(editor)
+        if (removedUrls > 0) {
+          return { ok: true, message: `✅ 已删除文档中的 ${removedUrls} 处 URL` }
+        }
+        return { ok: false, message: '⚠️ 当前文档中没有链接' }
+      } catch (err) {
+        return { ok: false, message: '⚠️ 删除链接失败：' + (err?.message || String(err)) }
+      }
+    },
+    successMessage: '✅ 已删除文档中的链接（保留链接文字）',
+    failureMessage: '⚠️ 编辑器不可用',
+  }),
+  defineCommand({
+    id: 'batch-clean',
+    category: 'text',
+    patterns: [
+      /^(批量|一键|全部)?(清洗|清理|净化)(文档|全文|正文|内容|一下)?$/,
+      /^batch\s*clean(er)?$/i,
+      /^(clean|sanitize|strip)\s*(all|everything|doc(ument)?)$/i,
+      /^一键清洗$/,
+      /^清洗文档$/,
+    ],
+    priority: 106,
+    condition: editorAvailable,
+    action: (ctx) => {
+      try {
+        const result = runBatchClean(ctx.editor)
+        if (result.total === 0) {
+          return { ok: false, message: '✨ 文档已经很干净，没有可清洗的内容' }
+        }
+        const parts = []
+        if (result.links) parts.push(`${result.links} 处链接`)
+        if (result.urls) parts.push(`${result.urls} 处 URL`)
+        if (result.emails) parts.push(`${result.emails} 处邮箱`)
+        if (result.phones) parts.push(`${result.phones} 处手机号`)
+        if (result.md) parts.push(`${result.md} 处 Markdown 标记`)
+        if (result.images) parts.push(`${result.images} 张图片`)
+        const summary = parts.length ? parts.join(' + ') : `${result.total} 项`
+        const tail = result.errors.length ? `（部分步骤出错：${result.errors.join('；')}）` : ''
+        return {
+          ok: true,
+          message: `✅ 已批量清洗：${summary}${tail}`,
+          data: result,
+        }
+      } catch (err) {
+        return { ok: false, message: '⚠️ 批量清洗失败：' + (err?.message || String(err)) }
+      }
+    },
+    successMessage: '✅ 已批量清洗文档',
+    failureMessage: '✨ 文档已经很干净，没有可清洗的内容',
+  }),
   defineCommand({
     id: 'delete-selection',
     category: 'text',
@@ -936,11 +1505,15 @@ export const LOCAL_COMMAND_CATEGORIES = [
 ]
 
 /**
- * 用于占位符轮转的代表性短语（精选 12 条覆盖主要分类）
+ * 用于占位符轮转的代表性短语（精选 14 条覆盖主要分类）
  * 注意：这些字符串是"示例"，不是匹配规则；它们代表用户最可能输入的本地指令。
  */
 export const LOCAL_COMMAND_PLACEHOLDERS = [
+  '输入「批量清洗」一键清理链接/邮箱/手机号/Markdown/图片',
   '输入「删除」删除选中文本',
+  '输入「删除链接」/「删除邮箱」/「删除手机号」一键清洗',
+  '输入「清洗格式」去掉 Markdown 标记',
+  '输入「删除图片」清空所有图片',
   '输入「加粗」/「斜体」切换格式',
   '输入「用思源黑体」切换字体',
   '输入「居中」/「左对齐」调整对齐',
@@ -957,3 +1530,8 @@ export const LOCAL_COMMAND_PLACEHOLDERS = [
 ]
 
 export const LOCAL_COMMANDS_COUNT = LOCAL_COMMANDS.length
+
+// ── 提示气泡辅助工具导出（Level 3 配套）───────────────────────
+// 注意：countCleanableItems / runBatchClean 的具体实现见上方
+// 「批量清洗聚合工具」区域；此处再 export 一次以兼容不同导入风格。
+export { countCleanableItems, runBatchClean, runBatchCleanAsync }
