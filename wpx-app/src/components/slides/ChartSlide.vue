@@ -217,6 +217,10 @@ function buildOption() {
 async function initChart() {
   if (!chartEl.value) return
   try {
+    // 动态 import 按需加载，减小主 bundle 体积。
+    // echarts 已在 vite.config.js 的 optimizeDeps.include 中显式声明，
+    // Vite 会在 dev 启动时把它预打包为 ESM，并把这里的 'echarts' 改写为
+    // `/@id/echarts` 这种已被 Vite 解析过的 URL，浏览器原生 ESM 可正常加载。
     const echarts = await import('echarts')
     const inst = echarts.init(chartEl.value, isDark.value ? 'dark' : null, {
       renderer: 'canvas',
@@ -227,8 +231,8 @@ async function initChart() {
   } catch (err) {
     // echarts 未安装或加载失败：给出可读提示，不影响父级布局
     // eslint-disable-next-line no-console
-    console.error('[ChartSlide] 加载 ECharts 失败，请执行 npm i echarts', err)
-    loadError.value = '图表组件加载失败：请先安装 ECharts（npm i echarts）'
+    console.error('[ChartSlide] 加载 ECharts 失败，请确认 echarts 已安装', err)
+    loadError.value = '图表组件加载失败：请确认 echarts 已安装并重启 dev server'
   }
 }
 

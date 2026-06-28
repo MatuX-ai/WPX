@@ -317,3 +317,439 @@ export async function downloadSlidesAsPptx(slides, options = {}) {
   triggerDownload(blob, filename)
   return { ok: true, filename }
 }
+
+/* ───────── PDF 导出 ───────── */
+
+/**
+ * 把单张 slide 渲染成独立的可打印 HTML 页面字符串。
+ * - 走 `@media print` 打印样式，每张幻灯片强制 16:9 横向分页
+ * - 图表页使用可读的占位说明（PDF 静态打印无法触发 ECharts 动画，
+ *   与 PPTX 保持一致的降级策略）
+ *
+ * @param {Array} slides
+ * @param {{ theme?: 'light'|'dark', title?: string }} [options]
+ * @returns {string} 完整 HTML 字符串
+ */
+function buildPrintableHtml(slides, options = {}) {
+  const list = Array.isArray(slides) ? slides : []
+  const theme = options.theme === 'dark' ? 'dark' : 'light'
+  const docTitle = options.title || 'WPX 演示文稿'
+
+  const slidesHtml = list.map((slide, idx) => {
+    const component = String(slide?.component || 'TextSlide')
+    const props = slide?.props || {}
+    const esc = (v) => escapeHtml(v == null ? '' : v)
+    const themeClass = props.theme === 'dark' ? 'is-dark' : ''
+    const isPageBreak = idx > 0
+
+    let body = ''
+    switch (component) {
+      case 'CoverSlide':
+        body =
+          `<h1 class="slide-title slide-title--cover">${esc(props.title || '未命名演示文稿')}</h1>` +
+          (props.subtitle ? `<h2 class="slide-subtitle">${esc(props.subtitle)}</h2>` : '') +
+          (props.author ? `<p class="slide-meta">${esc(props.author)}</p>` : '')
+        break
+      case 'EndSlide':
+        body =
+          `<h1 class="slide-title slide-title--cover">${esc(props.text || props.title || '感谢观看')}</h1>` +
+          (props.subtitle ? `<h2 class="slide-subtitle">${esc(props.subtitle)}</h2>` : '') +
+          (props.contactInfo?.website ? `<p class="slide-meta">${esc(props.contactInfo.website)}</p>` : '')
+        break
+      case 'TextSlide':
+      case 'TocSlide': {
+        const items = Array.isArray(props.bulletPoints)
+          ? props.bulletPoints
+          : Array.isArray(props.items) ? props.items : []
+        body =
+          `<h2 class="slide-title">${esc(props.title || '')}</h2>` +
+          (items.length
+            ? `<ul class="slide-bullets">${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`
+            : '<p class="slide-empty">（暂无要点）</p>')
+        break
+      }
+      case 'ImageTextSlide':
+        body =
+          `<h2 class="slide-title">${esc(props.title || '')}</h2>` +
+          (props.imageUrl
+            ? `<div class="slide-img-wrap"><img src="${esc(props.imageUrl)}" alt="${esc(props.title || '')}" /></div>`
+            : '<div class="slide-placeholder">[图片占位]</div>') +
+          (props.text ? `<p class="slide-text">${esc(props.text)}</p>` : '')
+        break
+      case 'ChartSlide': {
+        const chartType = props.chartType || 'bar'
+        body =
+          `<h2 class="slide-title">${esc(props.title || '数据图表')}</h2>` +
+          `<div class="slide-placeholder slide-placeholder--chart">[${esc(chartType)} 图表占位] PDF 静态导出</div>`
+        break
+      }
+      case 'TableSlide': {
+        const headers = Array.isArray(props.tableData?.headers) ? props.tableData.headers : []
+        const rows = Array.isArray(props.tableData?.rows) ? props.tableData.rows : []
+        if (headers.length) {
+          const thead = `<tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr>`
+          const tbody = rows
+            .map((r) => `<tr>${(Array.isArray(r) ? r : []).map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`)
+            .join('')
+          body =
+            `<h2 class="slide-title">${esc(props.title || '')}</h2>` +
+            `<table class="slide-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`
+        } else {
+          body =
+            `<h2 class="slide-title">${esc(props.title || '')}</h2>` +
+            '<div class="slide-placeholder">[表格占位]</div>'
+        }
+        break
+      }
+      default:
+        body = `<h2 class="slide-title">${esc(props.title || component)}</h2>`
+    }
+
+    const pageBreak = isPageBreak ? 'page-break-before' : ''
+    return `<section class="slide-page ${themeClass} ${pageBreak}" data-component="${esc(component)}" data-index="${idx}">
+  <div class="slide-stage">
+    <div class="slide-content">
+      ${body}
+    </div>
+    <div class="slide-footer"><span class="slide-footer-page">${idx + 1} / ${list.length}</span></div>
+  </div>
+</section>`
+  }).join('\n')
+
+  return `<!doctype html>
+<html lang="zh-CN" data-theme="${theme}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${escapeHtml(docTitle)}</title>
+<style>
+  /* 屏幕样式：保持可读 */
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #475569;
+    --accent: #7c3aed;
+    --border: #e2e8f0;
+    --card: #ffffff;
+  }
+  html[data-theme="dark"] {
+    --bg: #0b1020;
+    --fg: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #a78bfa;
+    --border: #1e293b;
+    --card: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', Inter, system-ui, sans-serif;
+  }
+
+  /* 每张幻灯片：屏幕下用 stack 展示，打印时按页输出 */
+  .slide-page {
+    width: min(960px, 95vw);
+    aspect-ratio: 16 / 9;
+    margin: 24px auto;
+    background: var(--card);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 6px 32px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+    position: relative;
+  }
+  .slide-page.is-dark {
+    --bg: #0b1020;
+    --fg: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #a78bfa;
+    --border: #1e293b;
+    --card: #0f172a;
+    background: var(--card);
+    color: var(--fg);
+  }
+  .slide-stage {
+    width: 100%;
+    height: 100%;
+    padding: 56px 64px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .slide-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+  }
+  .slide-footer {
+    display: flex;
+    justify-content: flex-end;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .slide-title {
+    margin: 0;
+    font-size: 2.4rem;
+    line-height: 1.2;
+    color: var(--fg);
+  }
+  .slide-title--cover {
+    font-size: 3.2rem;
+    background: linear-gradient(135deg, var(--accent), #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-align: center;
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+  .slide-subtitle {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.25rem;
+    font-weight: 400;
+    text-align: center;
+  }
+  .slide-meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1rem;
+    text-align: center;
+  }
+  .slide-bullets {
+    margin: 0;
+    padding-left: 1.4rem;
+    line-height: 1.85;
+    font-size: 1.15rem;
+  }
+  .slide-bullets li { margin-bottom: 8px; }
+  .slide-empty {
+    color: var(--muted);
+    font-style: italic;
+  }
+  .slide-text {
+    margin: 0;
+    color: var(--fg);
+    font-size: 1.05rem;
+    line-height: 1.7;
+  }
+  .slide-img-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 12px 0;
+    min-height: 40%;
+  }
+  .slide-img-wrap img {
+    max-width: 80%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+  }
+  .slide-placeholder {
+    padding: 24px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    text-align: center;
+    font-size: 0.95rem;
+  }
+  .slide-placeholder--chart {
+    background: rgba(124, 58, 237, 0.08);
+    color: var(--accent);
+  }
+  .slide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  .slide-table th,
+  .slide-table td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+  }
+  .slide-table th {
+    background: rgba(124, 58, 237, 0.08);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* 打印样式：横向 16:9，禁用屏幕阴影/边距 */
+  @page {
+    size: 13.33in 7.5in; /* LAYOUT_WIDE 对应尺寸 */
+    margin: 0;
+  }
+  @media print {
+    html, body {
+      background: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    .slide-page {
+      width: 13.33in;
+      height: 7.5in;
+      aspect-ratio: auto;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      page-break-after: always;
+      break-after: page;
+    }
+    .slide-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    .page-break-before {
+      page-break-before: always;
+      break-before: page;
+    }
+  }
+</style>
+</head>
+<body>
+${slidesHtml}
+</body>
+</html>`
+}
+
+/**
+ * 在浏览器端通过隐藏 iframe + window.print() 触发打印。
+ * 用户可在打印对话框选择「另存为 PDF」。
+ *
+ * @param {string} html
+ * @param {{ autoPrint?: boolean, onClose?: () => void }} [options]
+ * @returns {HTMLIFrameElement} 用于清理
+ */
+function openPrintableIframe(html, options = {}) {
+  const { autoPrint = true, onClose } = options
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.setAttribute('tabindex', '-1')
+  iframe.title = 'wpx-slide-print'
+
+  const cleanup = () => {
+    try {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+    } catch {
+      /* noop */
+    }
+    if (typeof onClose === 'function') {
+      try {
+        onClose()
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
+  // afterprint 事件：Chromium / Firefox / WebKit 均支持
+  iframe.addEventListener('load', () => {
+    try {
+      const win = iframe.contentWindow
+      if (!win) {
+        cleanup()
+        return
+      }
+      win.addEventListener('afterprint', cleanup, { once: true })
+      if (autoPrint) {
+        // 等一帧让样式稳定，再触发打印
+        setTimeout(() => {
+          try {
+            win.focus()
+            win.print()
+          } catch (err) {
+            console.error('[slideExport] window.print 触发失败', err)
+            cleanup()
+          }
+        }, 50)
+      }
+    } catch (err) {
+      console.error('[slideExport] iframe load 处理失败', err)
+      cleanup()
+    }
+  })
+
+  document.body.appendChild(iframe)
+  // srcdoc 可避免 blob URL 泄漏；某些旧浏览器不支持时回退 doc.write
+  try {
+    iframe.srcdoc = html
+  } catch {
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (doc) {
+      doc.open()
+      doc.write(html)
+      doc.close()
+    } else {
+      cleanup()
+    }
+  }
+  return iframe
+}
+
+/**
+ * 触发 PDF 导出。
+ *
+ * 浏览器环境下打开隐藏 iframe 并调用 window.print()，
+ * 由用户选择在打印对话框中「另存为 PDF」。
+ *
+ * @param {Array} slides
+ * @param {{ theme?: 'light'|'dark', title?: string, filename?: string, autoPrint?: boolean }} [options]
+ * @returns {{ ok: boolean, filename: string, method: 'browser-print' }}
+ */
+export function exportSlidesAsPdf(slides, options = {}) {
+  const list = Array.isArray(slides) ? slides : []
+  if (list.length === 0) {
+    return { ok: false, filename: '', error: '没有可导出的幻灯片' }
+  }
+  const filename = options.filename || `slides-${Date.now()}.pdf`
+  const html = buildPrintableHtml(list, options)
+  const autoPrint = options.autoPrint !== false
+
+  // SSR / 非浏览器环境：直接返回 HTML，由调用方决定如何处理
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return {
+      ok: true,
+      filename,
+      method: 'html-only',
+      html,
+      size: html.length,
+    }
+  }
+
+  // 用户主动关闭了 autoPrint：返回可打印 HTML 字符串，不触发打印对话框
+  if (!autoPrint) {
+    return {
+      ok: true,
+      filename,
+      method: 'html-only',
+      html,
+      size: html.length,
+    }
+  }
+
+  openPrintableIframe(html, { autoPrint: true })
+  return { ok: true, filename, method: 'browser-print' }
+}
+
+/**
+ * 在浏览器端触发 PDF 导出（同 exportSlidesAsPdf，保留旧 API 命名）。
+ * @param {Array} slides
+ * @param {{ theme?: 'light'|'dark', filename?: string, title?: string, autoPrint?: boolean }} [options]
+ */
+export function downloadSlidesAsPdf(slides, options = {}) {
+  return exportSlidesAsPdf(slides, options)
+}

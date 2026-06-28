@@ -12,6 +12,7 @@ import {
   resolveSourceHanSansFamily,
 } from '@/utils/exportFontAnalysis'
 import { consumeTokensForExport } from '@/utils/tokenApi'
+import { normalizeHtmlPrintPaper } from '@/constants/htmlPrintPaper'
 import { useAuth } from '@/composables/useAuth'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useUserHabits } from '@/composables/useUserHabits'
@@ -20,6 +21,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
 import ExportFontConfirm from '@/components/fonts/ExportFontConfirm.vue'
 import ExportOptionsConfirm from '@/components/export/ExportOptionsConfirm.vue'
+import ExportHtmlOptionsConfirm from '@/components/export/ExportHtmlOptionsConfirm.vue'
 
 const props = defineProps({
   getMarkdown: {
@@ -77,6 +79,8 @@ const exportAnalysis = ref(null)
 const pendingExportOption = ref(null)
 const optionsConfirmVisible = ref(false)
 const pendingExportOptions = ref(null)
+const htmlOptionsConfirmVisible = ref(false)
+const pendingHtmlExportOptions = ref(null)
 const headingCount = ref(0)
 /** @type {import('vue').Ref<{ getEditor?: () => unknown } | null> | null} */
 const editorHostRef = inject('editorHostRef', null)
@@ -93,6 +97,14 @@ const defaultPaperOptions = computed(() => {
     generateToc: false,
   }
 })
+
+const defaultHtmlOptions = computed(() => ({
+  documentMode: 'full',
+  fitImagesToWidth: true,
+  autoPaginate: true,
+  generateToc: false,
+  printPaper: 'A4',
+}))
 
 function resolveExportEditor() {
   const fromProp = props.getEditor?.()
@@ -132,6 +144,12 @@ function closeOptionsConfirm() {
   if (loading.value) return
   optionsConfirmVisible.value = false
   pendingExportOptions.value = null
+}
+
+function closeHtmlOptionsConfirm() {
+  if (loading.value) return
+  htmlOptionsConfirmVisible.value = false
+  pendingHtmlExportOptions.value = null
 }
 
 function countHeadingsInMarkdown(markdown) {
@@ -205,7 +223,10 @@ async function performExport(option, exportOptions = null) {
     exportContent = editor.getHTML()
   }
 
-  if (exportOptions && typeof exportOptions === 'object') {
+  if (option.format === 'html') {
+    const htmlOptions = exportOptions && typeof exportOptions === 'object' ? exportOptions : null
+    exportOptionsPayload.exportOptions = buildHtmlExportOptionsPayload(htmlOptions)
+  } else if (exportOptions && typeof exportOptions === 'object') {
     exportOptionsPayload.exportOptions = buildExportOptionsPayload(exportOptions)
   }
 
@@ -232,6 +253,24 @@ function buildExportOptionsPayload(options) {
     autoPaginate: options.autoPaginate !== false,
     fitImagesToWidth: options.fitImagesToWidth !== false,
     generateToc: Boolean(options.generateToc),
+  }
+}
+
+/**
+ * HTML 导出选项载荷
+ *
+ * HTML 没有「纸张 / 页边距 / 页眉页脚」概念，paper 字段对后端 buildHtmlFitCss
+ * 不生效，但 printPaper 会被 buildHtmlFitCss 读取用于生成 @page { size }。
+ */
+function buildHtmlExportOptionsPayload(options) {
+  const fallback = defaultHtmlOptions.value
+  const base = { ...fallback, ...(options || {}) }
+  return {
+    autoPaginate: base.autoPaginate !== false,
+    fitImagesToWidth: base.fitImagesToWidth !== false,
+    generateToc: Boolean(base.generateToc),
+    printPaper: normalizeHtmlPrintPaper(base.printPaper),
+    documentMode: base.documentMode === 'fragment' ? 'fragment' : 'full',
   }
 }
 
@@ -275,15 +314,30 @@ async function handleExport(option) {
 
   pendingExportOption.value = option
   pendingExportOptions.value = null
+  pendingHtmlExportOptions.value = null
   headingCount.value = countHeadingsInMarkdown(markdown)
-  optionsConfirmVisible.value = true
+
+  if (option.format === 'html') {
+    htmlOptionsConfirmVisible.value = true
+  } else {
+    optionsConfirmVisible.value = true
+  }
 }
 
 async function handleConfirmOptions(options) {
   optionsConfirmVisible.value = false
   pendingExportOptions.value = options
-  const option = pendingExportOption.value
+  await runExportWithOptions(options)
+}
 
+async function handleConfirmHtmlOptions(options) {
+  htmlOptionsConfirmVisible.value = false
+  pendingHtmlExportOptions.value = options
+  await runExportWithOptions(options)
+}
+
+async function runExportWithOptions(options) {
+  const option = pendingExportOption.value
   if (!option) return
 
   loading.value = true
@@ -339,7 +393,10 @@ async function handleConfirmExport() {
     }
 
     const option = pendingExportOption.value
-    const exportOptions = pendingExportOptions.value
+    const exportOptions =
+      option?.format === 'html'
+        ? pendingHtmlExportOptions.value
+        : pendingExportOptions.value
     closeExportConfirm()
     loading.value = true
     await performExport(option, exportOptions)
@@ -364,7 +421,10 @@ async function handleGuestLogin() {
 async function handleUseFreeFont() {
   const editor = resolveExportEditor()
   const option = pendingExportOption.value
-  const exportOptions = pendingExportOptions.value
+  const exportOptions =
+    option?.format === 'html'
+      ? pendingHtmlExportOptions.value
+      : pendingExportOptions.value
 
   if (!editor || !option) return
 
@@ -551,6 +611,15 @@ onUnmounted(() => {
       :loading="loading || confirmLoading"
       @confirm="handleConfirmOptions"
       @close="closeOptionsConfirm"
+    />
+
+    <ExportHtmlOptionsConfirm
+      :visible="htmlOptionsConfirmVisible"
+      :defaults="defaultHtmlOptions"
+      :heading-count="headingCount"
+      :loading="loading || confirmLoading"
+      @confirm="handleConfirmHtmlOptions"
+      @close="closeHtmlOptionsConfirm"
     />
 
     <p v-if="errorMessage" class="sr-only" role="status">{{ errorMessage }}</p>

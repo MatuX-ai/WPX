@@ -227,33 +227,35 @@ function handleClose() {
         </div>
 
         <footer class="font-recommend-footer">
+          <div class="font-recommend-footer__group">
+            <button
+              type="button"
+              class="font-recommend-footer__btn font-recommend-footer__btn--secondary"
+              :disabled="isAnyDownloading"
+              @click="handleInstallManually"
+            >
+              我已经自己安装过了
+            </button>
+            <button
+              type="button"
+              class="font-recommend-footer__btn font-recommend-footer__btn--secondary"
+              :disabled="isAnyDownloading"
+              @click="handleSkip"
+            >
+              下次再说
+            </button>
+            <button
+              type="button"
+              class="font-recommend-footer__btn font-recommend-footer__btn--tertiary"
+              :disabled="isAnyDownloading"
+              @click="handleNeverAsk"
+            >
+              不再提醒
+            </button>
+          </div>
           <button
             type="button"
-            class="wpx-btn wpx-btn--ghost"
-            :disabled="isAnyDownloading"
-            @click="handleInstallManually"
-          >
-            我已经自己安装过了
-          </button>
-          <button
-            type="button"
-            class="wpx-btn wpx-btn--text"
-            :disabled="isAnyDownloading"
-            @click="handleNeverAsk"
-          >
-            不再提醒
-          </button>
-          <button
-            type="button"
-            class="wpx-btn wpx-btn--text"
-            :disabled="isAnyDownloading"
-            @click="handleSkip"
-          >
-            下次再说
-          </button>
-          <button
-            type="button"
-            class="wpx-btn wpx-btn--primary"
+            class="font-recommend-footer__btn font-recommend-footer__btn--primary"
             :disabled="!missing.length || isAnyDownloading"
             @click="downloadAll"
           >
@@ -437,11 +439,82 @@ function handleClose() {
 .font-recommend-footer {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 12px 18px 14px;
   border-top: 1px solid var(--theme-border);
   background: var(--theme-bg-soft, rgba(128, 128, 128, 0.04));
+}
+
+.font-recommend-footer__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.font-recommend-footer__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.font-recommend-footer__btn:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+.font-recommend-footer__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.font-recommend-footer__btn--primary {
+  background: var(--theme-accent, #7c3aed);
+  border-color: var(--theme-accent, #7c3aed);
+  color: #fff;
+}
+
+.font-recommend-footer__btn--primary:hover:not(:disabled) {
+  background: var(--theme-accent-hover, #6d28d9);
+  border-color: var(--theme-accent-hover, #6d28d9);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--theme-accent) 30%, transparent);
+}
+
+.font-recommend-footer__btn--secondary {
+  background: var(--theme-bg, #fff);
+  border-color: var(--theme-border, #e2e8f0);
+  color: var(--theme-fg-muted, #475569);
+}
+
+.font-recommend-footer__btn--secondary:hover:not(:disabled) {
+  background: var(--theme-bg-subtle, #f8fafc);
+  border-color: color-mix(in srgb, var(--theme-fg-muted, #475569) 30%, var(--theme-border, #e2e8f0));
+  color: var(--theme-fg, #0f172a);
+}
+
+.font-recommend-footer__btn--tertiary {
+  background: transparent;
+  border-color: transparent;
+  color: var(--theme-fg-muted, #64748b);
+  padding: 6px 8px;
+}
+
+.font-recommend-footer__btn--tertiary:hover:not(:disabled) {
+  background: var(--theme-bg-hover, rgba(128, 128, 128, 0.08));
+  color: var(--theme-fg, #0f172a);
 }
 
 .font-recommend-fade-enter-active,

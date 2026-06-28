@@ -2,8 +2,13 @@ import { ref } from 'vue'
 import { blobToDataUrl } from '@/utils/imageUtils'
 import { markdownToHtml } from '@/utils/markdownToEditor'
 import { toEditorContent } from '@/utils/aiSelection'
+import { detectMarkdown, extractMarkdownSnippet } from '@/utils/markdownDetector'
+import { hasImagesInDoc } from '@/composables/useMarkdownFormatter'
+import { useMarkdownFormatPromptStore } from '@/stores/markdownFormatPrompt'
+import { importHtmlString } from '@/composables/useHtmlImporter'
+import { useToastStore } from '@/stores/toast'
 
-export const DRAG_DROP_TEXT_EXTENSIONS = new Set(['.md', '.txt'])
+export const DRAG_DROP_TEXT_EXTENSIONS = new Set(['.md', '.txt', '.html', '.htm'])
 export const DRAG_DROP_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png'])
 export const DRAG_DROP_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png'])
 
@@ -74,7 +79,33 @@ function insertTextFileContent(editor, text, extension) {
     return
   }
 
+  // HTML 文件：走 useHtmlImporter 静默导入，原始源码存入 doc.attrs.htmlSource
+  // 需求文档：HTML 导入不弹窗，由 A4 模式触发排版弹窗
+  if (extension === '.html' || extension === '.htm') {
+    importHtmlFileContent(editor, text)
+    return
+  }
+
   editor.chain().focus().insertContent(toEditorContent(text)).run()
+}
+
+/**
+ * 通过 useHtmlImporter 导入 HTML 文件内容，并在右下角弹出轻量 toast「网页已导入」。
+ * 不触发 markdownFormatPrompt（保持「导入无感」原则）。
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {string} htmlString
+ */
+function importHtmlFileContent(editor, htmlString) {
+  const result = importHtmlString(editor, htmlString, { importSource: 'file' })
+  // Pinia store 可在事件处理器中直接调用（不依赖组件实例）
+  const toast = useToastStore()
+  if (result.ok) {
+    toast.info('网页已导入', 3000)
+    return
+  }
+  // 失败时仍走通用插入（避免 HTML 被丢失）
+  console.warn('[useDragDrop] importHtmlString failed:', result.error)
+  toast.warning(result.message || 'HTML 导入失败', 3000)
 }
 
 /**
@@ -119,8 +150,18 @@ export function useDragDrop({ getEditor, onContentChange } = {}) {
 
       if (kind === 'text') {
         const text = await readTextFile(file)
-        insertTextFileContent(editor, text, getFileExtension(file.name))
+        const ext = getFileExtension(file.name)
+        insertTextFileContent(editor, text, ext)
         notifyChange()
+        // Markdown 文档拖入：检测后向 store 推送排版提示
+        if (ext === '.md' && text && detectMarkdown(text)) {
+          const previewText = extractMarkdownSnippet(text, 80) || ''
+          useMarkdownFormatPromptStore().trigger({
+            source: 'dragdrop',
+            previewText,
+            hasImages: hasImagesInDoc(editor),
+          })
+        }
         continue
       }
 

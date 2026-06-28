@@ -686,6 +686,8 @@ watch(
 
 .image-editor-host :deep(.vdr-container) {
   /* 浮窗自身特性：阴影 / 圆角 / 背景 */
+  /* pointer-events: auto 必须保留：祖先 .floating-host 通常为 none，否则点击穿透到底层会误触发关闭逻辑 */
+  pointer-events: auto;
   box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22);
   border-radius: 16px;
   background: var(--theme-surface);

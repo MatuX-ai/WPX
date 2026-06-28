@@ -31,6 +31,7 @@ import {
   X,
 } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
+import { downloadSlidesAsHtml, downloadSlidesAsPptx, downloadSlidesAsPdf } from '@/utils/slideExport'
 import SlideDeck from '@/components/slides/SlideDeck.vue'
 
 const props = defineProps({
@@ -143,6 +144,64 @@ function handleExport() {
   }
 }
 
+function handleExportHtml() {
+  if (totalPages.value === 0) {
+    toast.warning('当前幻灯片为空，无法导出')
+    return
+  }
+  try {
+    const result = downloadSlidesAsHtml(slides.value, { theme: theme.value })
+    if (result?.ok) {
+      toast.success(`已导出网页：${result.filename}`)
+    } else {
+      toast.error('导出网页失败：' + (result?.error || '未知错误'))
+    }
+  } catch (err) {
+    console.error('[SlideDeckNodeView] 导出网页失败：', err)
+    toast.error('导出网页失败：' + (err?.message || String(err)))
+  }
+}
+
+async function handleExportPptx() {
+  if (totalPages.value === 0) {
+    toast.warning('当前幻灯片为空，无法导出')
+    return
+  }
+  try {
+    const result = await downloadSlidesAsPptx(slides.value, { theme: theme.value })
+    if (result?.ok) {
+      toast.success(`已导出 PPTX：${result.filename}`)
+    } else {
+      toast.error('导出 PPTX 失败：' + (result?.error || '未知错误'))
+    }
+  } catch (err) {
+    console.error('[SlideDeckNodeView] 导出 PPTX 失败：', err)
+    toast.error('导出 PPTX 失败：' + (err?.message || String(err)))
+  }
+}
+
+function handleExportPdf() {
+  if (totalPages.value === 0) {
+    toast.warning('当前幻灯片为空，无法导出')
+    return
+  }
+  try {
+    const result = downloadSlidesAsPdf(slides.value, { theme: theme.value })
+    if (result?.ok) {
+      if (result.method === 'browser-print') {
+        toast.success(`已弹出打印对话框：${result.filename}`)
+      } else {
+        toast.success(`已生成可打印 HTML：${result.filename}`)
+      }
+    } else {
+      toast.error('导出 PDF 失败：' + (result?.error || '未知错误'))
+    }
+  } catch (err) {
+    console.error('[SlideDeckNodeView] 导出 PDF 失败：', err)
+    toast.error('导出 PDF 失败：' + (err?.message || String(err)))
+  }
+}
+
 /* ───────── 生命周期：监听全屏变化 ───────── */
 import { onBeforeUnmount, onMounted } from 'vue'
 
@@ -220,6 +279,39 @@ onBeforeUnmount(() => {
       >
         <Download :size="14" aria-hidden="true" />
         <span class="slide-deck-node__btn-label">导出</span>
+      </button>
+
+      <button
+        type="button"
+        class="slide-deck-node__btn"
+        title="导出为 HTML 网页"
+        aria-label="导出为 HTML 网页"
+        @click="handleExportHtml"
+      >
+        <Download :size="14" aria-hidden="true" />
+        <span class="slide-deck-node__btn-label">网页</span>
+      </button>
+
+      <button
+        type="button"
+        class="slide-deck-node__btn"
+        title="导出为 PPTX"
+        aria-label="导出为 PPTX"
+        @click="handleExportPptx"
+      >
+        <Download :size="14" aria-hidden="true" />
+        <span class="slide-deck-node__btn-label">PPTX</span>
+      </button>
+
+      <button
+        type="button"
+        class="slide-deck-node__btn"
+        title="导出为 PDF（通过打印对话框另存为 PDF）"
+        aria-label="导出为 PDF"
+        @click="handleExportPdf"
+      >
+        <Download :size="14" aria-hidden="true" />
+        <span class="slide-deck-node__btn-label">PDF</span>
       </button>
 
       <span class="slide-deck-node__divider" aria-hidden="true" />

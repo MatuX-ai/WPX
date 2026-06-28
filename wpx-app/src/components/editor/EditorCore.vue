@@ -28,6 +28,7 @@ import {
 } from '@lucide/vue'
 import { useEditorStore } from '@/stores/editor'
 import { useAppStore } from '@/stores/app'
+import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import { useUserHabits, extractFormatFromEditor } from '@/composables/useUserHabits'
 import { editorDragOutProps, useDragDrop } from '@/composables/useDragDrop'
@@ -38,14 +39,25 @@ import { toEditorContent } from '@/utils/aiSelection'
 import { tiptapJsonToMarkdown } from '@/utils/tiptapToMarkdown'
 import { markdownToHtml } from '@/utils/markdownToEditor'
 import { blobToDataUrl } from '@/utils/imageUtils'
+import { detectMarkdown, extractMarkdownSnippet } from '@/utils/markdownDetector'
+import { hasImagesInDoc } from '@/composables/useMarkdownFormatter'
+import { useMarkdownFormatPromptStore } from '@/stores/markdownFormatPrompt'
+import {
+  importHtmlString,
+  extractHtmlFromClipboard,
+  hasHtmlImport,
+} from '@/composables/useHtmlImporter'
+import { useHtmlFormatPromptStore } from '@/stores/htmlFormatPrompt'
+import { getSanitizedJson } from '@/utils/exportAttrsFilter'
 import {
   findNextMatch,
   replaceAllMatches,
   replaceCurrentSelection,
 } from '@/utils/editorFindReplace'
 import { EditorImage } from '@/extensions/EditorImage'
-import { FontFamily, FontSize, LineHeight } from '@/extensions/DocumentFormat'
+import { FontFamily, FontSize, LineHeight, ParagraphIndent } from '@/extensions/DocumentFormat'
 import { SlideDeckNode } from '@/extensions/SlideDeckNode'
+import { HtmlSourceExtension } from '@/extensions/HtmlSourceExtension'
 import TableInsertDialog from '@/components/editor/TableInsertDialog.vue'
 import TableBubbleMenu from '@/components/editor/TableBubbleMenu.vue'
 import ImageBubbleMenu from '@/components/editor/ImageBubbleMenu.vue'
@@ -54,6 +66,7 @@ import ImageUrlDialog from '@/components/editor/ImageUrlDialog.vue'
 import FontFamilySelect from '@/components/editor/FontFamilySelect.vue'
 import EditorContextMenu from '@/components/context/EditorContextMenu.vue'
 import { useEditorOverlayOptional } from '@/composables/useEditorOverlay'
+import { setActiveEditor, clearActiveEditor } from '@/composables/useEditorRegistry'
 
 const HEADING_OPTIONS = [
   { label: '正文', value: '' },
@@ -80,11 +93,13 @@ const emit = defineEmits(['change'])
 
 const editorStore = useEditorStore()
 const appStore = useAppStore()
+const userPreferencesStore = useUserPreferencesStore()
 const editorOverlay = useEditorOverlayOptional()
 const windowSize = useWindowSize()
 const { isToolbarIconOnly } = windowSize
 const { bindEditor, unbindEditor, applyFormat } = useUserHabits()
 const toast = useToast()
+const formatPromptStore = useMarkdownFormatPromptStore()
 const toolbarVersion = ref(0)
 const showTableDialog = ref(false)
 const showFindReplace = ref(false)
@@ -135,12 +150,52 @@ function applyReplaceRequest(request) {
 }
 
 function emitContent(editor) {
+  // 实时同步：保留 doc.attrs.htmlSource 等（供运行时功能如「恢复原样」「重新触发排版」使用）
+  // 注意：仅在编辑器内运行时保留 attrs；导出时通过 getSanitizedJson 净化。
   const json = editor.getJSON()
   emit('change', {
     html: editor.getHTML(),
     json,
     markdown: tiptapJsonToMarkdown(json),
   })
+}
+
+/**
+ * 获取**导出用**的 MD 字符串：剥离 doc.attrs.htmlSource 等内部属性。
+ * 适用于 saveDocument / exportDocx / exportMd 等"对外"导出场景。
+ * @returns {string}
+ */
+function getMarkdownForExport() {
+  const currentEditor = editor.value
+  if (!currentEditor) return ''
+  const sanitized = getSanitizedJson(currentEditor) || { type: 'doc', content: [] }
+  return tiptapJsonToMarkdown(sanitized)
+}
+
+/**
+ * 获取**导出用**的 HTML 字符串：doc 节点的内部 attrs 不参与渲染，
+ * 但保险起见仍然基于净化后的 JSON 调用 editor.getHTML()。
+ * @returns {string}
+ */
+function getHtmlForExport() {
+  const currentEditor = editor.value
+  if (!currentEditor) return ''
+  // editor.getHTML() 不会输出 doc.attrs，因此无需额外过滤
+  return currentEditor.getHTML()
+}
+
+/**
+ * 检测文本是否含 Markdown 标记，若是则向 store 推送排版提示请求。
+ * @param {'paste' | 'import' | 'dragdrop'} source 触发来源
+ * @param {string} text 待检测文本
+ */
+function notifyMarkdownDetected(source, text) {
+  if (!text || typeof text !== 'string') return
+  if (!detectMarkdown(text)) return
+  const currentEditor = editor.value
+  const previewText = extractMarkdownSnippet(text, 80) || ''
+  const hasImages = currentEditor ? hasImagesInDoc(currentEditor) : false
+  formatPromptStore.trigger({ source, previewText, hasImages })
 }
 
 function openContextMenu(event) {
@@ -167,9 +222,15 @@ const editor = useEditor({
     TextAlign.configure({
       types: ['heading', 'paragraph'],
     }),
+    // MD 智能排版引擎：把 data-indent 注入 paragraph/heading schema。
+    // 必须在 TextAlign 之后注册，避免 addGlobalAttributes 合并顺序冲突。
+    ParagraphIndent,
     FontFamily,
     FontSize,
     LineHeight,
+    // HTML 导入扩展：把 htmlSource / sourceUrl / importedAt / importSource / lastFormattedTemplate /
+    // lastFormattedAt 注入到 doc schema，保证随文档 JSON 持久化、跨窗口传输。
+    HtmlSourceExtension,
     EditorImage.configure({
       allowBase64: true,
       HTMLAttributes: {
@@ -205,6 +266,7 @@ const editor = useEditor({
       const items = event.clipboardData?.items
       if (!items) return false
 
+      // 1) 图片粘贴优先（已有逻辑）
       for (const item of items) {
         if (!item.type.startsWith('image/')) continue
 
@@ -221,6 +283,30 @@ const editor = useEditor({
         }
         reader.readAsDataURL(file)
         return true
+      }
+
+      // 2) HTML 粘贴检测（新增，优先级高于纯文本）
+      //    从其他网页/富文本编辑器复制的内容会同时含 text/html 和 text/plain。
+      //    仅当 HTML 长度 > 100 才视为真实 HTML，避免误判普通文本中偶然出现的尖括号。
+      const htmlContent = extractHtmlFromClipboard(event.clipboardData)
+      if (htmlContent) {
+        const result = importHtmlString(editor.value, htmlContent, { importSource: 'paste' })
+        if (result.ok) {
+          toast.info('网页已导入', 3000)
+          // 进入焦点模式 + 含 htmlSource → 触发排版弹窗（在 AiAssistantPlaceholder 层 watch）
+          if (userPreferencesStore.paper.focusMode) {
+            useHtmlFormatPromptStore().trigger({ source: 'manual' })
+          }
+        } else {
+          toast.warning(result.message || 'HTML 导入失败', 3000)
+        }
+        return true
+      }
+
+      // 3) 纯文本粘贴：检测 Markdown 标记，命中则推送排版提示
+      const pastedText = event.clipboardData?.getData?.('text/plain') || ''
+      if (pastedText) {
+        notifyMarkdownDetected('paste', pastedText)
       }
 
       return false
@@ -250,6 +336,16 @@ function getMarkdown() {
   return tiptapJsonToMarkdown(currentEditor.getJSON())
 }
 
+defineExpose({
+  getMarkdown,
+  getMarkdownForExport,
+  getHtmlForExport,
+  getFormatSnapshot,
+  loadMarkdown,
+  openImageEditor,
+  getEditor: () => editor.value,
+})
+
 function getFormatSnapshot() {
   return extractFormatFromEditor(editor.value)
 }
@@ -258,9 +354,15 @@ function loadMarkdown(markdown) {
   const currentEditor = editor.value
   if (!currentEditor) return
 
-  currentEditor.commands.setContent(markdownToHtml(markdown || ''))
+  const source = markdown || ''
+  currentEditor.commands.setContent(markdownToHtml(source))
   emitContent(currentEditor)
   syncSelection(currentEditor)
+
+  // 导入 Markdown 文档后检测是否需要排版
+  if (source) {
+    notifyMarkdownDetected('import', source)
+  }
 }
 
 function handleExternalFileOpen(payload) {
@@ -286,6 +388,9 @@ function handleExternalFileOpen(payload) {
 let unsubscribeExternalFileOpen = null
 
 onMounted(() => {
+  // 注册到全局编辑器注册中心，供本地指令层 / 命令面板等使用
+  setActiveEditor(editor.value)
+
   if (!isElectron()) return
 
   const api = getElectronAPI()
@@ -304,6 +409,16 @@ onMounted(() => {
     handleExternalFileOpen(pending)
   }
 })
+
+// 监听 editor 实例变化（Tiptap 异步初始化 / props.content 改变触发重建），
+// 重新同步到全局注册中心，避免持有陈旧的 ProseMirror state 引用。
+watch(
+  () => editor.value,
+  (next, prev) => {
+    if (prev) clearActiveEditor(prev)
+    if (next) setActiveEditor(next)
+  },
+)
 
 function applyHeading(level) {
   const currentEditor = editor.value
@@ -444,6 +559,8 @@ watch(
 onBeforeUnmount(() => {
   unsubscribeExternalFileOpen?.()
   unbindEditor()
+  // 从全局注册中心注销，避免外部代码持有已销毁的 editor
+  clearActiveEditor(editor.value)
 })
 
 function openTableDialog() {
@@ -659,14 +776,6 @@ const toolbarItems = computed(() => {
       action: () => ed.chain().focus().redo().run(),
     },
   ]
-})
-
-defineExpose({
-  getMarkdown,
-  getFormatSnapshot,
-  getEditor: () => editor.value,
-  loadMarkdown,
-  openImageEditor,
 })
 </script>
 
@@ -1048,6 +1157,13 @@ defineExpose({
 .editor-content :deep(.editor-prose p) {
   margin: 0.5rem 0;
   line-height: 1.75;
+  text-indent: 0;
+}
+
+/* MD 智能排版引擎：data-indent 由 useMarkdownFormatter 设置，
+   以 CSS 变量映射为 text-indent，避免覆盖 Tiptap 原生 attrs。 */
+.editor-content :deep(.editor-prose p[data-indent='2em']) {
+  text-indent: 2em;
 }
 
 .editor-content :deep(.editor-prose ul),

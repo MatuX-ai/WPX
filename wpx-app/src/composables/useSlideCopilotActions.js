@@ -20,7 +20,7 @@ import { useModelSettingsStore } from '@/stores/modelSettings'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { outlineToSlides } from '@/composables/useSlideGenerator'
-import { downloadSlidesAsHtml, downloadSlidesAsPptx } from '@/utils/slideExport'
+import { downloadSlidesAsHtml, downloadSlidesAsPptx, downloadSlidesAsPdf } from '@/utils/slideExport'
 
 const PLATFORM_DEEPSEEK_BASE = 'https://api.deepseek.com'
 const PLATFORM_DEEPSEEK_MODEL = 'deepseek-chat'
@@ -383,6 +383,40 @@ export function useSlideCopilotActions() {
         return { ok: true, ...result, message: slidesStore.lastMessage }
       } catch (error) {
         const msg = error?.message || 'PPTX 导出失败'
+        slidesStore.lastError = msg
+        return { ok: false, error: msg }
+      }
+    },
+    render: SlideSnapshot,
+  })
+
+  /* ───────── 9. exportAsPDF ───────── */
+  useFrontendTool({
+    name: 'exportAsPDF',
+    description: '把当前 slides 导出为 PDF 文件（基于浏览器原生 window.print + 自定义打印样式，16:9 横向，图表与图片降级为占位）。',
+    parameters: z.object({
+      filename: z.string().optional().describe('下载文件名，默认 slides-<timestamp>.pdf'),
+      autoPrint: z.boolean().optional().describe('是否自动弹出打印对话框，默认 true'),
+    }),
+    handler: async ({ filename, autoPrint }) => {
+      const snapshot = slidesStore.getSlidesSnapshot()
+      if (snapshot.length === 0) {
+        return { ok: false, error: '当前没有幻灯片可导出，请先生成。' }
+      }
+      try {
+        const result = downloadSlidesAsPdf(snapshot, {
+          theme: slidesStore.theme,
+          filename,
+          autoPrint: autoPrint !== false,
+        })
+        if (result?.method === 'browser-print') {
+          slidesStore.lastMessage = `已发送 PDF 打印任务：${result.filename}`
+        } else {
+          slidesStore.lastMessage = `PDF 导出已准备：${result.filename}`
+        }
+        return { ok: true, ...result, message: slidesStore.lastMessage }
+      } catch (error) {
+        const msg = error?.message || 'PDF 导出失败'
         slidesStore.lastError = msg
         return { ok: false, error: msg }
       }

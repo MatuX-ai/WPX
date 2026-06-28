@@ -30,54 +30,32 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { usePPTWorkflow } from '@/composables/usePPTWorkflow'
 import { outlineToSlides } from '@/composables/useSlideGenerator'
-import { downloadSlidesAsHtml, downloadSlidesAsPptx } from '@/utils/slideExport'
+import { downloadSlidesAsHtml, downloadSlidesAsPptx, downloadSlidesAsPdf } from '@/utils/slideExport'
 
 /**
- * 动态加载 @copilotkit/vue/v2，避免在未安装依赖时让静态分析报错。
- * 使用 new Function('return import(p)') 是为了绕过 Vite / Vitest 的
- * import-analysis，对运行时无影响。
+ * 静态导入 @copilotkit/vue/v2。
+ * 该子路径在 v1.61.1 的 package.json "exports" 中已声明，
+ * 且 vite.config.js 已将 @copilotkit/vue/v2 列入 optimizeDeps.include，
+ * 这里直接静态 import 会进入 vendor-copilotkit chunk。
+ * （历史上的 new Function('return import(p)') hack 在浏览器原生 import()
+ *  下不支持 bare specifier，会报 "Failed to resolve module specifier"。）
  */
-const dynamicImport = new Function('p', 'return import(p)')
-let _useFrontendTool = null
-let _loadPromise = null
-async function loadUseFrontendTool() {
-  if (_useFrontendTool) return _useFrontendTool
-  if (!_loadPromise) {
-    _loadPromise = dynamicImport('@copilotkit/vue/v2').then((mod) => {
-      _useFrontendTool = mod?.useFrontendTool
-      if (!_useFrontendTool) {
-        throw new Error('@copilotkit/vue/v2 未提供 useFrontendTool')
-      }
-      return _useFrontendTool
-    })
-  }
-  return _loadPromise
-}
+import { useFrontendTool } from '@copilotkit/vue/v2'
 
 /**
- * 同步包装：在 setup() 中调用，会触发首次懒加载。
- * 一旦加载完成，后续调用直接复用缓存。
+ * 同步包装：直接调用 v2 的 useFrontendTool。
+ * 模块在静态 import 时已就绪，无需异步加载队列。
  */
 function useFrontendToolSync(config) {
-  if (_useFrontendTool) {
-    _useFrontendTool(config)
-    return
-  }
-  // 首次调用：触发异步加载，并同步把当前 config 注册一次。
-  // 若依赖未安装会在这里抛错，便于开发者发现。
-  const fn = _useFrontendTool
-  if (!fn) {
-    throw new Error('@copilotkit/vue/v2 尚未加载，请先在应用启动时调用 ensureCopilotRuntime()')
-  }
-  fn(config)
+  useFrontendTool(config)
 }
 
 /**
- * 在应用启动早期调用一次，触发 @copilotkit/vue/v2 的懒加载。
- * 一般放在 CopilotKitProvider 的父组件 setup 里。
+ * 保留 ensureCopilotRuntime() 兼容旧调用方（fire-and-forget）。
+ * 因为现在是同步加载，这个函数立即返回，但保留以免破坏外部调用点。
  */
-export async function ensureCopilotRuntime() {
-  await loadUseFrontendTool()
+export function ensureCopilotRuntime() {
+  // no-op: useFrontendTool 已随 slide-actions.js 静态加载就绪
 }
 
 /* ───────── JSON-Schema 简写 → Zod 编译器 ───────── */
@@ -605,6 +583,53 @@ const exportAsPptxAction = {
   },
 }
 
+/**
+ * Action #9：导出 PDF
+ * 使用浏览器原生 window.print() 配合自定义 @page 样式，
+ * 16:9 横向打印，与 PPTX LAYOUT_WIDE 视觉一致。
+ */
+const exportAsPdfAction = {
+  name: 'exportAsPDF',
+  description:
+    '把当前 slides 导出为 PDF 文件（基于浏览器原生 window.print + 自定义打印样式，16:9 横向，图表与图片降级为占位）。',
+  parameters: {
+    filename: {
+      type: 'string',
+      description: '下载文件名，默认 slides-<timestamp>.pdf',
+      required: false,
+    },
+    autoPrint: {
+      type: 'boolean',
+      description: '是否自动弹出打印对话框，默认 true',
+      required: false,
+    },
+  },
+  handler: async ({ filename, autoPrint }) => {
+    const slidesStore = useSlidesStore()
+    const snapshot = slidesStore.getSlidesSnapshot()
+    if (snapshot.length === 0) {
+      return { ok: false, error: '当前没有幻灯片可导出，请先生成。' }
+    }
+    try {
+      const result = downloadSlidesAsPdf(snapshot, {
+        theme: slidesStore.theme,
+        filename,
+        autoPrint: autoPrint !== false,
+      })
+      if (result?.method === 'browser-print') {
+        slidesStore.lastMessage = `已发送 PDF 打印任务：${result.filename}`
+      } else {
+        slidesStore.lastMessage = `PDF 导出已准备：${result.filename}`
+      }
+      return { ok: true, ...result, message: slidesStore.lastMessage }
+    } catch (error) {
+      const msg = error?.message || 'PDF 导出失败'
+      slidesStore.lastError = msg
+      return { ok: false, error: msg }
+    }
+  },
+}
+
 /* ───────── Actions 集合 ───────── */
 
 /**
@@ -621,6 +646,7 @@ export const SLIDE_ACTIONS = [
   removeSlideAction,
   exportAsHtmlAction,
   exportAsPptxAction,
+  exportAsPdfAction,
 ]
 
 /* ───────── 注册桥接：声明 → CopilotKit Frontend Tool ───────── */

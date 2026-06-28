@@ -6,9 +6,9 @@ import {
   toFrontendToolConfig,
 } from '@/copilot/actions/slide-actions'
 
-describe('slide-actions - 8 个 Action 声明', () => {
-  it('SLIDE_ACTIONS 包含 8 个且 name 唯一', () => {
-    expect(SLIDE_ACTIONS).toHaveLength(8)
+describe('slide-actions - 9 个 Action 声明', () => {
+  it('SLIDE_ACTIONS 包含 9 个且 name 唯一', () => {
+    expect(SLIDE_ACTIONS).toHaveLength(9)
     const names = SLIDE_ACTIONS.map((a) => a.name)
     expect(new Set(names).size).toBe(names.length)
   })
@@ -22,6 +22,7 @@ describe('slide-actions - 8 个 Action 声明', () => {
     'removeSlide',
     'exportAsHTML',
     'exportAsPPTX',
+    'exportAsPDF',
   ])('%s 存在于 SLIDE_ACTIONS 中且具备完整字段', (name) => {
     const action = SLIDE_ACTIONS.find((a) => a.name === name)
     expect(action).toBeTruthy()
