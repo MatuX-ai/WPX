@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useSkillExecutor } from '@/composables/useSkillExecutor'
 
 const props = defineProps({
@@ -29,9 +29,91 @@ watch(
   () => props.skillId,
   () => {
     formData.value = {}
+    resetDragOffset()
   },
   { immediate: true },
 )
+
+// ── 拖拽支持 ──────────────────────────────────────
+
+/** Dialog DOM 引用 */
+const dialogRef = ref(null)
+
+/** 拖拽偏移量（单位 px） */
+const dragOffset = ref({ x: 0, y: 0 })
+
+/** 拖拽状态 */
+const dragState = ref({
+  active: false,
+  startX: 0,
+  startY: 0,
+  originX: 0,
+  originY: 0,
+})
+
+function resetDragOffset () {
+  dragOffset.value = { x: 0, y: 0 }
+}
+
+function onDragStart (event) {
+  // 只响应鼠标左键，忽略触摸与右键
+  if (event.button !== 0) return
+  // 如果点击的是关闭按钮，不启动拖拽
+  const target = event.target
+  if (target && target.closest && target.closest('.skill-form-dialog__close')) return
+  if (target && target.closest && target.closest('button')) return
+
+  dragState.value = {
+    active: true,
+    startX: event.clientX,
+    startY: event.clientY,
+    originX: dragOffset.value.x,
+    originY: dragOffset.value.y,
+  }
+
+  // 防止拖拽时选中文字
+  event.preventDefault()
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+}
+
+function onDragMove (event) {
+  if (!dragState.value.active) return
+  const dx = event.clientX - dragState.value.startX
+  const dy = event.clientY - dragState.value.startY
+
+  // 计算下一个偏移量
+  let nextX = dragState.value.originX + dx
+  let nextY = dragState.value.originY + dy
+
+  // 限制拖拽范围：不超出视口
+  const el = dialogRef.value
+  if (el) {
+    const rect = el.getBoundingClientRect()
+    // 计算原始位置（未位移的）的边界
+    const baseLeft = rect.left - dragOffset.value.x
+    const baseTop = rect.top - dragOffset.value.y
+    const minX = -baseLeft
+    const maxX = window.innerWidth - baseLeft - rect.width
+    const minY = -baseTop
+    const maxY = window.innerHeight - baseTop - rect.height
+    nextX = Math.min(Math.max(nextX, minX), Math.max(minX, maxX))
+    nextY = Math.min(Math.max(nextY, minY), Math.max(minY, maxY))
+  }
+
+  dragOffset.value = { x: nextX, y: nextY }
+}
+
+function onDragEnd () {
+  dragState.value.active = false
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+})
 
 // ── 表单操作 ──────────────────────────────────
 
@@ -71,13 +153,19 @@ function handleKeydown (event) {
 <template>
   <div v-if="overlay" class="skill-form-backdrop" @mousedown.self="handleCancel">
     <div
+      ref="dialogRef"
       class="skill-form-dialog"
+      :class="{ 'skill-form-dialog--dragging': dragState.active }"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="`skill-form-title-${skillId}`"
+      :style="{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }"
       @keydown="handleKeydown"
     >
-      <header class="skill-form-dialog__header">
+      <header
+        class="skill-form-dialog__header"
+        @mousedown="onDragStart"
+      >
         <h3 :id="`skill-form-title-${skillId}`" class="skill-form-dialog__title">
           {{ schema?.title || 'Skill 参数' }}
         </h3>
@@ -85,6 +173,7 @@ function handleKeydown (event) {
           type="button"
           class="skill-form-dialog__close"
           aria-label="关闭"
+          @mousedown.stop
           @click="handleCancel"
         >
           ✕
@@ -266,22 +355,32 @@ function handleKeydown (event) {
   position: fixed;
   inset: 0;
   z-index: 1100;
+  /* 居中显示：避免与顶部标题栏 + 工具栏重叠 */
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 80px 16px 16px;
+  padding: calc(var(--title-bar-height, 36px) + var(--editor-toolbar-height, 36px) + 16px) 16px 16px;
   background: rgba(15, 23, 42, 0.35);
 }
 
 .skill-form-dialog {
   width: min(100%, 480px);
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - var(--title-bar-height, 36px) - var(--editor-toolbar-height, 36px) - 32px);
   overflow-y: auto;
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-lg);
   background: var(--theme-bg);
   color: var(--theme-fg);
   box-shadow: var(--theme-shadow-lg);
+  /* 允许使用 transform 进行拖拽定位，不影响布局 */
+  will-change: transform;
+}
+
+.skill-form-dialog--dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: none;
 }
 
 .skill-form-dialog__header {
@@ -290,6 +389,13 @@ function handleKeydown (event) {
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--theme-border);
+  cursor: move; /* 提示用户该区域可拖拽 */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.skill-form-dialog__header:active {
+  cursor: grabbing;
 }
 
 .skill-form-dialog__title {

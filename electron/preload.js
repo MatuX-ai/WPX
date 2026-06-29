@@ -40,11 +40,13 @@ const electronAPI = {
   onOpenFile: (callback) => onChannel('file:open', callback),
   onOpenMarkdownFile: (callback) => onChannel('file:open', callback),
   onOpenArchive: (callback) => onChannel('file:open-archive', callback),
+  openFileDialog: () => ipcRenderer.invoke('dialog:open-file'),
   files: {
     readDocument: (filePath) => ipcRenderer.invoke('file:read-document', filePath),
     writeDocument: (filePath, content) =>
       ipcRenderer.invoke('file:write-document', filePath, content),
     getModifiedTime: (filePath) => ipcRenderer.invoke('file:get-modified-time', filePath),
+    convertDocx: (filePath) => ipcRenderer.invoke('file:convert-docx', filePath),
     onOpenFile: (callback) => onChannel('file:open', callback),
     onOpenMarkdown: (callback) => onChannel('file:open', callback),
     onOpenArchive: (callback) => onChannel('file:open-archive', callback),

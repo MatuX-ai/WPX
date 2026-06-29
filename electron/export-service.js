@@ -593,6 +593,1545 @@ function renderEndSlide(slide, pres, theme) {
   }
 }
 
+/* ───────── 教师专用课件渲染器（lesson-ppt） ───────── */
+
+/**
+ * OutlineSlide - 教学目标页（三维目标：知识与技能 / 过程与方法 / 情感态度价值观）
+ *  props: { title, objectives: [{dimension, items: string[]}], theme }
+ */
+function renderOutlineSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  slide0.addText(props.title || '教学目标', {
+    x: SAFE_MARGIN,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2,
+    h: 0.9,
+    fontFace: theme.fontFace,
+    fontSize: 32,
+    bold: true,
+    color: theme.accent,
+  })
+  // 标题下紫绿渐变色条（用纯色近似）
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 1.42,
+    w: 1.6,
+    h: 0.06,
+    fill: { color: theme.accent },
+  })
+
+  const objectives = Array.isArray(props.objectives) ? props.objectives : []
+  if (!objectives.length) {
+    slide0.addText('（未填写教学目标）', {
+      x: SAFE_MARGIN,
+      y: SLIDE_H / 2 - 0.5,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: 1,
+      fontFace: theme.fontFace,
+      fontSize: 16,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+    })
+    return
+  }
+
+  // 三维目标配色
+  const DIMENSION_COLORS = ['1976D2', '43A047', 'FB8C00', '7B1FA2']
+  const startY = 1.7
+  const usableH = SLIDE_H - startY - 0.4
+  const rowH = Math.max(0.9, usableH / objectives.length)
+
+  objectives.forEach((obj, idx) => {
+    const dimColor = DIMENSION_COLORS[idx % DIMENSION_COLORS.length]
+    const rowY = startY + idx * rowH
+    // 左侧维度色块
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN,
+      y: rowY + 0.05,
+      w: 1.7,
+      h: rowH - 0.15,
+      fill: { color: dimColor },
+      line: { color: dimColor, width: 0 },
+    })
+    slide0.addText(obj.dimension || `维度${idx + 1}`, {
+      x: SAFE_MARGIN,
+      y: rowY + 0.05,
+      w: 1.7,
+      h: rowH - 0.15,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+    })
+    // 右侧要点列表
+    const items = Array.isArray(obj.items)
+      ? obj.items.filter((s) => typeof s === 'string' && s.trim())
+      : []
+    if (items.length) {
+      const itemTexts = items.map((item, i) => ({
+        text: item,
+        options: {
+          bullet: { code: '25CF' },
+          color: theme.fg,
+          paraSpaceAfter: i === items.length - 1 ? 0 : 4,
+        },
+      }))
+      slide0.addText(itemTexts, {
+        x: SAFE_MARGIN + 1.9,
+        y: rowY + 0.1,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 1.9,
+        h: rowH - 0.25,
+        fontFace: theme.fontFace,
+        fontSize: 13,
+        color: theme.fg,
+        valign: 'middle',
+      })
+    } else {
+      slide0.addText('（暂无要点）', {
+        x: SAFE_MARGIN + 1.9,
+        y: rowY + 0.1,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 1.9,
+        h: rowH - 0.25,
+        fontFace: theme.fontFace,
+        fontSize: 12,
+        italic: true,
+        color: theme.muted,
+        valign: 'middle',
+      })
+    }
+  })
+}
+
+/**
+ * KeyPointsSlide - 教学重难点（双栏）
+ *  props: { title, keyPoints: string[], difficulties: string[], theme }
+ */
+function renderKeyPointsSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  slide0.addText(props.title || '教学重难点', {
+    x: SAFE_MARGIN,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2,
+    h: 0.9,
+    fontFace: theme.fontFace,
+    fontSize: 32,
+    bold: true,
+    color: theme.accent,
+  })
+
+  const colW = (SLIDE_W - SAFE_MARGIN * 2 - 0.5) / 2
+  const colY = 1.7
+  const colH = SLIDE_H - 2.3
+
+  // 左栏：重点
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'E3F2FD' },
+    line: { color: '1976D2', width: 1 },
+  })
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: 1.3,
+    h: 0.5,
+    fill: { color: '1976D2' },
+  })
+  slide0.addText('教学重点', {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: 1.3,
+    h: 0.5,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  const keyPoints = Array.isArray(props.keyPoints)
+    ? props.keyPoints.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (keyPoints.length) {
+    const lines = keyPoints.map((p) => ({
+      text: `★ ${p}`,
+      options: { color: theme.fg, paraSpaceAfter: 6 },
+    }))
+    slide0.addText(lines, {
+      x: SAFE_MARGIN + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（未填写重点）', {
+      x: SAFE_MARGIN + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+
+  // 右栏：难点
+  const rightX = SAFE_MARGIN + colW + 0.5
+  slide0.addShape(pres.ShapeType.rect, {
+    x: rightX,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'FFF3E0' },
+    line: { color: 'FB8C00', width: 1 },
+  })
+  slide0.addShape(pres.ShapeType.rect, {
+    x: rightX,
+    y: colY,
+    w: 1.3,
+    h: 0.5,
+    fill: { color: 'FB8C00' },
+  })
+  slide0.addText('教学难点', {
+    x: rightX,
+    y: colY,
+    w: 1.3,
+    h: 0.5,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  const difficulties = Array.isArray(props.difficulties)
+    ? props.difficulties.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (difficulties.length) {
+    const lines = difficulties.map((p) => ({
+      text: `⚡ ${p}`,
+      options: { color: theme.fg, paraSpaceAfter: 6 },
+    }))
+    slide0.addText(lines, {
+      x: rightX + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（未填写难点）', {
+      x: rightX + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+}
+
+/**
+ * LeadInSlide - 课堂导入页（情境 + 引导问题）
+ *  props: { title, scenario, questions: string[], mediaUrl, theme }
+ */
+function renderLeadInSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  // 头部 chip + 标题
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: 'FB8C00' },
+  })
+  slide0.addText('导入', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '课堂导入', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.05,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  const colW = (SLIDE_W - SAFE_MARGIN * 2 - 0.5) / 2
+  const colY = 1.5
+  const colH = SLIDE_H - colY - 0.4
+
+  // 左栏：情境
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'FFF3E0' },
+    line: { color: 'FB8C00', width: 1, dashType: 'dash' },
+  })
+  slide0.addText('📖 情境', {
+    x: SAFE_MARGIN + 0.2,
+    y: colY + 0.15,
+    w: colW - 0.4,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 16,
+    bold: true,
+    color: 'FB8C00',
+  })
+  if (props.scenario) {
+    slide0.addText(props.scenario, {
+      x: SAFE_MARGIN + 0.2,
+      y: colY + 0.7,
+      w: colW - 0.4,
+      h: colH - 0.85,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+      paraSpaceAfter: 6,
+    })
+  } else {
+    slide0.addText('（未填写导入情境）', {
+      x: SAFE_MARGIN + 0.2,
+      y: colY + 0.7,
+      w: colW - 0.4,
+      h: colH - 0.85,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+
+  // 右栏：引导问题
+  const rightX = SAFE_MARGIN + colW + 0.5
+  slide0.addShape(pres.ShapeType.rect, {
+    x: rightX,
+    y: colY,
+    w: 1.6,
+    h: 0.5,
+    fill: { color: '1976D2' },
+  })
+  slide0.addText('引导问题', {
+    x: rightX,
+    y: colY,
+    w: 1.6,
+    h: 0.5,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  const questions = Array.isArray(props.questions)
+    ? props.questions.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (questions.length) {
+    const qLines = questions.map((q, i) => ({
+      text: `${i + 1}. ${q}`,
+      options: { color: theme.fg, paraSpaceAfter: 8 },
+    }))
+    slide0.addText(qLines, {
+      x: rightX,
+      y: colY + 0.65,
+      w: colW,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（未填写引导问题）', {
+      x: rightX,
+      y: colY + 0.65,
+      w: colW,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+}
+
+/**
+ * ConceptSlide - 概念讲解（新知讲授）
+ *  props: { title, definition, keyPoints: string[], formula?, formulaLatex?, theme }
+ */
+function renderConceptSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 1.05,
+    h: 0.45,
+    fill: { color: '1976D2' },
+  })
+  slide0.addText('新知讲授', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 1.05,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 13,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '新知讲授', {
+    x: SAFE_MARGIN + 1.25,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.25,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  let y = 1.5
+  if (props.definition) {
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN,
+      y,
+      w: 0.15,
+      h: 0.95,
+      fill: { color: '1976D2' },
+    })
+    slide0.addText(
+      [
+        { text: '定义  ', options: { bold: true, color: '1976D2', fontSize: 14 } },
+        { text: props.definition, options: { color: theme.fg, fontSize: 14 } },
+      ],
+      {
+        x: SAFE_MARGIN + 0.3,
+        y,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 0.3,
+        h: 0.95,
+        fontFace: theme.fontFace,
+        valign: 'middle',
+      },
+    )
+    y += 1.15
+  } else {
+    slide0.addText('（未填写定义）', {
+      x: SAFE_MARGIN,
+      y,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: 0.5,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+    })
+    y += 0.55
+  }
+
+  const keyPoints = Array.isArray(props.keyPoints)
+    ? props.keyPoints.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (keyPoints.length) {
+    const lines = keyPoints.map((p, i) => ({
+      text: `${i + 1}. ${p}`,
+      options: { color: theme.fg, paraSpaceAfter: 6, bullet: false },
+    }))
+    slide0.addText(lines, {
+      x: SAFE_MARGIN + 0.2,
+      y,
+      w: SLIDE_W - SAFE_MARGIN * 2 - 0.2,
+      h: Math.min(3.5, (keyPoints.length * 0.45 + 0.3)),
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+    y += keyPoints.length * 0.45 + 0.3
+  } else if (!props.definition) {
+    slide0.addText('（未填写要点）', {
+      x: SAFE_MARGIN,
+      y,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: 0.5,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+    })
+    y += 0.55
+  }
+
+  const formula = props.formulaLatex || props.formula
+  if (formula) {
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN,
+      y: y + 0.1,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: 0.85,
+      fill: { color: 'FFF8E1' },
+      line: { color: 'FFB300', width: 1, dashType: 'dash' },
+    })
+    slide0.addText(
+      [
+        { text: '公式  ', options: { bold: true, color: 'FFB300', fontSize: 13 } },
+        { text: formula, options: { color: 'B26500', italic: true, fontSize: 16, fontFace: 'Cambria Math' } },
+      ],
+      {
+        x: SAFE_MARGIN + 0.25,
+        y: y + 0.1,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 0.5,
+        h: 0.85,
+        fontFace: theme.fontFace,
+        valign: 'middle',
+      },
+    )
+  }
+}
+
+/**
+ * ExampleSlide - 例题讲解（题目 + 解答）
+ *  props: { title, problem, solution: string[], analysis?, tips?, theme }
+ */
+function renderExampleSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: '43A047' },
+  })
+  slide0.addText('例题', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '例题讲解', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.05,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  const colW = (SLIDE_W - SAFE_MARGIN * 2 - 0.5) / 2
+  const colY = 1.5
+  const colH = SLIDE_H - colY - 0.4
+
+  // 左栏：题目
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'E8F5E9' },
+    line: { color: '43A047', width: 1 },
+  })
+  slide0.addText('题目', {
+    x: SAFE_MARGIN + 0.2,
+    y: colY + 0.15,
+    w: colW - 0.4,
+    h: 0.4,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: '43A047',
+  })
+  if (props.problem) {
+    slide0.addText(props.problem, {
+      x: SAFE_MARGIN + 0.2,
+      y: colY + 0.65,
+      w: colW - 0.4,
+      h: 1.6,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（未填写题目）', {
+      x: SAFE_MARGIN + 0.2,
+      y: colY + 0.65,
+      w: colW - 0.4,
+      h: 0.6,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+    })
+  }
+  if (props.analysis) {
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN + 0.2,
+      y: colY + 2.35,
+      w: colW - 0.4,
+      h: 0.95,
+      fill: { color: 'FFF8E1' },
+      line: { color: 'FB8C00', width: 0 },
+    })
+    slide0.addText(
+      [
+        { text: '思路分析\n', options: { bold: true, color: 'FB8C00', fontSize: 11 } },
+        { text: props.analysis, options: { color: theme.fg, fontSize: 12 } },
+      ],
+      {
+        x: SAFE_MARGIN + 0.35,
+        y: colY + 2.4,
+        w: colW - 0.7,
+        h: 0.85,
+        fontFace: theme.fontFace,
+        valign: 'top',
+      },
+    )
+  }
+  if (props.tips) {
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN + 0.2,
+      y: colY + 3.45,
+      w: colW - 0.4,
+      h: 0.85,
+      fill: { color: 'E3F2FD' },
+      line: { color: '1976D2', width: 0 },
+    })
+    slide0.addText(
+      [
+        { text: '解题提示\n', options: { bold: true, color: '1976D2', fontSize: 11 } },
+        { text: props.tips, options: { color: theme.fg, fontSize: 12 } },
+      ],
+      {
+        x: SAFE_MARGIN + 0.35,
+        y: colY + 3.5,
+        w: colW - 0.7,
+        h: 0.75,
+        fontFace: theme.fontFace,
+        valign: 'top',
+      },
+    )
+  }
+
+  // 右栏：解答
+  const rightX = SAFE_MARGIN + colW + 0.5
+  slide0.addShape(pres.ShapeType.rect, {
+    x: rightX,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'E3F2FD' },
+    line: { color: '1976D2', width: 1 },
+  })
+  slide0.addText('解答', {
+    x: rightX + 0.2,
+    y: colY + 0.15,
+    w: colW - 0.4,
+    h: 0.4,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: '1976D2',
+  })
+  const solution = Array.isArray(props.solution)
+    ? props.solution.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (solution.length) {
+    const solLines = solution.map((s, i) => ({
+      text: `${i + 1}. ${s}`,
+      options: { color: theme.fg, paraSpaceAfter: 8 },
+    }))
+    slide0.addText(solLines, {
+      x: rightX + 0.2,
+      y: colY + 0.65,
+      w: colW - 0.4,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（未填写解答步骤）', {
+      x: rightX + 0.2,
+      y: colY + 0.65,
+      w: colW - 0.4,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+}
+
+/**
+ * PracticeSlide - 课堂练习
+ *  props: { title, questions: [{stem, type?, options?, difficulty?, answer?}], answerVisible, theme }
+ */
+function renderPracticeSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  // 头部
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: 'FB8C00' },
+  })
+  slide0.addText('练习', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '课堂练习', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 2.0,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  const showAnswer = Boolean(props.answerVisible)
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SLIDE_W - SAFE_MARGIN - 1.8,
+    y: 0.55,
+    w: 1.8,
+    h: 0.45,
+    fill: { color: showAnswer ? 'FB8C00' : 'FFFFFF' },
+    line: { color: 'FB8C00', width: 1 },
+  })
+  slide0.addText(showAnswer ? '隐藏答案' : '显示答案', {
+    x: SLIDE_W - SAFE_MARGIN - 1.8,
+    y: 0.55,
+    w: 1.8,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 12,
+    bold: true,
+    color: showAnswer ? 'FFFFFF' : 'FB8C00',
+    align: 'center',
+    valign: 'middle',
+  })
+
+  const questions = Array.isArray(props.questions) ? props.questions : []
+  if (!questions.length) {
+    slide0.addText('（暂无练习题）', {
+      x: SAFE_MARGIN,
+      y: SLIDE_H / 2 - 0.5,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: 1,
+      fontFace: theme.fontFace,
+      fontSize: 16,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+    })
+    return
+  }
+
+  const yStart = 1.5
+  const maxH = SLIDE_H - yStart - 0.4
+  const maxPerSlide = 3
+  const displayed = questions.slice(0, maxPerSlide)
+  const itemH = Math.min(maxH / displayed.length, 1.85)
+
+  displayed.forEach((q, i) => {
+    const itemY = yStart + i * itemH
+    // 题目卡片
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN,
+      y: itemY,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: itemH - 0.1,
+      fill: { color: 'FFF8E1' },
+      line: { color: 'FB8C00', width: 1 },
+    })
+    // 题号
+    slide0.addText(`${i + 1}.`, {
+      x: SAFE_MARGIN + 0.15,
+      y: itemY + 0.1,
+      w: 0.5,
+      h: 0.4,
+      fontFace: theme.fontFace,
+      fontSize: 16,
+      bold: true,
+      color: 'FB8C00',
+    })
+    // 类型
+    slide0.addText(q.type || '解答题', {
+      x: SAFE_MARGIN + 0.55,
+      y: itemY + 0.13,
+      w: 1.0,
+      h: 0.32,
+      fontSize: 10,
+      bold: true,
+      color: 'FB8C00',
+      align: 'left',
+      valign: 'middle',
+    })
+    // 难度
+    const diff = Math.max(0, Math.min(3, Number(q.difficulty) || 1))
+    slide0.addText('★'.repeat(diff) + '☆'.repeat(3 - diff), {
+      x: SLIDE_W - SAFE_MARGIN - 1.5,
+      y: itemY + 0.13,
+      w: 1.3,
+      h: 0.32,
+      fontFace: theme.fontFace,
+      fontSize: 12,
+      color: 'FB8C00',
+      align: 'right',
+      valign: 'middle',
+    })
+    // 题干
+    slide0.addText(q.stem || '', {
+      x: SAFE_MARGIN + 0.2,
+      y: itemY + 0.5,
+      w: SLIDE_W - SAFE_MARGIN * 2 - 0.4,
+      h: itemH - 0.6,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      color: theme.fg,
+      valign: 'top',
+    })
+    // 选项
+    if (Array.isArray(q.options) && q.options.length) {
+      const optLines = q.options.map((opt, oi) => ({
+        text: `${String.fromCharCode(65 + oi)}. ${opt}`,
+        options: { color: theme.fg, paraSpaceAfter: 2 },
+      }))
+      slide0.addText(optLines, {
+        x: SAFE_MARGIN + 0.5,
+        y: itemY + 0.85,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 0.7,
+        h: Math.min(0.75, itemH - 0.95),
+        fontFace: theme.fontFace,
+        fontSize: 12,
+        color: theme.fg,
+        valign: 'top',
+      })
+    }
+    // 答案
+    if (showAnswer && q.answer) {
+      slide0.addShape(pres.ShapeType.rect, {
+        x: SAFE_MARGIN + 0.5,
+        y: itemY + itemH - 0.45,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 0.7,
+        h: 0.32,
+        fill: { color: 'C8E6C9' },
+        line: { color: '43A047', width: 0 },
+      })
+      slide0.addText(`答案：${q.answer}`, {
+        x: SAFE_MARGIN + 0.6,
+        y: itemY + itemH - 0.45,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 0.9,
+        h: 0.32,
+        fontFace: theme.fontFace,
+        fontSize: 12,
+        bold: true,
+        color: '2E7D32',
+        valign: 'middle',
+      })
+    }
+  })
+}
+
+/**
+ * SummarySlide - 课堂小结（要点 + 思维导图）
+ *  props: { title, keyPoints: string[], mindMap: {nodes: [{id,label}], edges: [{from,to}]}, theme }
+ */
+function renderSummarySlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  // 头部
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: theme.accent },
+  })
+  slide0.addText('小结', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '课堂小结', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.05,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  const colW = (SLIDE_W - SAFE_MARGIN * 2 - 0.5) / 2
+  const colY = 1.5
+  const colH = SLIDE_H - colY - 0.4
+
+  // 左栏：要点
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'F5F5F5' },
+    line: { color: theme.border, width: 1 },
+  })
+  const keyPoints = Array.isArray(props.keyPoints)
+    ? props.keyPoints.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (keyPoints.length) {
+    const lines = keyPoints.map((p, i) => ({
+      text: `${i + 1}. ${p}`,
+      options: { color: theme.fg, paraSpaceAfter: 8 },
+    }))
+    slide0.addText(lines, {
+      x: SAFE_MARGIN + 0.25,
+      y: colY + 0.25,
+      w: colW - 0.5,
+      h: colH - 0.5,
+      fontFace: theme.fontFace,
+      fontSize: 15,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（未填写小结要点）', {
+      x: SAFE_MARGIN + 0.25,
+      y: colY + 0.25,
+      w: colW - 0.5,
+      h: colH - 0.5,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+
+  // 右栏：思维导图（文字版）
+  const rightX = SAFE_MARGIN + colW + 0.5
+  slide0.addShape(pres.ShapeType.rect, {
+    x: rightX,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'E8F5E9' },
+    line: { color: '43A047', width: 1 },
+  })
+  slide0.addText('🧠 知识网络', {
+    x: rightX + 0.2,
+    y: colY + 0.15,
+    w: colW - 0.4,
+    h: 0.4,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: '43A047',
+  })
+
+  const mindMap = props.mindMap
+  const nodes = Array.isArray(mindMap && mindMap.nodes) ? mindMap.nodes : []
+  if (nodes.length) {
+    const nodeLines = nodes.map((n) => `• ${n.label || n.id || ''}`)
+    slide0.addText(nodeLines.join('\n'), {
+      x: rightX + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.85,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      color: theme.fg,
+      valign: 'top',
+      paraSpaceAfter: 6,
+    })
+  } else {
+    slide0.addText('（未提供思维导图）', {
+      x: rightX + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.85,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+}
+
+/**
+ * BlackboardSlide - 板书设计（深绿底色 + 黄色重点标记）
+ *  props: { title, layout: 'linear'|'tree'|'table', sections: [{label, content}], theme }
+ */
+function renderBlackboardSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  // 强制使用黑板底色（覆盖 masterName 默认底色）
+  slide0.background = { color: '1E3A2E' }
+
+  // 标题栏（黑板顶部）
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: 'FFF8E1' },
+  })
+  slide0.addText('板书', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: '1E3A2E',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '板书设计', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.05,
+    h: 0.6,
+    fontFace: 'KaiTi',
+    fontSize: 26,
+    bold: true,
+    color: 'FFEB3B',
+    valign: 'middle',
+  })
+
+  const boardY = 1.45
+  const boardH = SLIDE_H - boardY - 0.3
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: boardY,
+    w: SLIDE_W - SAFE_MARGIN * 2,
+    h: boardH,
+    fill: { color: '1E3A2E' },
+    line: { color: 'FFF8E1', width: 2 },
+  })
+
+  const sections = Array.isArray(props.sections)
+    ? props.sections.filter((s) => s && typeof s.label === 'string')
+    : []
+  if (!sections.length) {
+    slide0.addText('（暂无板书内容）', {
+      x: SAFE_MARGIN + 0.5,
+      y: boardY + boardH / 2 - 0.3,
+      w: SLIDE_W - SAFE_MARGIN * 2 - 1,
+      h: 0.6,
+      fontFace: 'KaiTi',
+      fontSize: 16,
+      italic: true,
+      color: 'FFF8E1',
+      align: 'center',
+    })
+    return
+  }
+
+  const layout = props.layout || 'linear'
+  let y = boardY + 0.4
+
+  if (layout === 'linear') {
+    sections.forEach((s) => {
+      slide0.addText(s.label, {
+        x: SAFE_MARGIN + 0.5,
+        y,
+        w: 2.0,
+        h: 0.5,
+        fontFace: 'KaiTi',
+        fontSize: 18,
+        bold: true,
+        color: 'FFEB3B',
+        valign: 'middle',
+      })
+      slide0.addText(s.content || '', {
+        x: SAFE_MARGIN + 2.6,
+        y,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 3.1,
+        h: 0.5,
+        fontFace: 'KaiTi',
+        fontSize: 18,
+        color: 'FFF8E1',
+        valign: 'middle',
+      })
+      y += 0.7
+    })
+  } else if (layout === 'tree') {
+    sections.forEach((s) => {
+      slide0.addShape(pres.ShapeType.rect, {
+        x: SAFE_MARGIN + 0.4,
+        y,
+        w: 0.06,
+        h: 0.85,
+        fill: { color: 'FFEB3B' },
+      })
+      slide0.addText(s.label, {
+        x: SAFE_MARGIN + 0.6,
+        y,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 1,
+        h: 0.4,
+        fontFace: 'KaiTi',
+        fontSize: 17,
+        bold: true,
+        color: 'FFEB3B',
+      })
+      if (s.content) {
+        slide0.addText(s.content, {
+          x: SAFE_MARGIN + 0.85,
+          y: y + 0.42,
+          w: SLIDE_W - SAFE_MARGIN * 2 - 1.25,
+          h: 0.45,
+          fontFace: 'KaiTi',
+          fontSize: 16,
+          color: 'FFF8E1',
+        })
+      }
+      y += 1.0
+    })
+  } else {
+    // table 布局
+    sections.forEach((s) => {
+      slide0.addText(s.label, {
+        x: SAFE_MARGIN + 0.5,
+        y,
+        w: 2.2,
+        h: 0.5,
+        fontFace: 'KaiTi',
+        fontSize: 17,
+        bold: true,
+        color: 'FFEB3B',
+        valign: 'middle',
+      })
+      slide0.addText('|', {
+        x: SAFE_MARGIN + 2.8,
+        y,
+        w: 0.2,
+        h: 0.5,
+        fontFace: 'KaiTi',
+        fontSize: 18,
+        color: 'FFF8E1',
+        align: 'center',
+        valign: 'middle',
+      })
+      slide0.addText(s.content || '', {
+        x: SAFE_MARGIN + 3.05,
+        y,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 3.55,
+        h: 0.5,
+        fontFace: 'KaiTi',
+        fontSize: 17,
+        color: 'FFF8E1',
+        valign: 'middle',
+      })
+      // 分割线
+      slide0.addShape(pres.ShapeType.line, {
+        x: SAFE_MARGIN + 0.5,
+        y: y + 0.55,
+        w: SLIDE_W - SAFE_MARGIN * 2 - 1,
+        h: 0,
+        line: { color: 'FFF8E1', width: 0.5, dashType: 'dash' },
+      })
+      y += 0.6
+    })
+  }
+}
+
+/**
+ * HomeworkSlide - 作业布置（按必做/选做/实践分组）
+ *  props: { title, tasks: [{type: '必做'|'选做'|'实践', description, source?}], theme }
+ */
+function renderHomeworkSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: '7B1FA2' },
+  })
+  slide0.addText('作业', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '作业布置', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.05,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  const tasks = Array.isArray(props.tasks)
+    ? props.tasks.filter((t) => t && typeof t.description === 'string')
+    : []
+  if (!tasks.length) {
+    slide0.addText('（暂无作业）', {
+      x: SAFE_MARGIN,
+      y: SLIDE_H / 2 - 0.5,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: 1,
+      fontFace: theme.fontFace,
+      fontSize: 16,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+    })
+    return
+  }
+
+  const typeColors = {
+    必做: '1976D2',
+    选做: '43A047',
+    实践: 'FB8C00',
+  }
+  // 按类型分组
+  const groups = { 必做: [], 选做: [], 实践: [] }
+  for (const t of tasks) {
+    const k = t.type && groups[t.type] ? t.type : '必做'
+    groups[k].push(t)
+  }
+
+  let y = 1.4
+  const groupKeys = ['必做', '选做', '实践']
+  for (const key of groupKeys) {
+    const group = groups[key]
+    if (!group.length) continue
+    const groupColor = typeColors[key]
+    const groupH = Math.min(2.0, 0.55 + group.length * 0.5)
+    if (y + groupH > SLIDE_H - 0.3) break
+
+    // 分组卡片
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN,
+      y,
+      w: SLIDE_W - SAFE_MARGIN * 2,
+      h: groupH - 0.05,
+      fill: { color: 'FAFAFA' },
+      line: { color: groupColor, width: 1 },
+    })
+    // 左侧色条
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN,
+      y,
+      w: 0.12,
+      h: groupH - 0.05,
+      fill: { color: groupColor },
+      line: { color: groupColor, width: 0 },
+    })
+    // 类型 chip
+    slide0.addShape(pres.ShapeType.rect, {
+      x: SAFE_MARGIN + 0.3,
+      y: y + 0.12,
+      w: 0.7,
+      h: 0.36,
+      fill: { color: groupColor },
+    })
+    slide0.addText(key, {
+      x: SAFE_MARGIN + 0.3,
+      y: y + 0.12,
+      w: 0.7,
+      h: 0.36,
+      fontFace: theme.fontFace,
+      fontSize: 12,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+    })
+    slide0.addText(`共 ${group.length} 项`, {
+      x: SAFE_MARGIN + 1.1,
+      y: y + 0.12,
+      w: 2.0,
+      h: 0.36,
+      fontFace: theme.fontFace,
+      fontSize: 11,
+      color: theme.muted,
+      valign: 'middle',
+    })
+
+    // 任务列表
+    const lines = group.map((t, i) => ({
+      text: `${i + 1}. ${t.description}${t.source ? `（来源：${t.source}）` : ''}`,
+      options: { color: theme.fg, paraSpaceAfter: 4 },
+    }))
+    slide0.addText(lines, {
+      x: SAFE_MARGIN + 0.4,
+      y: y + 0.55,
+      w: SLIDE_W - SAFE_MARGIN * 2 - 0.6,
+      h: groupH - 0.7,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      color: theme.fg,
+      valign: 'top',
+    })
+
+    y += groupH + 0.1
+  }
+}
+
+/**
+ * ReflectionSlide - 教学反思（亮点 + 待改进）
+ *  props: { title, highlights: string[], improvements: string[], theme }
+ */
+function renderReflectionSlide(slide, pres, theme) {
+  const props = slide?.props || {}
+  const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
+  const slide0 = pres.addSlide({ masterName })
+
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fill: { color: '7B1FA2' },
+  })
+  slide0.addText('反思', {
+    x: SAFE_MARGIN,
+    y: 0.55,
+    w: 0.85,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 14,
+    bold: true,
+    color: 'FFFFFF',
+    align: 'center',
+    valign: 'middle',
+  })
+  slide0.addText(props.title || '教学反思', {
+    x: SAFE_MARGIN + 1.05,
+    y: 0.5,
+    w: SLIDE_W - SAFE_MARGIN * 2 - 1.05,
+    h: 0.6,
+    fontFace: theme.fontFace,
+    fontSize: 28,
+    bold: true,
+    color: theme.accent,
+    valign: 'middle',
+  })
+
+  const colW = (SLIDE_W - SAFE_MARGIN * 2 - 0.5) / 2
+  const colY = 1.5
+  const colH = SLIDE_H - colY - 0.4
+
+  // 左栏：亮点
+  slide0.addShape(pres.ShapeType.rect, {
+    x: SAFE_MARGIN,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'E8F5E9' },
+    line: { color: '43A047', width: 1 },
+  })
+  slide0.addText('✨ 教学亮点', {
+    x: SAFE_MARGIN + 0.2,
+    y: colY + 0.15,
+    w: colW - 0.4,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 16,
+    bold: true,
+    color: '43A047',
+  })
+  const highlights = Array.isArray(props.highlights)
+    ? props.highlights.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (highlights.length) {
+    const lines = highlights.map((p) => ({
+      text: `+ ${p}`,
+      options: { color: theme.fg, paraSpaceAfter: 6 },
+    }))
+    slide0.addText(lines, {
+      x: SAFE_MARGIN + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（待补充）', {
+      x: SAFE_MARGIN + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+
+  // 右栏：待改进
+  const rightX = SAFE_MARGIN + colW + 0.5
+  slide0.addShape(pres.ShapeType.rect, {
+    x: rightX,
+    y: colY,
+    w: colW,
+    h: colH,
+    fill: { color: 'FFF3E0' },
+    line: { color: 'FB8C00', width: 1 },
+  })
+  slide0.addText('🔧 待改进', {
+    x: rightX + 0.2,
+    y: colY + 0.15,
+    w: colW - 0.4,
+    h: 0.45,
+    fontFace: theme.fontFace,
+    fontSize: 16,
+    bold: true,
+    color: 'FB8C00',
+  })
+  const improvements = Array.isArray(props.improvements)
+    ? props.improvements.filter((s) => typeof s === 'string' && s.trim())
+    : []
+  if (improvements.length) {
+    const lines = improvements.map((p) => ({
+      text: `→ ${p}`,
+      options: { color: theme.fg, paraSpaceAfter: 6 },
+    }))
+    slide0.addText(lines, {
+      x: rightX + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 14,
+      color: theme.fg,
+      valign: 'top',
+    })
+  } else {
+    slide0.addText('（待补充）', {
+      x: rightX + 0.25,
+      y: colY + 0.65,
+      w: colW - 0.5,
+      h: colH - 0.8,
+      fontFace: theme.fontFace,
+      fontSize: 13,
+      italic: true,
+      color: theme.muted,
+      align: 'center',
+      valign: 'middle',
+    })
+  }
+}
+
 function renderUnknownSlide(slide, pres, theme) {
   const props = slide?.props || {}
   const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
@@ -628,6 +2167,17 @@ const RENDERERS = {
   ChartSlide: renderChartSlide,
   ImageTextSlide: renderImageTextSlide,
   EndSlide: renderEndSlide,
+  // 教师专用课件（lesson-ppt）：依据需求文档中的 10 个页面类型
+  OutlineSlide: renderOutlineSlide,
+  KeyPointsSlide: renderKeyPointsSlide,
+  LeadInSlide: renderLeadInSlide,
+  ConceptSlide: renderConceptSlide,
+  ExampleSlide: renderExampleSlide,
+  PracticeSlide: renderPracticeSlide,
+  SummarySlide: renderSummarySlide,
+  BlackboardSlide: renderBlackboardSlide,
+  HomeworkSlide: renderHomeworkSlide,
+  ReflectionSlide: renderReflectionSlide,
 }
 
 /* ───────── 主入口：renderSlidesToPPTXBuffer ───────── */

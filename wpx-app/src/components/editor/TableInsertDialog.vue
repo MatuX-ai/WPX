@@ -34,7 +34,8 @@ function onColsInput(event) {
 <template>
   <div
     v-if="visible"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+    class="fixed inset-0 flex items-center justify-center bg-slate-900/40 p-4"
+    style="z-index: var(--z-modal, 1100)"
     @click.self="emit('cancel')"
   >
     <div

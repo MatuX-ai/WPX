@@ -2,7 +2,7 @@ const { app } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const ASSOCIATED_EXTENSIONS = new Set(['.md', '.txt', '.wpx'])
+const ASSOCIATED_EXTENSIONS = new Set(['.md', '.txt', '.wpx', '.doc', '.docx', '.xls', '.xlsx', '.xlsm'])
 
 function getPreferencePath() {
   return path.join(app.getPath('userData'), 'file-associations.json')

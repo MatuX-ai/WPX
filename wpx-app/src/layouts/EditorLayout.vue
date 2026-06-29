@@ -42,6 +42,7 @@ import KnowledgeTrigger from '@/components/knowledge/KnowledgeTrigger.vue'
 import AiAssistantPlaceholder from '@/components/layout/AiAssistantPlaceholder.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import SlideCopilotActionsHost from '@/components/slides/SlideCopilotActionsHost.vue'
+import LessonPlanToPptDialog from '@/components/lesson/LessonPlanToPptDialog.vue'
 
 // 异步加载重型组件（减少初始 chunk）
 const KnowledgePanel = defineAsyncComponent(() =>
@@ -100,6 +101,7 @@ const {
 } = overlay
 
 const saveTooltip = shortcutTooltip('保存到文库', 'save')
+const lessonPptTooltip = shortcutTooltip('教案生成课件', 'lessonToPpt')
 const htmlSourceToggleTooltip = computed(() => {
   const baseLabel = htmlSourcePanelVisible.value ? '关闭 HTML 源码面板' : '编辑 HTML 源码'
   const hint = getShortcutLabel('toggleHtmlSourcePanel')
@@ -120,6 +122,34 @@ const aiChatDockTargetRef = ref(null)
  * 当 docked=false 时，A:AssistantPlaceholder 使用 :disabled 的 Teleport fallback 正常渲染到原位。
  */
 provide('aiChatDockTarget', aiChatDockTargetRef)
+
+/**
+ * 教案生成课件注入：
+ *  - AiAssistantPlaceholder 通过 inject('openLessonPlanDialog') 拿到本引用
+ *  - 优先通过 inject 调用，确保 Pinia store 等响应式正确
+ *  - 同步监听 window 事件作为兜底（处理跨 vue 实例 / 跨子树无法 inject 的场景）
+ */
+provide('openLessonPlanDialog', openLessonPlanToPptDialog)
+const lessonPlanDialogEventHandler = (ev) => {
+  // 只处理我们自己派发的事件，避免与其它功能冲突
+  const source = ev?.detail?.source
+  // AI 聊天面板与右键菜单已走 inject 路径，这里仅接管外部脚本调用
+  if (source === 'external-tool' || source === 'shortcut-bridge') {
+    try {
+      openLessonPlanToPptDialog()
+    } catch (err) {
+      console.warn('[EditorLayout] openLessonPlanToPptDialog failed:', err)
+    }
+  }
+}
+function bindLessonPlanDialogWindowListener() {
+  if (typeof window === 'undefined') return
+  window.addEventListener('wpx:local-command:open-lesson-plan-dialog', lessonPlanDialogEventHandler)
+}
+function unbindLessonPlanDialogWindowListener() {
+  if (typeof window === 'undefined') return
+  window.removeEventListener('wpx:local-command:open-lesson-plan-dialog', lessonPlanDialogEventHandler)
+}
 
 /** 右栏宽度：未调整时根据 viewport 选择紧凑版或默认版（参考 AI_CHAT_DOCKED）；
  *  用户手动调整后（isCustomized）使用 composable 的 effectiveWidth。 */
@@ -244,6 +274,62 @@ function openSaveDialog() {
     content: getMarkdown(),
     defaultTitle: getDefaultTitle(),
   })
+}
+
+/* ───────── 教案 → 课件（教师专用） ───────── */
+import { useLessonPptStore } from '@/stores/lessonPpt'
+import { usePPTWorkflow } from '@/composables/usePPTWorkflow'
+const lessonPptStore = useLessonPptStore()
+const pptWorkflow = usePPTWorkflow()
+const lessonDialogVisible = ref(false)
+
+function openLessonPlanToPptDialog() {
+  if (!appStore.hasOpenDocument) {
+    toast.warning('请先打开一份教案')
+    return
+  }
+  const md = getMarkdown()
+  if (!md || md.trim().length < 30) {
+    toast.warning('教案内容过少，无法识别章节')
+    return
+  }
+  lessonPptStore.openDialog()
+  lessonDialogVisible.value = true
+}
+
+function onLessonDialogUpdate(visible) {
+  lessonDialogVisible.value = visible
+  if (!visible) lessonPptStore.closeDialog()
+}
+
+function onLessonDialogConfirm({ config, parseResult }) {
+  // 1) 关闭弹窗
+  lessonDialogVisible.value = false
+  lessonPptStore.closeDialog()
+  // 2) 提取首行作为主题
+  const md = getMarkdown()
+  const titleMatch = md.match(/^#\s+(.+)$/m)
+  const topic = titleMatch ? titleMatch[1].trim() : getDefaultTitle() || '本节课'
+  // 3) 启动工作流，注入 lesson-plan context 与学科配置
+  pptWorkflow.startWorkflow(topic, {
+    context: 'lesson-plan',
+    lessonPlanConfig: {
+      subject: config.subject,
+      stage: config.stage,
+      templateId: config.templateId,
+      textbookVersion: config.textbookVersion,
+      lessonNumber: config.lessonNumber,
+      studentContext: config.studentContext,
+      includeBlackboard: config.includeBlackboard,
+      includeReflection: config.includeReflection,
+      includeHomework: config.includeHomework,
+      outline: parseResult?.outline || [],
+      matchedTemplate: parseResult?.matchedTemplate || '',
+    },
+  })
+  // 4) 打开 AI 助手，便于用户继续对话调整
+  overlay.toggleAiPanel()
+  toast.success(`已开始生成课件：${topic}`)
 }
 
 async function handlePackDocument(payload) {
@@ -417,6 +503,7 @@ useGlobalShortcuts({
   onToggleAiChat: () => toggleAiPanel(),
   onOpenImageEditor: () => editorRef.value?.openImageEditor?.(),
   onToggleHtmlSourcePanel: toggleHtmlSourcePanel,
+  onLessonToPpt: openLessonPlanToPptDialog,
   getEditor: () => editorRef.value?.getEditor?.(),
 })
 
@@ -438,6 +525,7 @@ onMounted(() => {
   tryHandleNewDocument()
   applyPendingKnowledgeImport()
   window.addEventListener('beforeunload', handleBeforeUnload)
+  bindLessonPlanDialogWindowListener()
 
   if (windowStore.isWindowFocused) {
     refreshDocumentSaveStatusOnFocus()
@@ -455,6 +543,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  unbindLessonPlanDialogWindowListener()
   unsubscribeAiChatToggle?.()
   unsubscribeAiChatToggle = null
 })
@@ -693,8 +782,30 @@ watch(
             @import="handleEmptyStateImport"
             @use-template="handleTemplateCreate"
           />
-          <EditorCore v-else ref="editorRef" @change="onEditorChange">
+          <EditorCore v-else ref="editorRef" @change="onEditorChange" @lesson-to-ppt-open="openLessonPlanToPptDialog">
             <template #toolbar-actions>
+              <button
+                type="button"
+                class="editor-layout__lesson-btn wpx-btn"
+                :title="lessonPptTooltip"
+                :aria-label="lessonPptTooltip"
+                data-testid="lesson-to-ppt-btn"
+                @click="openLessonPlanToPptDialog"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="4" width="18" height="14" rx="2" />
+                  <path d="M3 9h18" stroke-linecap="round" />
+                  <path d="M8 14h5" stroke-linecap="round" />
+                </svg>
+              </button>
               <button
                 type="button"
                 class="editor-layout__pdf-btn wpx-btn"
@@ -845,6 +956,13 @@ watch(
       :visible="pdfImportVisible"
       @close="pdfImportVisible = false"
       @confirm="handlePdfImportConfirm"
+    />
+
+    <LessonPlanToPptDialog
+      :visible="lessonDialogVisible"
+      :markdown="getMarkdown()"
+      @update:visible="onLessonDialogUpdate"
+      @confirm="onLessonDialogConfirm"
     />
   </div>
 </template>
@@ -997,6 +1115,40 @@ watch(
 .editor-layout__save-btn--icon-only {
   width: 28px;
   padding: 0;
+}
+
+/*
+ * “生成课件”始终为图标按钮，参照 .editor-layout__pdf-btn--icon-only 模式。
+ * 原实现依赖 :class="{ '...--icon-only': isToolbarIconOnly }" 动态切换；
+ * 在窗口非变窄状态会渲染「生成课件」文字，导致工具栏过于拥挤。
+ * 改造点：
+ *   1) 始终 28x28 图标按钮，占位稳定不变形；
+ *   2) 文字提示依赖 :title / :aria-label（不占布局空间）；
+ *   3) 视觉与保存、PDF 导入等兄弟按钮保持一致。
+ */
+.editor-layout__lesson-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-bg);
+  color: var(--theme-fg);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.editor-layout__lesson-btn:hover {
+  background: var(--theme-bg-muted);
+  border-color: color-mix(in srgb, var(--theme-accent) 35%, var(--theme-border));
+  color: var(--theme-accent);
 }
 
 .editor-layout__pdf-btn {

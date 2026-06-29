@@ -1,13 +1,14 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Infinity as InfinityIcon, Square, User } from '@lucide/vue'
+import { FolderOpen, Infinity as InfinityIcon, Square, User } from '@lucide/vue'
 import { useAuth } from '@/composables/useAuth'
 import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useAuthStore } from '@/stores/auth'
 import { useTrayStore } from '@/stores/tray'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { useSettingsStore } from '@/stores/settings'
+import { useAppStore } from '@/stores/app'
 import { useFocusModeFormatPrompt } from '@/composables/useFocusModeFormatPrompt'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import {
@@ -26,6 +27,7 @@ import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import UserAccountMenu from '@/components/layout/UserAccountMenu.vue'
 import WindowListMenu from '@/components/layout/WindowListMenu.vue'
 import { getWindowId } from '@/utils/windowContext'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   documentName: {
@@ -96,6 +98,32 @@ async function handleToggleFocusMode() {
   }
 }
 
+async function handleOpenFile() {
+  const api = getElectronAPI()
+  if (!api?.openFileDialog) return
+
+  const filePath = await api.openFileDialog()
+  if (!filePath) return
+
+  // 如果已有打开的文档，在新窗口中打开文件
+  const appStore = useAppStore()
+  if (appStore.hasOpenDocument && api.createWindow) {
+    api.createWindow(filePath)
+    return
+  }
+
+  // 否则读取文件内容并加载到当前编辑器
+  const payload = await api.files.readDocument(filePath)
+  if (!payload) return
+
+  appStore.openDocument()
+  appStore.queueExternalFile(payload)
+
+  if (router.currentRoute.value.name !== 'editor') {
+    router.push({ name: 'editor' })
+  }
+}
+
 const isMaximized = ref(false)
 const windowMenuOpen = ref(false)
 const userMenuOpen = ref(false)
@@ -104,6 +132,7 @@ const userMenuAnchor = ref(null)
 const avatarLoadFailed = ref(false)
 const windowList = ref([])
 const currentWindowId = ref(getWindowId())
+const router = useRouter()
 const resolvedPlatform = computed(() => props.platform || detectPlatform())
 const isMac = computed(() => resolvedPlatform.value === 'macos')
 const isElectronShell = computed(() => isElectron())
@@ -357,6 +386,18 @@ onUnmounted(() => {
         />
       </button>
 
+      <!-- 打开文件按钮（仅桌面端可见） -->
+      <button
+        v-if="isElectronShell"
+        type="button"
+        class="title-bar__menu-btn title-bar__open-btn"
+        aria-label="打开文件"
+        title="打开文件"
+        @click="handleOpenFile"
+      >
+        <FolderOpen :size="16" :stroke-width="1.8" aria-hidden="true" />
+      </button>
+
       <!--
         贴边模式下的 AI 助手头像按钮。
         当 AI 助手 dock 到右侧栏后，右下角的 Avatar 会隐藏。
@@ -414,12 +455,20 @@ onUnmounted(() => {
         <button
           v-if="!isAuthenticated"
           type="button"
-          class="title-bar__login-btn"
+          class="title-bar__menu-btn title-bar__login-btn"
+          :class="{ 'title-bar__login-btn--loading': isLoggingIn }"
           aria-label="登录"
+          title="登录"
           :disabled="isLoggingIn"
           @click="handleLogin"
         >
-          {{ isLoggingIn ? '登录中…' : '登录' }}
+          <span v-if="isLoggingIn" class="title-bar__login-spinner" aria-hidden="true" />
+          <User
+            v-else
+            :size="16"
+            :stroke-width="1.8"
+            aria-hidden="true"
+          />
         </button>
 
         <template v-else>
@@ -693,23 +742,9 @@ onUnmounted(() => {
 }
 
 .title-bar__login-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  padding: 0 10px;
   border: 1px solid var(--theme-border);
-  border-radius: 6px;
   background: var(--theme-surface);
   color: var(--theme-fg);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  cursor: default;
-  transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
 }
 
 .title-bar__login-btn:hover {
@@ -720,7 +755,32 @@ onUnmounted(() => {
 
 .title-bar__login-btn:disabled {
   opacity: 0.65;
-  cursor: default;
+  cursor: not-allowed;
+}
+
+.title-bar__login-btn--loading {
+  cursor: progress;
+}
+
+.title-bar__login-spinner {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  animation: title-bar-login-spin 0.8s linear infinite;
+}
+
+@keyframes title-bar-login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-bar__login-spinner {
+    animation-duration: 1.6s;
+  }
 }
 
 .title-bar__user-btn {

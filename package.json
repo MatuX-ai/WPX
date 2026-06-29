@@ -1,6 +1,6 @@
 {
   "name": "wpx",
-  "version": "0.1.14",
+  "version": "0.1.16",
   "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
   "author": {
     "name": "WPX Team",
@@ -188,6 +188,27 @@
         "description": "ZIP compressed archive",
         "mimeType": "application/zip",
         "role": "Viewer"
+      },
+      {
+        "ext": "xlsx",
+        "name": "Excel Spreadsheet",
+        "description": "Microsoft Excel workbook (xlsx)",
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "role": "Editor"
+      },
+      {
+        "ext": "xls",
+        "name": "Excel 97-2003 Spreadsheet",
+        "description": "Microsoft Excel 97-2003 workbook",
+        "mimeType": "application/vnd.ms-excel",
+        "role": "Editor"
+      },
+      {
+        "ext": "xlsm",
+        "name": "Excel Macro-Enabled Workbook",
+        "description": "Microsoft Excel macro-enabled workbook",
+        "mimeType": "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "role": "Editor"
       }
     ],
     "nsis": {
@@ -235,6 +256,7 @@
     "cors": "^2.8.6",
     "electron-is-dev": "^3.0.1",
     "electron-store": "^11.0.2",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "fontkit": "^2.0.4",
     "jszip": "^3.10.1",

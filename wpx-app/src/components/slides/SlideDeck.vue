@@ -41,6 +41,18 @@ import ChartSlide from './ChartSlide.vue'
 import TableSlide from './TableSlide.vue'
 import EndSlide from './EndSlide.vue'
 
+// 教师专用课件组件（教案 → 课件）
+import OutlineSlide from './lesson/OutlineSlide.vue'
+import KeyPointsSlide from './lesson/KeyPointsSlide.vue'
+import LeadInSlide from './lesson/LeadInSlide.vue'
+import ConceptSlide from './lesson/ConceptSlide.vue'
+import ExampleSlide from './lesson/ExampleSlide.vue'
+import PracticeSlide from './lesson/PracticeSlide.vue'
+import SummarySlide from './lesson/SummarySlide.vue'
+import BlackboardSlide from './lesson/BlackboardSlide.vue'
+import HomeworkSlide from './lesson/HomeworkSlide.vue'
+import ReflectionSlide from './lesson/ReflectionSlide.vue'
+
 /* ───────── 组件名 → 实际组件映射（markRaw 避免被响应化） ───────── */
 const COMPONENT_MAP = {
   CoverSlide: markRaw(CoverSlide),
@@ -50,6 +62,17 @@ const COMPONENT_MAP = {
   ChartSlide: markRaw(ChartSlide),
   TableSlide: markRaw(TableSlide),
   EndSlide: markRaw(EndSlide),
+  // 教师专用课件组件
+  OutlineSlide: markRaw(OutlineSlide),
+  KeyPointsSlide: markRaw(KeyPointsSlide),
+  LeadInSlide: markRaw(LeadInSlide),
+  ConceptSlide: markRaw(ConceptSlide),
+  ExampleSlide: markRaw(ExampleSlide),
+  PracticeSlide: markRaw(PracticeSlide),
+  SummarySlide: markRaw(SummarySlide),
+  BlackboardSlide: markRaw(BlackboardSlide),
+  HomeworkSlide: markRaw(HomeworkSlide),
+  ReflectionSlide: markRaw(ReflectionSlide),
 }
 
 const props = defineProps({

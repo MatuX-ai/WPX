@@ -7,8 +7,10 @@ import { hasImagesInDoc } from '@/composables/useMarkdownFormatter'
 import { useMarkdownFormatPromptStore } from '@/stores/markdownFormatPrompt'
 import { importHtmlString } from '@/composables/useHtmlImporter'
 import { useToastStore } from '@/stores/toast'
+import { getElectronAPI, isElectron } from '@/utils/electron'
 
 export const DRAG_DROP_TEXT_EXTENSIONS = new Set(['.md', '.txt', '.html', '.htm'])
+export const DRAG_DROP_DOCX_EXTENSIONS = new Set(['.docx', '.doc'])
 export const DRAG_DROP_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png'])
 export const DRAG_DROP_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png'])
 
@@ -26,6 +28,7 @@ export function classifyDroppedFile(file) {
 
   const ext = getFileExtension(file.name)
   if (DRAG_DROP_TEXT_EXTENSIONS.has(ext)) return 'text'
+  if (DRAG_DROP_DOCX_EXTENSIONS.has(ext)) return 'docx'
   if (DRAG_DROP_IMAGE_EXTENSIONS.has(ext)) return 'image'
   if (DRAG_DROP_IMAGE_MIME_TYPES.has(file.type)) return 'image'
 
@@ -161,6 +164,30 @@ export function useDragDrop({ getEditor, onContentChange } = {}) {
             previewText,
             hasImages: hasImagesInDoc(editor),
           })
+        }
+        continue
+      }
+
+      if (kind === 'docx') {
+        // DOCX/DOC 文件：桌面端通过 IPC 使用 mammoth 转换为 HTML
+        if (isElectron()) {
+          const api = getElectronAPI()
+          const filePath = file.path
+          if (filePath && api?.files?.convertDocx) {
+            const payload = await api.files.convertDocx(filePath)
+            if (payload && payload.content) {
+              const toast = useToastStore()
+              editor.chain().focus().setContent(payload.content).run()
+              notifyChange()
+              toast.info(`已导入「${payload.title}」`, 3000)
+            } else {
+              const toast = useToastStore()
+              toast.error('DOCX 文件转换失败，文件可能已损坏或格式不受支持', 5000)
+            }
+          }
+        } else {
+          const toast = useToastStore()
+          toast.warning('DOCX 导入仅支持桌面端', 3000)
         }
         continue
       }

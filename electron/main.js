@@ -13,6 +13,7 @@ const {
 const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
+const mammoth = require('mammoth')
 
 // 必须在 app.whenReady() 之前调用，才能让 Chrome 子进程一并禁用。
 // 原因：Electron 安全警告由 Chromium 进程输出，在主进程 ready 前
@@ -46,6 +47,7 @@ const {
   createFileOpenController,
   extractAssociablePathsFromArgv,
 } = require('./file-open')
+const { excelFileToMarkdown } = require('./excel-import')
 const WindowManager = require('./window-manager')
 const { initUserDataService } = require('./user-data-service')
 const { initModelIpc } = require('./model-ipc')
@@ -89,6 +91,15 @@ const debugBootstrap = configureAppRemoteDebugging(app, devConfig).then((port) =
 const APP_NAME = 'WPX'
 const WPX_PROTOCOL = 'wpx'
 const WPX_APP_ROOT = path.join(__dirname, '..', 'wpx-app')
+
+// 文件对话框过滤器（菜单项 + IPC handler 共享同一份定义）
+const FILE_OPEN_FILTERS = [
+  { name: '所有支持的文件', extensions: ['md', 'txt', 'wpx', 'doc', 'docx', 'html', 'htm'] },
+  { name: 'Markdown', extensions: ['md'] },
+  { name: '纯文本', extensions: ['txt'] },
+  { name: 'Word 文档', extensions: ['doc', 'docx'] },
+  { name: 'HTML', extensions: ['html', 'htm'] },
+]
 
 /** @type {string | null} */
 let pendingWpxProtocolUrl = null
@@ -173,6 +184,61 @@ async function openAssociatedFile(filePath) {
       return
     }
 
+    // DOCX / DOC 文件：使用 mammoth 转换为 HTML
+    const ext = path.extname(filePath).toLowerCase()
+    if (ext === '.docx' || ext === '.doc') {
+      const docxPayload = await convertDocxFile(filePath)
+      if (!docxPayload) {
+        dialog.showErrorBox('无法打开文件', `不支持的文件格式或文件已损坏：\n${filePath}`)
+        return
+      }
+
+      const deliverDocx = () => {
+        mainWindow?.webContents?.send('file:open', docxPayload)
+      }
+
+      if (!mainWindow) return
+
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once('did-finish-load', deliverDocx)
+      } else {
+        deliverDocx()
+      }
+
+      showMainWindow()
+      return
+    }
+
+    // XLSX / XLS / XLSM 文件：使用 ExcelJS 转换为 Markdown 表格
+    if (ext === '.xlsx' || ext === '.xls' || ext === '.xlsm') {
+      let excelPayload
+      try {
+        excelPayload = await convertExcelFile(filePath)
+      } catch (error) {
+        console.error('[main] excel import failed:', error)
+        dialog.showErrorBox(
+          '无法打开 Excel 文件',
+          `${path.basename(filePath)}\n\n${error.message}`,
+        )
+        return
+      }
+
+      const deliverExcel = () => {
+        mainWindow?.webContents?.send('file:open', excelPayload)
+      }
+
+      if (!mainWindow) return
+
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once('did-finish-load', deliverExcel)
+      } else {
+        deliverExcel()
+      }
+
+      showMainWindow()
+      return
+    }
+
     const payload = await readAssociatedFilePayload(filePath)
     if (!payload) return
 
@@ -192,6 +258,54 @@ async function openAssociatedFile(filePath) {
   } catch (error) {
     console.error('[main] Failed to open associated file:', error)
     dialog.showErrorBox('无法打开文件', `${filePath}\n\n${error.message}`)
+  }
+}
+
+/**
+ * 使用 mammoth 将 DOCX/DOC 文件转换为 HTML 负载
+ * @param {string} filePath
+ * @returns {Promise<{ path: string, content: string, title: string, extension: string } | null>}
+ */
+async function convertDocxFile(filePath) {
+  try {
+    const result = await mammoth.convertToHtml({ path: filePath })
+    const ext = path.extname(filePath).toLowerCase()
+    const baseTitle = path.basename(filePath, ext)
+    return {
+      path: filePath,
+      content: result.value,
+      title: baseTitle,
+      extension: ext,
+      contentType: 'html',
+    }
+  } catch (error) {
+    console.error('[main] mammoth conversion failed:', error)
+    return null
+  }
+}
+
+/**
+ * 使用 ExcelJS 将 xlsx/xlsm 文件转换为 Markdown 负载
+ * 返回结构与 readAssociatedFilePayload 一致，但 contentType='markdown'
+ * 前端识别后会渲染为 Markdown 编辑器内容
+ *
+ * 错误不吞掉，让外层 openAssociatedFile / IPC handler 的 try/catch
+ * 统一显示给用户（避免错误信息被“文件损坏”模糊化）
+ * @param {string} filePath
+ * @returns {Promise<{ path: string, content: string, title: string, extension: string, contentType: string, warnings: string[], sheetCount: number }>}
+ */
+async function convertExcelFile(filePath) {
+  const result = await excelFileToMarkdown(filePath)
+  const ext = path.extname(filePath).toLowerCase()
+  const baseTitle = path.basename(filePath, ext)
+  return {
+    path: filePath,
+    content: result.markdown,
+    title: baseTitle,
+    extension: ext,
+    contentType: 'markdown',
+    warnings: result.warnings,
+    sheetCount: result.sheetCount,
   }
 }
 
@@ -247,6 +361,18 @@ function buildAppMenu() {
     {
       label: '文件',
       submenu: [
+        {
+          label: '打开文件…',
+          accelerator: 'CmdOrCtrl+O',
+          click: async () => {
+            const result = await dialog.showOpenDialog({
+              properties: ['openFile'],
+              filters: FILE_OPEN_FILTERS,
+            })
+            if (result.canceled || !result.filePaths.length) return
+            await openAssociatedFile(result.filePaths[0])
+          },
+        },
         {
           label: '新建窗口',
           accelerator: 'CmdOrCtrl+N',
@@ -699,6 +825,17 @@ function registerIpcHandlers() {
 
   ipcMain.handle('file:read-document', async (_event, filePath) => {
     if (!filePath || typeof filePath !== 'string') return null
+    const ext = path.extname(filePath).toLowerCase()
+    if (ext === '.docx' || ext === '.doc') {
+      return convertDocxFile(filePath)
+    }
+    if (ext === '.xlsx' || ext === '.xls' || ext === '.xlsm') {
+      try {
+        return await convertExcelFile(filePath)
+      } catch (error) {
+        return { error: error.message, path: filePath, contentType: 'excel-error' }
+      }
+    }
     return readAssociatedFilePayload(filePath)
   })
 
@@ -716,6 +853,20 @@ function registerIpcHandlers() {
         error: error instanceof Error ? error.message : '无法写入文档',
       }
     }
+  })
+
+  ipcMain.handle('file:convert-docx', async (_event, filePath) => {
+    if (!filePath || typeof filePath !== 'string') return null
+    return convertDocxFile(filePath)
+  })
+
+  ipcMain.handle('dialog:open-file', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: FILE_OPEN_FILTERS,
+    })
+    if (result.canceled || !result.filePaths.length) return null
+    return result.filePaths[0]
   })
 
   ipcMain.handle('file:get-modified-time', async (_event, filePath) => {

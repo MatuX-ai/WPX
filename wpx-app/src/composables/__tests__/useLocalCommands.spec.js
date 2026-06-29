@@ -172,11 +172,11 @@ describe('useLocalCommands - 基础 API', () => {
     __resetRegistry()
   })
 
-  it('内置指令数量应为 64', () => {
-    expect(LOCAL_COMMANDS_COUNT).toBe(64)
-    expect(LOCAL_COMMANDS.length).toBe(64)
-    expect(getBuiltInCommandCount()).toBe(64)
-    expect(getRegisteredCommandCount()).toBe(64)
+  it('内置指令数量应为 65（新增 CMD-057 教案生成课件后）', () => {
+    expect(LOCAL_COMMANDS_COUNT).toBe(65)
+    expect(LOCAL_COMMANDS.length).toBe(65)
+    expect(getBuiltInCommandCount()).toBe(65)
+    expect(getRegisteredCommandCount()).toBe(65)
   })
 
   it('getLocalCommandPlaceholders 应返回非空数组', () => {
@@ -217,7 +217,7 @@ describe('useLocalCommands - 基础 API', () => {
       action: () => ({ ok: true }),
     })
     expect(unregisterLocalCommand('test-temp')).toBe(true)
-    expect(getRegisteredCommandCount()).toBe(64)
+    expect(getRegisteredCommandCount()).toBe(65)
   })
 
   it('registerLocalCommand 拒绝无效输入', () => {
@@ -1095,9 +1095,9 @@ describe('需求文档验收点 L805-L812（8 项）', () => {
   // ─── 7. placeholder 覆盖所有 64 条指令 ───
   it('L811 #7 placeholder 轮转示例覆盖 58 条内置指令的主要分类', () => {
     const placeholders = getLocalCommandPlaceholders()
-    // 文档原话 56 条；本地指令系统当前已扩到 64 条，验收以实际为准
+    // 文档原话 56 条；本地指令系统已扩到 65 条（含 CMD-057 教案生成课件），验收以实际为准
     expect(LOCAL_COMMANDS_COUNT).toBeGreaterThanOrEqual(56)
-    expect(LOCAL_COMMANDS_COUNT).toBe(64)
+    expect(LOCAL_COMMANDS_COUNT).toBe(65)
     // placeholder 必须覆盖主要分类（不能只有 1 条）
     expect(placeholders.length).toBeGreaterThanOrEqual(8)
     // 必须包含几个关键操作的引导语，让用户看到即可上手

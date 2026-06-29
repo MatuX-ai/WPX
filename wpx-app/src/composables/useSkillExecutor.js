@@ -29,19 +29,68 @@ function extractVars (template) {
 
 /**
  * 计算一个字符串与关键词列表的匹配分数
- * @param {string} text
- * @param {string[]} keywords
+ *
+ * 评分规则：
+ * - 关键词完整包含 +1
+ * - 关键词被文本以独立词形式包含 +1
+ * - 关键词位于文本开头 +0.5 额外加分（常见于「论文大纲」「考试计划」等意图清晰场景）
+ * - 最终归一化到 0-1
+ *
+ * @param {string} text 用户原始文本
+ * @param {string[]} keywords 关键词列表
+ * @param {string} fullKeywordName 完整 Skill 名称（用于检测独立词命中）
  * @returns {number} 0-1 的匹配分
  */
-function scoreMatch (text, keywords) {
+function scoreMatch (text, keywords, fullKeywordName) {
   const lower = text.toLowerCase()
   let score = 0
+  let matchCount = 0
   for (const kw of keywords) {
     if (lower.includes(kw.toLowerCase())) {
-      score += 1 / keywords.length
+      matchCount++
+      score += 1
     }
   }
-  return score
+  if (matchCount === 0) return 0
+  // 独立词形式命中：关键词在文本中作为完整词出现（而非偶然包含），额外加分
+  if (fullKeywordName && isStandaloneWord(text, fullKeywordName)) {
+    score += 0.5
+  }
+  // 文本开头包含关键词：额外加分（说明用户将 skill 名称作为主语）
+  if (fullKeywordName && text.trim().startsWith(fullKeywordName)) {
+    score += 0.3
+  }
+  // 归一化：按关键词总数与总加权上限进行缩放
+  // 上限 = 关键词数 + 0.5 + 0.3 = 1.8
+  const maxScore = keywords.length + 0.8
+  return Math.min(1, score / maxScore)
+}
+
+/**
+ * 判断关键词在文本中是否作为独立词出现
+ * 避免「作文批改」误中「复习复习大纲」这种偶然包含的情况
+ * @param {string} text
+ * @param {string} keyword
+ * @returns {boolean}
+ */
+function isStandaloneWord (text, keyword) {
+  if (!text || !keyword) return false
+  // 1. 完全相等肯定命中
+  if (text === keyword) return true
+  // 2. 以关键词开头或结尾：检查前/后是否为句子分隔符或文本边界
+  //    （句首/句末的关键词是明显的意图表达）
+  if (text.startsWith(keyword)) {
+    const after = text.charAt(keyword.length)
+    if (!after || /[\s\u3000.,;:!?。，；：！？、]/.test(after)) return true
+  }
+  if (text.endsWith(keyword)) {
+    const before = text.charAt(text.length - keyword.length - 1)
+    if (!before || /[\s\u3000.,;:!?。，；；：！？、]/.test(before)) return true
+  }
+  // 3. 中间出现：前后是句子分隔符或边界
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(?:^|[\\s\u3000.,;:!?。，；；：！？、])${escaped}(?:$|[\\s\u3000.,;:!?。，；；：！？、])`)
+  return regex.test(text)
 }
 
 // ── 显式触发前缀（按优先级排序）────────────────
@@ -375,14 +424,16 @@ export function useSkillExecutor () {
       const nameWords = skill.name.split(/[,，。；;、\s]+/).filter((w) => w.length >= 2)
       const descWords = skill.description.split(/[,，。；;、\s]+/).filter((w) => w.length >= 2)
       const keywords = [...nameWords, ...descWords]
-      const score = scoreMatch(msg, keywords)
+      const score = scoreMatch(msg, keywords, skill.name)
       if (score > bestScore) {
         bestScore = score
         bestId = skill.id
       }
     }
 
-    const THRESHOLD = 0.3
+    // 提高阈值到 0.45，避免偶然包含造成误匹配
+    // （例如「复习大纲」误中「演示文稿大纲」的场景）
+    const THRESHOLD = 0.45
     return bestScore >= THRESHOLD ? bestId : null
   }
 

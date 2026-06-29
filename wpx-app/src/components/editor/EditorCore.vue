@@ -89,7 +89,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['change'])
+const emit = defineEmits(['change', 'lesson-to-ppt-open'])
 
 const editorStore = useEditorStore()
 const appStore = useAppStore()
@@ -371,7 +371,21 @@ function handleExternalFileOpen(payload) {
   appStore.openDocument()
 
   nextTick(() => {
-    loadMarkdown(payload.content)
+    const currentEditor = editor.value
+    if (!currentEditor) {
+      // 编辑器未就绪，保留 pending 数据供后续重试
+      return
+    }
+
+    // 编辑器确认就绪后消费 pending 数据
+    appStore.takePendingExternalFile()
+
+    if (payload.contentType === 'html') {
+      // DOCX 等导入返回 HTML，直接设置到编辑器
+      currentEditor.commands.setContent(payload.content)
+    } else {
+      loadMarkdown(payload.content)
+    }
 
     if (payload.title) {
       appStore.setDocumentTitle(payload.title)
@@ -381,6 +395,19 @@ function handleExternalFileOpen(payload) {
 
     if (payload.format) {
       nextTick(() => applyFormat(payload.format))
+    }
+
+    // Excel 导入后展示统计信息 / 截断警告
+    if (payload.contentType === 'markdown' && payload.sheetCount) {
+      const warnings = Array.isArray(payload.warnings) ? payload.warnings : []
+      if (warnings.length) {
+        toast.warning(
+          `已导入 ${payload.sheetCount} 个工作表，部分内容已截断：\n${warnings.join('\n')}`,
+          5000,
+        )
+      } else {
+        toast.success(`已导入 ${payload.sheetCount} 个 Excel 工作表`, 2500)
+      }
     }
   })
 }
@@ -404,7 +431,7 @@ onMounted(() => {
     unsubscribeExternalFileOpen = subscribe(handleExternalFileOpen)
   }
 
-  const pending = appStore.takePendingExternalFile()
+  const pending = appStore.pendingExternalFile
   if (pending) {
     handleExternalFileOpen(pending)
   }
@@ -418,6 +445,17 @@ watch(
     if (prev) clearActiveEditor(prev)
     if (next) setActiveEditor(next)
   },
+)
+
+// 监听 appStore.pendingExternalFile：当编辑器已挂载但外部文件被队列时加载
+watch(
+  () => appStore.pendingExternalFile,
+  (payload) => {
+    if (payload) {
+      handleExternalFileOpen(payload)
+    }
+  },
+  { immediate: false },
 )
 
 function applyHeading(level) {
@@ -595,6 +633,11 @@ function handleContextMenuAiRewrite() {
 
 function handleContextMenuInsertImage() {
   imageInputRef.value?.click()
+}
+
+function handleContextMenuLessonToPpt() {
+  // 教案 → 课件：通知父组件打开 LessonPlanToPptDialog
+  emit('lesson-to-ppt-open')
 }
 
 async function handleImageFileSelected(event) {
@@ -927,6 +970,7 @@ const toolbarItems = computed(() => {
       @insert-table="openTableDialog"
       @insert-image="handleContextMenuInsertImage"
       @ai-rewrite="handleContextMenuAiRewrite"
+      @lesson-to-ppt="handleContextMenuLessonToPpt"
     />
 
     <FindReplaceDialog
@@ -955,7 +999,24 @@ const toolbarItems = computed(() => {
 <style scoped>
 .editor-toolbar {
   position: sticky;
-  top: var(--title-bar-height, 36px);
+  /*
+   * 修复：top 从 var(--title-bar-height, 36px) 调整为 0。
+   *
+   * 原因（语义层避免 sticky 与 padding-top 的“双重占位”临界）：
+   * sticky 元素的 top 是相对 scrollport（.app-main--immersive）顶部 + top 值。
+   * 原版 top = 36px 正好等于 .editor-layout（AppLayout 中 :deep 设置）的 padding-top = 36px，
+   * 两个 36px 占位在同一个 viewport 边界上同时占据：1) padding 把 .editor-shell 推到 viewport 36px，
+   * 2) sticky top = 36px 锁定 scrollport 顶部 + 36px = 同样 viewport 36px。
+   * 当“自然位置 = sticky 阈值”时，Chromium 中两个独立背景 blur 合成层在 sub-pixel 舍入阶段
+   * 各自 round-to-pixel，与 fixed TitleBar（z-index: 80）下边造成 ~1px 的双重合成继继。
+   *
+   * 现在 top = 0：sticky 阈值 = scrollport 顶部 = viewport 0，
+   * 但 sticky 元素的自然位置仍是 viewport 36px（padding-top 提供）。
+   * natural (36) ≥ threshold (0)，sticky 不介入，元素仍在 viewport 36px。
+   * 视觉上与原版一致，但 sticky 阈值与 padding-top 不再重叠在一起，
+   * 消除了“自然位置 = 阈值”这个临界条件，1px 合成继继不再出现。
+   */
+  top: 0;
   z-index: var(--z-editor-toolbar, 70);
   display: flex;
   align-items: center;

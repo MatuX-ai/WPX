@@ -26,7 +26,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'insert-table', 'insert-image', 'ai-rewrite'])
+const emit = defineEmits(['close', 'insert-table', 'insert-image', 'ai-rewrite', 'lesson-to-ppt'])
 
 const themeStore = useThemeStore()
 const menuRef = ref(null)
@@ -107,6 +107,18 @@ function handleInsertImage() {
   close()
 }
 
+function handleInsertSlideDeck() {
+  const ed = props.editor
+  if (!ed) return
+  ed.chain().focus().insertSlideDeck().run()
+  close()
+}
+
+function handleLessonToPpt() {
+  emit('lesson-to-ppt')
+  close()
+}
+
 const menuItems = computed(() => {
   const items = [
     { key: 'cut', label: '剪切', disabled: !props.hasSelection, action: handleCut },
@@ -129,7 +141,18 @@ const menuItems = computed(() => {
   items.push(
     { key: 'insert-table', label: '插入表格', disabled: false, action: handleInsertTable },
     { key: 'insert-image', label: '插入图片', disabled: false, action: handleInsertImage },
+    { key: 'insert-slide-deck', label: '插入演示文稿', disabled: false, action: handleInsertSlideDeck },
   )
+
+  // 教师专用：把当前文档生成课件（教案 → PPT 课件）
+  items.push({ key: 'divider-2', type: 'divider' })
+  items.push({
+    key: 'lesson-to-ppt',
+    label: '把这篇教案生成课件',
+    disabled: false,
+    action: handleLessonToPpt,
+    accent: true,
+  })
 
   return items
 })

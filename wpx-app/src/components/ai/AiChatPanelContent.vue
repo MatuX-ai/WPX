@@ -11,6 +11,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useToast } from '@/composables/useToast'
 import { fetchKnowledgeList, fetchKnowledgePreview } from '@/utils/knowledgeApi'
 import { usePPTWorkflow, PPT_STEP } from '@/composables/usePPTWorkflow'
+import { useLessonPptStore } from '@/stores/lessonPpt'
 import {
   downloadSlidesAsHtml,
   downloadSlidesAsPptx,
@@ -354,8 +355,9 @@ function removeMentionQueryFromInput() {
 
 const PPT_TRIGGER_PREFIX =
   '(?:帮我|帮我弄|请|麻烦|能|可以|能不能|想|要)?\\s*(?:生成|做|写|弄|画|设计|出|创建)'
+// 课件类关键词：教师教案 → 课堂 PPT 课件
 const PPT_TYPE_WORDS =
-  '(?:PPT|ppt|幻灯片|演示稿|演示文稿|演讲稿|讲稿|片子|slides?|deck|presentation)'
+  '(?:PPT|ppt|幻灯片|演示稿|演示文稿|演讲稿|讲稿|片子|slides?|deck|presentation|课件|教学课件|上课用|课堂演示)'
 const PPT_INTENT_REGEX = new RegExp(
   `(?:${PPT_TRIGGER_PREFIX})\\s*(?:一份|一个|下|个|篇|a|an)?\\s*([\\s\\S]*?)\\s*(?:${PPT_TYPE_WORDS})`,
   'i',
@@ -364,7 +366,8 @@ const PPT_PRESENTATION_ONLY_REGEX = new RegExp(
   `\\b(presentation)\\b`,
   'i',
 )
-
+// 教师教案场景关键词：在用户消息中检测是否表达 “教案/讲稿 → 课件” 意图
+const LESSON_PLAN_HINTS = /(?:教案|教学设计|课件|上课用|课堂|教学课件|教师用|教学过程|教学目标)/
 function extractPptIntent(message) {
   if (!message || typeof message !== 'string') return { matched: false, topic: '' }
   const match = message.match(PPT_INTENT_REGEX)
@@ -376,10 +379,11 @@ function extractPptIntent(message) {
       .replace(/^[\s，,。:：！!？?]+/, '')
       .replace(/[\s，,。:：！!？?]+$/, '')
       .trim()
-    return { matched: true, topic: topic || message.trim() }
+    const isLesson = LESSON_PLAN_HINTS.test(message)
+    return { matched: true, topic: topic || message.trim(), context: isLesson ? 'lesson-plan' : 'generic' }
   }
   if (PPT_PRESENTATION_ONLY_REGEX.test(message)) {
-    return { matched: true, topic: message.trim() }
+    return { matched: true, topic: message.trim(), context: 'generic' }
   }
   return { matched: false, topic: '' }
 }
@@ -399,7 +403,29 @@ function handleSend() {
   const pptWorkflow = usePPTWorkflow()
   const pptIntent = extractPptIntent(message)
   if (pptIntent.topic) {
-    pptWorkflow.startWorkflow(pptIntent.topic)
+    const options = {}
+    if (pptIntent.context === 'lesson-plan') {
+      options.context = 'lesson-plan'
+      // 从 store 读取已有配置（如果弹窗已开过）
+      try {
+        const lps = useLessonPptStore()
+        options.lessonPlanConfig = {
+          subject: lps.subject,
+          stage: lps.stage,
+          templateId: lps.templateId,
+          textbookVersion: lps.textbookVersion,
+          lessonNumber: lps.lessonNumber,
+          studentContext: lps.studentContext,
+          includeBlackboard: lps.includeBlackboard,
+          includeReflection: lps.includeReflection,
+          includeHomework: lps.includeHomework,
+        }
+      } catch (e) {
+        // store 初始化失败时静默忽略
+        console.warn('[AiChat] 读取 lessonPpt 失败', e)
+      }
+    }
+    pptWorkflow.startWorkflow(pptIntent.topic, options)
   }
 
   emit('send', {

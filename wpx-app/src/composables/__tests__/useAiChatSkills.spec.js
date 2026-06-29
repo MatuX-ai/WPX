@@ -84,6 +84,31 @@ describe('useSkillExecutor — 匹配与 Prompt 组装', () => {
     expect(executor.matchSkillByIntent(null)).toBeNull()
   })
 
+  // ── TEST: 避免数学/复习等无关主题误中作文批改等 Skill ──
+  it('"帮我写一个人教版高一期末数学复习大纲" 不匹配任何 Skill（不误中作文批改）', () => {
+    // 这是回归测试：原 bug 是用户输入数学复习大纲，但出现了作文批改表单
+    // 原因：「大纲」是多个 Skill 名称的一部分，阈值过低时会造成偶然命中
+    const matchedId = executor.matchSkillByIntent('帮我写一个人教版高一期末数学复习大纲')
+    expect(matchedId).toBeNull()
+  })
+
+  it('"帮我写一份期末复习计划" 不匹配任何 Skill', () => {
+    const matchedId = executor.matchSkillByIntent('帮我写一份期末复习计划')
+    expect(matchedId).toBeNull()
+  })
+
+  it('"帮我出一份高一数学试卷" 不匹配任何 Skill（避免误中智能组卷）', () => {
+    // 「试卷」在智能组卷描述中出现，但用户表达不清，不足以触发表单
+    const matchedId = executor.matchSkillByIntent('帮我出一份高一数学试卷')
+    expect(matchedId).toBeNull()
+  })
+
+  it('"教高中语文" 不匹配任何 Skill', () => {
+    // 「高中语文」与多个教师 Skill 相关，但表达太模糊，不足以触发表单
+    const matchedId = executor.matchSkillByIntent('教高中语文')
+    expect(matchedId).toBeNull()
+  })
+
   // ── TEST 3: parseSkillCommand 手动指定 ──────
   it('"用教案生成器，数学，人教版" parseSkillCommand 匹配教案生成器', () => {
     const result = executor.parseSkillCommand('用教案生成器，数学，人教版')

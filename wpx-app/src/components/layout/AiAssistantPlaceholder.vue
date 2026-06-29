@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEditorStore } from '@/stores/editor'
 import { useSettingsStore } from '@/stores/settings'
@@ -92,6 +92,74 @@ const CLEANABLE_DEFAULT = Object.freeze({
 })
 const cleanableCount = ref({ ...CLEANABLE_DEFAULT })
 let cleanableScanTimer = null
+
+// ── Skill 候选弹窗拖拽支持 ──────────────────────────────
+/** Candidate Dialog DOM 引用 */
+const candidateDialogRef = ref(null)
+/** Candidate 拖拽偏移量 */
+const candidateDragOffset = ref({ x: 0, y: 0 })
+/** Candidate 拖拽状态 */
+const candidateDragState = ref({
+  active: false,
+  startX: 0,
+  startY: 0,
+  originX: 0,
+  originY: 0,
+})
+
+function resetCandidateDragOffset () {
+  candidateDragOffset.value = { x: 0, y: 0 }
+}
+
+function onCandidateDragStart (event) {
+  if (event.button !== 0) return
+  const target = event.target
+  if (target && target.closest && target.closest('.skill-candidate-dialog__close')) return
+  if (target && target.closest && target.closest('button')) return
+
+  candidateDragState.value = {
+    active: true,
+    startX: event.clientX,
+    startY: event.clientY,
+    originX: candidateDragOffset.value.x,
+    originY: candidateDragOffset.value.y,
+  }
+  event.preventDefault()
+  document.addEventListener('mousemove', onCandidateDragMove)
+  document.addEventListener('mouseup', onCandidateDragEnd)
+}
+
+function onCandidateDragMove (event) {
+  if (!candidateDragState.value.active) return
+  const dx = event.clientX - candidateDragState.value.startX
+  const dy = event.clientY - candidateDragState.value.startY
+  let nextX = candidateDragState.value.originX + dx
+  let nextY = candidateDragState.value.originY + dy
+  const el = candidateDialogRef.value
+  if (el) {
+    const rect = el.getBoundingClientRect()
+    const baseLeft = rect.left - candidateDragOffset.value.x
+    const baseTop = rect.top - candidateDragOffset.value.y
+    const minX = -baseLeft
+    const maxX = window.innerWidth - baseLeft - rect.width
+    const minY = -baseTop
+    const maxY = window.innerHeight - baseTop - rect.height
+    nextX = Math.min(Math.max(nextX, minX), Math.max(minX, maxX))
+    nextY = Math.min(Math.max(nextY, minY), Math.max(minY, maxY))
+  }
+  candidateDragOffset.value = { x: nextX, y: nextY }
+}
+
+function onCandidateDragEnd () {
+  candidateDragState.value.active = false
+  document.removeEventListener('mousemove', onCandidateDragMove)
+  document.removeEventListener('mouseup', onCandidateDragEnd)
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousemove', onCandidateDragMove)
+  document.removeEventListener('mouseup', onCandidateDragEnd)
+})
 
 function refreshCleanableCount() {
   const editor = getActiveEditor()
@@ -368,6 +436,16 @@ const { chat, isLoading, sendMessage, pendingSkill, submitSkillForm, cancelSkill
   onSkillExecuting,
 })
 
+// 关闭/切换候选弹窗时重置拖拽偏移
+watch(
+  () => pendingSkill.value,
+  (next) => {
+    if (!next || next.mode !== 'candidates') {
+      resetCandidateDragOffset()
+    }
+  },
+)
+
 const selectionPreview = computed(() => {
   if (!editorStore.chatInputActive) return ''
   return editorStore.activeSelection.hasSelection
@@ -466,6 +544,28 @@ function tryLocalCommand(text, activeSelection) {
     openFontMarket: () => router.push({ name: 'font-market' }),
     openLibrary: () => router.push({ name: 'library' }),
     openKnowledgePanel: () => appStore.toggleKnowledgePanel(),
+
+    // 教案生成课件委派（CMD-057）：
+    // - 优先调用 EditorLayout 通过 provide/inject 注入的方法
+    // - 降级为派发 window 自定义事件，由 EditorLayout 监听
+    openLessonPlanDialog: () => {
+      try {
+        // 路径 1：通过 inject('openLessonPlanDialog') 拿到 EditorLayout 注入的方法
+        const injected = inject('openLessonPlanDialog', null)
+        if (typeof injected === 'function') {
+          injected()
+          return
+        }
+      } catch (e) {
+        // inject 可能在 setup 上下文外失败，忽略
+      }
+      if (typeof window !== 'undefined') {
+        const ev = new CustomEvent('wpx:local-command:open-lesson-plan-dialog', {
+          detail: { source: 'ai-chat' },
+        })
+        window.dispatchEvent(ev)
+      }
+    },
 
     // 文件操作委派
     saveDocument: () => {
@@ -1320,13 +1420,24 @@ watch(
     class="skill-candidate-backdrop"
     @mousedown.self="cancelSkillForm"
   >
-    <div class="skill-candidate-dialog" role="dialog" aria-modal="true">
-      <header class="skill-candidate-dialog__header">
+    <div
+      ref="candidateDialogRef"
+      class="skill-candidate-dialog"
+      :class="{ 'skill-candidate-dialog--dragging': candidateDragState.active }"
+      role="dialog"
+      aria-modal="true"
+      :style="{ transform: `translate(${candidateDragOffset.x}px, ${candidateDragOffset.y}px)` }"
+    >
+      <header
+        class="skill-candidate-dialog__header"
+        @mousedown="onCandidateDragStart"
+      >
         <h3 class="skill-candidate-dialog__title">找到多个匹配的 Skill，请选择：</h3>
         <button
           type="button"
           class="skill-candidate-dialog__close"
           aria-label="关闭"
+          @mousedown.stop
           @click="cancelSkillForm"
         >
           ✕
@@ -1358,22 +1469,31 @@ watch(
   position: fixed;
   inset: 0;
   z-index: 1100;
+  /* 居中显示：避免与顶部标题栏 + 工具栏重叠 */
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 80px 16px 16px;
+  padding: calc(var(--title-bar-height, 36px) + var(--editor-toolbar-height, 36px) + 16px) 16px 16px;
   background: rgba(15, 23, 42, 0.35);
 }
 
 .skill-candidate-dialog {
   width: min(100%, 480px);
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - var(--title-bar-height, 36px) - var(--editor-toolbar-height, 36px) - 32px);
   overflow-y: auto;
   border: 1px solid var(--theme-border);
   border-radius: var(--theme-radius-lg);
   background: var(--theme-bg);
   color: var(--theme-fg);
   box-shadow: var(--theme-shadow-lg);
+  will-change: transform;
+}
+
+.skill-candidate-dialog--dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: none;
 }
 
 .skill-candidate-dialog__header {
@@ -1382,6 +1502,13 @@ watch(
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--theme-border);
+  cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.skill-candidate-dialog__header:active {
+  cursor: grabbing;
 }
 
 .skill-candidate-dialog__title {
