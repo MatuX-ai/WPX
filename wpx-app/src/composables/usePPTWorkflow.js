@@ -55,6 +55,13 @@ const initialState = () => ({
   startedAt: null,
   /** 工作流结束时间戳（= 进入 EDITING 时） */
   completedAt: null,
+  /**
+   * 业务上下文：'generic'（默认，AI 自由生成 PPT） | 'lesson-plan'（教师教案→课件）
+   * - 'lesson-plan' 时启用 useLessonPptStore 的教案解析与学科模板
+   */
+  context: 'generic',
+  /** 教案上下文配置（仅 context==='lesson-plan' 时使用） */
+  lessonPlanConfig: null,
 })
 
 const state = reactive(initialState())
@@ -87,18 +94,31 @@ function reset(reason = 'manual') {
  */
 function buildSystemPromptAddition() {
   const lines = []
-  lines.push('【PPT 生成工作流】')
+  const isLesson = state.context === 'lesson-plan'
+  lines.push(isLesson ? '【课件生成工作流（教师教案）】' : '【PPT 生成工作流】')
   lines.push(`当前步骤：${describeStep(state.step)}（${STEP_ORDER.indexOf(state.step) + 1}/${STEP_ORDER.length}）`)
+
+  if (isLesson && state.lessonPlanConfig) {
+    const c = state.lessonPlanConfig
+    lines.push(`学科：${c.subject || '未指定'} · 学段：${c.stage || '未指定'} · 模板：${c.templateId || 'default'}`)
+    if (c.studentContext) lines.push(`学情：${c.studentContext}`)
+  }
 
   switch (state.step) {
     case PPT_STEP.OUTLINE:
       lines.push(`主题：${state.topic || '（未指定）'}`)
-      lines.push('下一步：调用 generateOutline Action，把主题传给它，等待用户确认。')
+      lines.push(isLesson
+        ? '下一步：调用 generateOutline Action，传入教案 Markdown 全文（userMessage）。系统会自动解析教学目标/重难点/教学过程/板书/作业。'
+        : '下一步：调用 generateOutline Action，把主题传给它，等待用户确认。')
       break
     case PPT_STEP.TEMPLATE:
       lines.push('大纲已确认。')
-      lines.push('下一步：调用 selectTemplate Action，传入 templateId（business/tech/fresh/custom）。')
-      lines.push('若用户选了 custom，需要同时传 custom 描述。')
+      if (isLesson) {
+        lines.push('下一步：调用 selectTemplate Action，传入 templateId（使用学科模板 ID，如 junior-math / senior-physics）。')
+      } else {
+        lines.push('下一步：调用 selectTemplate Action，传入 templateId（business/tech/fresh/custom）。')
+        lines.push('若用户选了 custom，需要同时传 custom 描述。')
+      }
       break
     case PPT_STEP.GENERATE:
       lines.push(`已选模板：${state.templateId}${state.templateCustom ? `（${state.templateCustom}）` : ''}`)
@@ -169,8 +189,11 @@ export function usePPTWorkflow() {
     /**
      * 用户表达"生成 PPT"意图时调用。
      * @param {string} topic - 用户给出的话题
+     * @param {Object} [options]
+     * @param {'generic'|'lesson-plan'} [options.context]
+     * @param {Object} [options.lessonPlanConfig] - 教案上下文配置
      */
-    startWorkflow(topic) {
+    startWorkflow(topic, options = {}) {
       const cleaned = String(topic || '').trim()
       if (!cleaned) {
         state.lastError = '主题不能为空'
@@ -179,7 +202,11 @@ export function usePPTWorkflow() {
       Object.assign(state, initialState())
       state.topic = cleaned
       state.startedAt = Date.now()
-      state.lastMessage = `已开始生成 PPT：${cleaned}`
+      state.context = options.context === 'lesson-plan' ? 'lesson-plan' : 'generic'
+      state.lessonPlanConfig = options.lessonPlanConfig || null
+      state.lastMessage = state.context === 'lesson-plan'
+        ? `已开始生成课件：${cleaned}`
+        : `已开始生成 PPT：${cleaned}`
       state.lastError = ''
       goToStep(PPT_STEP.OUTLINE)
       return true

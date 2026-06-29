@@ -1476,6 +1476,39 @@ const windowCommands = [
     successMessage: '✅ 已打开文库',
     failureMessage: '⚠️ 无法打开文库',
   }),
+  // ── 教案生成课件（CMD-057） ──────────────────────────
+  // 触发后弹出 LessonPlanToPptDialog 配置弹窗。
+  // 实际弹窗逻辑由 EditorLayout 通过 window 自定义事件 wpx:local-command:open-lesson-plan-dialog 处理。
+  defineCommand({
+    id: 'open-lesson-plan-dialog',
+    category: 'window',
+    patterns: [
+      /^(教案生成课件|生成课件|把这篇[生成做成][课件PPT]|做课件|把(这篇|这份)?教案?(生成|转成|做成)(课件|PPT))$/,
+      /^(教案|教学设计)[→\->\s]*[生成做成]课件$/,
+      /^lesson\s*to\s*ppt$/i,
+      /^\/lesson[\-\s]?to[\-\s]?ppt$/i,
+      /^(教案|课文).*?(课件|教学课件)$/,
+    ],
+    priority: 75,
+    condition: () => true,
+    action: (ctx) => {
+      if (typeof ctx.openLessonPlanDialog === 'function') {
+        ctx.openLessonPlanDialog()
+        return { ok: true, message: '✅ 已打开教案生成课件配置', data: { source: 'local-command' } }
+      }
+      // 降级：派发全局事件让 EditorLayout 接管
+      if (typeof window !== 'undefined') {
+        const ev = new CustomEvent('wpx:local-command:open-lesson-plan-dialog', {
+          detail: { source: 'ai-chat' },
+        })
+        window.dispatchEvent(ev)
+        return { ok: true, message: '✅ 已触发教案生成课件', data: { source: 'event-fallback' } }
+      }
+      return { ok: false, message: '⚠️ 当前环境不支持教案生成课件' }
+    },
+    successMessage: '✅ 已打开教案生成课件配置',
+    failureMessage: '⚠️ 当前环境不支持教案生成课件',
+  }),
 ]
 
 // ── 汇总导出 ──────────────────────────────────────
