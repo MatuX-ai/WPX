@@ -24,6 +24,7 @@
 import { build } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
+import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -125,13 +126,28 @@ for (const route of PRERENDER_ROUTES) {
 // ========== 步骤 4：生成 sitemap.xml + robots.txt ==========
 console.log('[prerender] 步骤 4/4 · 生成 sitemap.xml + robots.txt...')
 
-const lastmod = new Date().toISOString().slice(0, 10)
+const today = new Date().toISOString().slice(0, 10)
+
+// 读取 git 最新提交日期（作为 changelog / docs / skills 子路由的 lastmod）
+// 仅作用于这三个“内容动态”的子路由，其余路由使用构建日期。
+let gitLastmod = today
+try {
+  const out = execSync('git log -1 --format=%cI', { encoding: 'utf-8' }).trim()
+  if (out) gitLastmod = out.slice(0, 10)
+} catch {
+  // 非 git 环境或读取失败时静默回落到 today
+}
+
+const lastmodFor = (path) => {
+  if (/^\/(changelog|docs|skills)/.test(path)) return gitLastmod
+  return today
+}
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${PRERENDER_ROUTES.map((r) => `  <url>
     <loc>${escapeXml(SITE_URL.replace(/\/$/, '') + r.path)}</loc>
-    <lastmod>${lastmod}</lastmod>
+    <lastmod>${lastmodFor(r.path)}</lastmod>
     <changefreq>${r.changefreq}</changefreq>
     <priority>${r.priority}</priority>
   </url>`).join('\n')}

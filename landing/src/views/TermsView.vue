@@ -93,7 +93,7 @@ const lastUpdated = '2026-06-18'
               <li>多窗口独立编辑与多任务并行；</li>
               <li>内置 Skills 体系（含学生专用、教师专用与通用 Skills）；</li>
               <li>内置 8 款免费开源字体及在线字体按需下载；</li>
-              <li>可选云端 AI 推理（需用户自行配置 API Key 或使用平台 Token）；</li>
+              <li>可选云端 AI 推理（需用户自行配置兼容 OpenAI 协议的 API Key）；</li>
               <li>文件压缩 / 解压（7z、ZIP）；</li>
               <li>图片处理（去背景、裁剪、滤镜）。</li>
             </ul>
@@ -192,7 +192,7 @@ const lastUpdated = '2026-06-18'
               </p>
               <p>
                 <strong class="text-dark">商业字体：</strong>
-                通过「字体商店」购买并 Token 充值的商业字体，仅限你本人或你所在企业按购买时选择的授权范围使用；不得转售或二次分发。
+                你自行采购并导入的商业字体，需自行确保已获得合法授权并按对应授权范围使用；不得转售或二次分发。V1.1 起，平台不再销售或充值商业字体。
               </p>
               <p>
                 <strong class="text-dark">嵌入导出：</strong>

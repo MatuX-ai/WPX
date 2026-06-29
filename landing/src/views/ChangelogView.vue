@@ -6,17 +6,134 @@
  *
  *  - 倒序时间线：版本号 → 日期 → 改动列表
  *  - 每条改动用 feature / fix / breaking 三色 chip 区分
- *  - 底部 CTA：订阅 + GitHub Releases
+ *  - 顶部 CTA：订阅 GitHub Releases
+ *  - 移动端默认收起旧版本（节省首屏空间）
  * ------------------------------------------------------------
  */
+import { ref } from 'vue'
 
+const chipStyles = {
+  feature: 'bg-primary-from/10 text-primary-600',
+  fix: 'bg-accent-mint/20 text-emerald-700',
+  breaking: 'bg-rose-100 text-rose-700'
+}
+
+const chipLabels = {
+  feature: '新功能',
+  fix: '修复',
+  breaking: '不兼容'
+}
+
+// 倒序：v0.1.16 → v0.1.10 → v1.0.0 → v0.9.x ……
 const releases = [
+  {
+    version: 'v0.1.16',
+    date: '2026-06-29',
+    badge: '最新',
+    badgeClass: 'bg-wpx-gradient text-white',
+    summary: 'Excel 导入支持 (.xls / .xlsx) + 标题字号 / 段距 / 列表样式优化。',
+    docLink: null,
+    changes: [
+      { type: 'feature', text: 'Excel / WPS 表格 / Numbers 文档一键导入并解析为表格块' },
+      { type: 'feature', text: '编辑器标题字号档位扩展（5 档）+ 段距微调' },
+      { type: 'fix', text: '修复图片批量插入时的顺序错乱' }
+    ]
+  },
+  {
+    version: 'v0.1.15',
+    date: '2026-06-29',
+    badge: '重大',
+    badgeClass: 'bg-accent-yellow/30 text-amber-800',
+    summary: '教师教案 → 课件 PPT 全流程上线，备课效率提升 10 倍。',
+    docLink: { label: '需求文档', href: '/docs#lesson-ppt' },
+    changes: [
+      { type: 'feature', text: '教案大纲 → 演示文稿大纲 → PPT 一键生成' },
+      { type: 'feature', text: 'PPT 母版与配色方案自动推荐' },
+      { type: 'feature', text: '配套讲义同步生成（Markdown 格式）' },
+      { type: 'feature', text: 'AI 助手贴边模式一键切换' }
+    ]
+  },
+  {
+    version: 'v0.1.14',
+    date: '2026-06-29',
+    badge: '特性',
+    badgeClass: 'bg-primary-from/10 text-primary-600',
+    summary: 'AI Chat 显示 DeepSeek 思考过程 + 图片对齐修复。',
+    docLink: { label: '需求文档', href: '/docs#ai-panel' },
+    changes: [
+      { type: 'feature', text: 'AI Chat 支持显示 DeepSeek 等模型的 `reasoning_content` 思考链' },
+      { type: 'feature', text: 'AI 错误提示增加「重试 / 切换模型 / 检查 Key」三选项' },
+      { type: 'fix', text: '修复图片删除后的占位空白' },
+      { type: 'fix', text: '修复多张图片对齐时的链式缩进异常' }
+    ]
+  },
+  {
+    version: 'v0.1.13',
+    date: '2026-06-29',
+    badge: '重大',
+    badgeClass: 'bg-accent-yellow/30 text-amber-800',
+    summary: 'Focus 模式 MD 排版提示 + 本地指令 64 条 + HTML 源码编辑 + IDE 风格 dock。',
+    docLink: { label: '需求文档', href: '/docs#local-commands' },
+    changes: [
+      { type: 'feature', text: 'Focus 模式进入时自动应用 MD 排版模板提示' },
+      { type: 'feature', text: '本地指令系统从 56 条扩展至 64 条（含 /focus /export /paper-a4 等）' },
+      { type: 'feature', text: 'HTML 源码分屏编辑（CodeMirror 6 + Tiptap 双向同步）' },
+      { type: 'feature', text: 'AI 助手贴边 dock 模式（IDE 风格右侧栏 inline panel）' },
+      { type: 'feature', text: '右栏拖拽调整宽度（resize handle）' }
+    ]
+  },
+  {
+    version: 'v0.1.12',
+    date: '2026-06-29',
+    badge: '工程',
+    badgeClass: 'bg-dark/5 text-dark/70',
+    summary: 'electron-builder 打包配置优化 + 图片删除链路修复。',
+    docLink: null,
+    changes: [
+      { type: 'fix', text: '修复图片删除后编辑器残留空白节点的问题' },
+      { type: 'fix', text: '对齐图片链路在多窗口下的一致性' },
+      { type: 'fix', text: 'electron-builder 安装包体积与启动速度优化' }
+    ]
+  },
+  {
+    version: 'v0.1.11',
+    date: '2026-06-28',
+    badge: '安全',
+    badgeClass: 'bg-rose-100 text-rose-700',
+    summary: '7 项中风险安全加固 + 版本递增至 0.1.11。',
+    docLink: null,
+    changes: [
+      { type: 'fix', text: '加固 IPC 通道签名校验，阻断伪造主进程消息' },
+      { type: 'fix', text: '加固本地文件路径越权校验' },
+      { type: 'fix', text: '修复 Webview 沙箱里潜在的 URL 跳转漏洞' },
+      { type: 'fix', text: '其他 4 项中风险加固（详见 GitHub Security Advisory）' }
+    ]
+  },
+  {
+    version: 'v0.1.10',
+    date: '2026-06-28',
+    badge: '特性',
+    badgeClass: 'bg-primary-from/10 text-primary-600',
+    summary: '演示文稿生成器 / HTML 导出弹窗 / 本地指令 56 条 / MD-HTML 智能排版 / jcode 高性能 AI 引擎 / PDF 离线 OCR 全套上线。',
+    docLink: { label: '需求文档', href: '/docs#lesson-ppt' },
+    changes: [
+      { type: 'feature', text: '演示文稿生成器（4 步工作流：意图 → 大纲 → 配图 → 导出）' },
+      { type: 'feature', text: 'HTML 导出弹窗（带 ZIP 打包、源文件一并归档）' },
+      { type: 'feature', text: '本地指令系统首版 56 条（基础操作 + 排版指令）' },
+      { type: 'feature', text: 'MD / HTML 智能排版引擎（导入 HTML 后自动清理与排版）' },
+      { type: 'feature', text: 'jcode 高性能 AI 引擎前端接入（带知识库）' },
+      { type: 'feature', text: 'PDF 离线 OCR（pdfjs + tesseract.js，本地推理 0 上传）' },
+      { type: 'feature', text: '编辑器核心：Tiptap + 自定义扩展 + 12 种语气与 6 种长度档位' }
+    ]
+  },
+  // 历史旧版（移动端默认收起）
   {
     version: 'v1.0.0',
     date: '2026-06-18',
     badge: '首发',
-    badgeClass: 'bg-wpx-gradient text-white',
+    badgeClass: 'bg-dark/5 text-dark/70',
     summary: '从单点工具到完整写作工作台，WPX 的第一个里程碑版本。',
+    docLink: null,
     changes: [
       { type: 'feature', text: '多窗口独立编辑器 —— 同时打开 N 个文档，互不干扰' },
       { type: 'feature', text: '虚拟纸张：所见即所得的版式编辑，支持母版与分页' },
@@ -31,88 +148,20 @@ const releases = [
     badge: '稳定',
     badgeClass: 'bg-accent-mint/20 text-emerald-700',
     summary: 'PDF 导出器升级，支持母版渲染与字体子集化嵌入。',
+    docLink: null,
     changes: [
       { type: 'feature', text: 'PDF 导出支持自定义纸张大小与页边距' },
       { type: 'feature', text: '中文字体子集化导出，PDF 体积下降 60%' },
       { type: 'fix', text: '修复导出长文档时偶发的分页错位问题' },
       { type: 'fix', text: '修复部分 Linux 系统下字体回退失败的问题' }
     ]
-  },
-  {
-    version: 'v0.9.0',
-    date: '2026-05-20',
-    badge: '重大',
-    badgeClass: 'bg-accent-yellow/30 text-amber-800',
-    summary: '内置 16 款学生 Skills + 16 款教师 Skills，覆盖全场景教学与学习。',
-    changes: [
-      { type: 'feature', text: '学生 Skills：论文大纲、文献综述、查重降重、排版助手、开题报告等' },
-      { type: 'feature', text: '教师 Skills：教案生成、课件大纲、智能出题、作文批改、家长会发言稿等' },
-      { type: 'feature', text: 'Skills 管理面板：启用 / 停用 / 自定义提示词' },
-      { type: 'feature', text: 'Skills 执行历史与一键复用' }
-    ]
-  },
-  {
-    version: 'v0.8.0',
-    date: '2026-05-06',
-    badge: '特性',
-    badgeClass: 'bg-primary-from/10 text-primary-600',
-    summary: '内置 8 款免费开源字体，覆盖中英文书写全部场景。',
-    changes: [
-      { type: 'feature', text: '思源黑体 / 思源宋体 / 霞鹜文楷 / 霞鹜文楷等宽' },
-      { type: 'feature', text: '阿里巴巴普惠体 / HarmonyOS Sans / JetBrains Mono / Noto Color Emoji' },
-      { type: 'feature', text: '字体按字重筛选与一键预览' },
-      { type: 'feature', text: '在线免费字体库（按需下载）' }
-    ]
-  },
-  {
-    version: 'v0.7.0',
-    date: '2026-04-22',
-    badge: '特性',
-    badgeClass: 'bg-primary-from/10 text-primary-600',
-    summary: '集成 7-Zip，支持文档打包 / 解压 / 分卷 / 加密。',
-    changes: [
-      { type: 'feature', text: '一键将当前文档目录打包为 7z / ZIP' },
-      { type: 'feature', text: 'AES-256 加密保护敏感文档' },
-      { type: 'feature', text: '文件关联：双击 .7z / .zip 直接在 WPX 中预览' }
-    ]
-  },
-  {
-    version: 'v0.6.0',
-    date: '2026-04-08',
-    badge: '特性',
-    badgeClass: 'bg-primary-from/10 text-primary-600',
-    summary: '内置图片编辑器：去背景、裁剪、滤镜、打码一句话搞定。',
-    changes: [
-      { type: 'feature', text: 'AI 一键去背景（本地 rembg 推理，零上传）' },
-      { type: 'feature', text: '裁剪 / 旋转 / 缩放 / 滤镜 / 马赛克' },
-      { type: 'feature', text: '拖拽插入到当前文档光标位置' }
-    ]
-  },
-  {
-    version: 'v0.5.0',
-    date: '2026-03-25',
-    badge: '起点',
-    badgeClass: 'bg-dark/5 text-dark/70',
-    summary: 'Markdown 编辑器与 TipTap 富文本核心首次发布。',
-    changes: [
-      { type: 'feature', text: '基于 TipTap 的所见即所得编辑器' },
-      { type: 'feature', text: 'Markdown 双向同步' },
-      { type: 'feature', text: '本地文件持久化（不依赖云端）' },
-      { type: 'breaking', text: '编辑器内部 API 不稳定，不建议插件化对接' }
-    ]
   }
 ]
 
-const chipStyles = {
-  feature: 'bg-primary-from/10 text-primary-600',
-  fix: 'bg-accent-mint/20 text-emerald-700',
-  breaking: 'bg-rose-100 text-rose-700'
-}
-
-const chipLabels = {
-  feature: '新功能',
-  fix: '修复',
-  breaking: '不兼容'
+// 移动端默认收起旧版本
+const visibleCount = ref(7)
+const showAll = () => {
+  visibleCount.value = releases.length
 }
 </script>
 
@@ -126,8 +175,27 @@ const chipLabels = {
           <span class="wpx-gradient-text">WPX 的每一次小步快跑</span>
         </h1>
         <p class="mt-4 text-dark/60">
-          新功能、性能优化、Bug 修复 —— 我们在这里记录每一次有意义的改变。
+          桌面端 v0.1.10 → v0.1.16 一口气迭代 6 个版本，所有 feature / fix / breaking 都有迹可循。
         </p>
+        <!-- 订阅 CTA -->
+        <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="https://github.com/wpx-team/wpx/releases.atom"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="wpx-btn-primary"
+          >
+            <span aria-hidden="true">📡</span> 订阅 GitHub Releases
+          </a>
+          <a
+            href="https://github.com/wpx-team/wpx/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="wpx-btn-ghost"
+          >
+            在 GitHub 查看 ↗
+          </a>
+        </div>
       </div>
 
       <!-- Timeline -->
@@ -140,7 +208,7 @@ const chipLabels = {
           />
 
           <article
-            v-for="r in releases"
+            v-for="r in releases.slice(0, visibleCount)"
             :key="r.version"
             class="relative mb-12 md:ml-12"
           >
@@ -170,8 +238,18 @@ const chipLabels = {
                   >
                     {{ r.badge }}
                   </span>
+                  <router-link
+                    v-if="r.docLink"
+                    :to="r.docLink.href"
+                    class="text-xs font-semibold text-primary-600 hover:underline"
+                  >
+                    {{ r.docLink.label }} →
+                  </router-link>
                 </div>
-                <time class="text-sm text-dark/50">{{ r.date }}</time>
+                <time class="flex items-center gap-1 text-sm text-dark/50">
+                  <span aria-hidden="true">⏱</span>
+                  {{ r.date }}
+                </time>
               </header>
               <p class="mt-2 text-sm leading-relaxed text-dark/70">
                 {{ r.summary }}
@@ -193,6 +271,17 @@ const chipLabels = {
               </ul>
             </div>
           </article>
+
+          <!-- 显示更多按钮（移动端隐藏 v0.9.5 之前的旧版本） -->
+          <div v-if="visibleCount < releases.length" class="text-center">
+            <button
+              type="button"
+              class="rounded-full border border-primary-from/30 bg-wpx-gradient-soft px-6 py-2 text-sm font-semibold text-primary-600 transition-all hover:-translate-y-0.5 hover:shadow-wpx"
+              @click="showAll"
+            >
+              显示全部 {{ releases.length - visibleCount }} 个旧版本 ↓
+            </button>
+          </div>
         </div>
       </div>
 
@@ -213,21 +302,8 @@ const chipLabels = {
             rel="noopener noreferrer"
             class="wpx-btn-primary"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.37 2.447a1 1 0 00-.364 1.118l1.287 3.957c.3.922-.755 1.688-1.54 1.118l-3.37-2.447a1 1 0 00-1.176 0l-3.37 2.447c-.784.57-1.838-.196-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.05 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.957z"
-              />
-            </svg>
-            <span>前往 GitHub Releases</span>
+            <span aria-hidden="true">⭐</span>
+            前往 GitHub Releases
           </a>
           <router-link
             to="/blog"

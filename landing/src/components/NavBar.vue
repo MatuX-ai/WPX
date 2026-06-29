@@ -7,7 +7,7 @@
  * 特性：
  *  - 滚动后背景从透明 → 白色 + backdrop-blur（500ms 缓动）
  *  - 左侧：Logo（图标 + WPX 文字）
- *  - 中间：功能 / 下载（锚点）、关于（路由）、GitHub（外链）
+ *  - 中间：5 项混合导航：功能 / 下载（锚点）、技能 / 更新日志 / 关于（路由）、GitHub（外链）
  *  - 右侧：【免费下载】CTA，自带 2s 脉冲动画
  *  - 移动端：汉堡按钮 → 全屏覆盖菜单，自动锁 body 滚动
  *  - 点击下载/锚点：跨页先回首页再平滑滚动
@@ -23,10 +23,15 @@ const router = useRouter()
 const scrolled = ref(false)
 const mobileOpen = ref(false)
 
-// 中间导航
+// 中间导航：5 项 = 锚点 + 路由混合
+// type: 'anchor' → 站内锚点滚动
+// type: 'route'  → 跨页路由跳转
 const navLinks = [
-  { id: 'features', label: '功能' },
-  { id: 'download', label: '下载' }
+  { id: 'features', label: '功能', type: 'anchor' },
+  { id: 'skills', label: '技能', type: 'route', to: '/skills' },
+  { id: 'changelog', label: '更新日志', type: 'route', to: '/changelog' },
+  { id: 'download', label: '下载', type: 'anchor' },
+  { id: 'about', label: '关于', type: 'route', to: '/about' }
 ]
 
 // 滚动监听
@@ -72,11 +77,6 @@ const handleAnchor = async (e, id) => {
     }
     history.replaceState(null, '', `#${id}`)
   }
-}
-
-const gotoAbout = () => {
-  mobileOpen.value = false
-  router.push('/about')
 }
 
 // 关闭菜单（供覆盖层 / ESC 使用）
@@ -149,22 +149,23 @@ onBeforeUnmount(() => {
 
       <!-- ========== 中间：导航链接（桌面） ========== -->
       <nav class="hidden items-center gap-1 md:flex">
-        <a
-          v-for="link in navLinks"
-          :key="link.id"
-          :href="`#${link.id}`"
-          class="rounded-full px-4 py-2 text-sm font-medium text-dark/70 transition-colors hover:bg-primary-500/5 hover:text-primary-600"
-          @click="(e) => handleAnchor(e, link.id)"
-        >
-          {{ link.label }}
-        </a>
-        <a
-          href="/about"
-          class="rounded-full px-4 py-2 text-sm font-medium text-dark/70 transition-colors hover:bg-primary-500/5 hover:text-primary-600"
-          @click.prevent="gotoAbout"
-        >
-          关于
-        </a>
+        <template v-for="link in navLinks" :key="link.id">
+          <router-link
+            v-if="link.type === 'route'"
+            :to="link.to"
+            class="rounded-full px-4 py-2 text-sm font-medium text-dark/70 transition-colors hover:bg-primary-500/5 hover:text-primary-600"
+          >
+            {{ link.label }}
+          </router-link>
+          <a
+            v-else
+            :href="`#${link.id}`"
+            class="rounded-full px-4 py-2 text-sm font-medium text-dark/70 transition-colors hover:bg-primary-500/5 hover:text-primary-600"
+            @click="(e) => handleAnchor(e, link.id)"
+          >
+            {{ link.label }}
+          </a>
+        </template>
         <a
           href="https://github.com/wpx-team/wpx"
           target="_blank"
@@ -306,36 +307,32 @@ onBeforeUnmount(() => {
       <!-- 链接列表 -->
       <nav class="wpx-container flex-1 overflow-y-auto py-6">
         <ul class="space-y-3">
-          <li
-            v-for="(link, idx) in navLinks"
-            :key="link.id"
-            :style="{
-              transitionDelay: mobileOpen ? `${idx * 50}ms` : '0ms'
-            }"
-            class="fullscreen-item"
-          >
-            <a
-              :href="`#${link.id}`"
-              class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
-              @click="(e) => handleAnchor(e, link.id)"
+          <template v-for="(link, idx) in navLinks" :key="link.id">
+            <li
+              :style="{
+                transitionDelay: mobileOpen ? `${idx * 50}ms` : '0ms'
+              }"
+              class="fullscreen-item"
             >
-              <span>{{ link.label }}</span>
-              <span class="text-dark/30">↓</span>
-            </a>
-          </li>
-          <li
-            :style="{ transitionDelay: mobileOpen ? `${navLinks.length * 50}ms` : '0ms' }"
-            class="fullscreen-item"
-          >
-            <a
-              href="/about"
-              class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
-              @click.prevent="gotoAbout"
-            >
-              <span>关于</span>
-              <span class="text-dark/30">→</span>
-            </a>
-          </li>
+              <router-link
+                v-if="link.type === 'route'"
+                :to="link.to"
+                class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
+              >
+                <span>{{ link.label }}</span>
+                <span class="text-dark/30">→</span>
+              </router-link>
+              <a
+                v-else
+                :href="`#${link.id}`"
+                class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
+                @click="(e) => handleAnchor(e, link.id)"
+              >
+                <span>{{ link.label }}</span>
+                <span class="text-dark/30">↓</span>
+              </a>
+            </li>
+          </template>
           <li
             :style="{
               transitionDelay: mobileOpen ? `${(navLinks.length + 1) * 50}ms` : '0ms'

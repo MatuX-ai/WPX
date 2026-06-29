@@ -154,7 +154,7 @@ function guessReply(text) {
   const t = text.toLowerCase()
   if (/功能|feature|介绍|可以|做什么/.test(t)) return '我猜你想看的是【功能】页面 → 那里有 WPX 的全部能力介绍。'
   if (/下载|download|安装|exe|dmg|appimage/.test(t)) return '直奔【下载】页，15MB 一键装好。'
-  if (/价格|付费|多少钱|token/.test(t)) return 'WPX 工具免费，AI 算力按 Token 计费（6 块起）。详见首页【为什么免费】段落。'
+  if (/价格|付费|多少钱|token|计费/.test(t)) return 'WPX 工具本身完全免费，AI 算力由用户自行接 API（如 DeepSeek / 智谱 / 通义等）。详见首页【完全免费】说明。'
   if (/文档|教程|怎么用|帮助/.test(t)) return '官方文档持续更新中，先看【功能】页和首页交互演示。'
   if (/博客|blog|文章|更新/.test(t)) return '博客页（/blog）有团队周记和功能解读。'
   if (/关于|团队|公司|联系/.test(t)) return '团队介绍在【关于】路由 → /about。'

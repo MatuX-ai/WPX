@@ -214,6 +214,8 @@ function handleCta(s) {
               WPX 始终相信好工具应该人人可用。V1.1 起我们撤掉所有平台内置大模型服务与商业字体售卖业务，
               把 AI 与字体的选择权完全交回给用户。你可以在本地接入任何兼容 OpenAI 协议的国产 / 国外大模型，
               也可以自由使用任何已获合法授权的字体，<strong class="text-dark">WPX 不收任何平台服务费、不抽成、不收 Token 费</strong>。
+              <br />
+              <strong class="text-dark">v1.1 起说明</strong>：已无 Token 计费机制，原 FAQ 中相关措辞已全部废弃，请以最新文档为准。
             </p>
           </div>
         </div>

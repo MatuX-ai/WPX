@@ -99,6 +99,20 @@ const socials = [
             论文、报告、随笔，一处搞定。
           </p>
 
+          <!-- 当前桌面端版本徽章 -->
+          <a
+            href="/changelog"
+            class="mt-5 inline-flex items-center gap-2 rounded-full border border-primary-from/20 bg-wpx-gradient-soft px-3 py-1 text-xs font-semibold text-primary-600 transition-all hover:-translate-y-0.5 hover:shadow-wpx"
+            aria-label="当前桌面端版本 v0.1.16，点击查看完整更新日志"
+          >
+            <span
+              aria-hidden="true"
+              class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
+            />
+            当前桌面端 v0.1.16 · 已迭代 6 个版本
+            <span aria-hidden="true">→</span>
+          </a>
+
           <!-- 社交链接 -->
           <div class="mt-6 flex flex-wrap items-center gap-2">
             <a
@@ -191,6 +205,16 @@ const socials = [
           <span class="font-semibold text-primary-600">midnight snacks</span>.
         </p>
         <div class="flex items-center gap-3 text-xs text-dark/40">
+          <a
+            href="https://github.com/wpx-team/wpx/releases.atom"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 transition-colors hover:text-primary-600"
+          >
+            订阅更新
+            <span aria-hidden="true">↗</span>
+          </a>
+          <span>·</span>
           <a
             href="/sitemap.xml"
             class="transition-colors hover:text-primary-600"

@@ -11,9 +11,9 @@ export const siteConfig = {
   // 基础站点信息
   name: 'WPX',
   shortName: 'WPX',
-  title: 'WPX - 免费AI文档编辑器，告别WPS付费烦恼',
+  title: 'WPX - 免费多窗口 AI 文档编辑器 | 演示文稿/本地指令/v0.1.16',
   description:
-    '纯净、免费、开源的AI文档编辑器。Markdown、PDF互转、AI写作、图片处理。',
+    '多窗口独立 AI 文档编辑器：Markdown、PDF、DOCX 互转，内置 32+ Skills 与 64 条本地指令、教师课件 PPT 一键生成、PDF 离线 OCR、HTML 源码分屏编辑，完全免费、开源本地优先。',
   keywords: [
     'WPX',
     'AI文档编辑器',
@@ -24,7 +24,24 @@ export const siteConfig = {
     '图片处理',
     'WPS替代',
     '开源',
-    'Electron'
+    'Electron',
+    // ===== v0.1.16 新增关键词 (V1.1 完全免费模式) =====
+    '多窗口编辑器',
+    '多窗口独立编辑器',
+    '演示文稿生成器',
+    'PPT生成',
+    '教师课件',
+    '本地指令',
+    'HTML源码编辑',
+    'PDF离线OCR',
+    '完全免费编辑器',
+    '无Token文档编辑器',
+    'Skills市场',
+    'DeepSeek文档',
+    '智谱GLM文档',
+    'jcode高性能',
+    '虚拟纸张',
+    'Markdown转PDF'
   ],
   author: 'WPX Team',
   // 默认站点 URL：构建时会被 env.VITE_SITE_URL 覆盖
@@ -35,7 +52,7 @@ export const siteConfig = {
   ogImagePng: '/og-image.svg', // 兼容旧客户端
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  ogImageAlt: 'WPX - 免费 AI 文档编辑器，让写作更自由',
+  ogImageAlt: 'WPX - 多窗口 AI 文档编辑器，演示文稿 / 本地指令 · v0.1.16',
   twitterHandle: '@wpx_app',
   locale: 'zh_CN',
   themeColor: '#4F46E5',

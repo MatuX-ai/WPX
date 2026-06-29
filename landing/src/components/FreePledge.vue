@@ -19,8 +19,13 @@ const rows = [
   },
   {
     feature: '商业字体',
-    wps: { text: '单独购买', bad: true },
+    wps: { text: '按字数收费', bad: true },
     wpx: { text: '完全免费', good: true, note: '自导入已授权字体' }
+  },
+  {
+    feature: 'Token 计费',
+    wps: { text: '已废止', bad: false },
+    wpx: { text: '已停用', good: true, note: 'V1.1 起不适用' }
   },
   {
     feature: '模板',
@@ -70,7 +75,7 @@ const pledgeItems = [
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">我们的承诺</span>
         <h2 class="mt-4 text-[1.6rem] font-extrabold leading-tight sm:text-3xl md:text-5xl">
-          <span class="wpx-gradient-text">完全免费 · 没有例外</span>
+          <span class="wpx-gradient-text">完全免费 · 没有任何附加项</span>
         </h2>
         <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-dark/70">
           工具<strong class="text-dark">永久免费</strong>，AI 与字体由用户自备 / 自导入。
@@ -226,6 +231,10 @@ const pledgeItems = [
           立即免费下载
           <span aria-hidden="true">→</span>
         </a>
+        <!-- 同步说明：本文已随 v0.1.16 同步生效，旧版 Token 计费措辞已废 -->
+        <p class="mt-2 max-w-2xl text-xs leading-relaxed text-dark/40">
+          本文最后随 v0.1.16 同步生效；之前版本若仍提 Token 计费，已作废。
+        </p>
       </div>
     </div>
   </section>

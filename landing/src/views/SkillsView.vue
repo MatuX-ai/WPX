@@ -10,6 +10,15 @@
  * ------------------------------------------------------------
  */
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// 下载/试用 CTA
+const trySkill = (skill) => {
+  // 彩蛋：跳到首页下载区，附带 skill id 作为 hash
+  router.push({ path: '/', hash: `#download?skill=${skill.id}` })
+}
 
 const tabs = [
   { id: 'all', label: '全部' },
@@ -18,6 +27,7 @@ const tabs = [
   { id: 'general', label: '通用' }
 ]
 const activeTab = ref('all')
+const keyword = ref('')
 
 const skills = [
   // 学生 · 学术写作
@@ -96,8 +106,20 @@ const skills = [
 ]
 
 const filteredSkills = computed(() => {
-  if (activeTab.value === 'all') return skills
-  return skills.filter((s) => s.cat === activeTab.value)
+  let list = skills
+  if (activeTab.value !== 'all') {
+    list = list.filter((s) => s.cat === activeTab.value)
+  }
+  const kw = keyword.value.trim().toLowerCase()
+  if (kw) {
+    list = list.filter((s) =>
+      s.name.toLowerCase().includes(kw) ||
+      s.desc.toLowerCase().includes(kw) ||
+      s.group.toLowerCase().includes(kw) ||
+      s.id.toLowerCase().includes(kw)
+    )
+  }
+  return list
 })
 
 const groupedSkills = computed(() => {
@@ -124,6 +146,53 @@ const groupedSkills = computed(() => {
         </p>
       </div>
 
+      <!-- 教师专项：课件 PPT 一键生成 -->
+      <div class="mt-10 overflow-hidden rounded-3xl border border-primary-500/20 bg-wpx-gradient-soft p-6 md:p-8">
+        <div class="flex flex-col gap-6 md:flex-row md:items-center">
+          <div class="flex-1">
+            <div class="inline-flex items-center gap-2 rounded-full bg-wpx-gradient px-3 py-1 text-[11px] font-semibold text-white shadow-wpx">
+              <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+              教师专区
+            </div>
+            <h2 class="mt-3 text-xl font-extrabold md:text-2xl">
+              <span class="wpx-gradient-text">教师教案 → 课件 PPT，一键生成</span>
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed text-dark/70 md:text-base">
+              把任意教案、知识点或讲义交给 WPX。系统会拆解教学逻辑 → 匹配教学模板 → 生成可编辑的 PPT。1
+              个 Skill 顶 3 个课件组的活。
+            </p>
+            <div class="mt-4 flex flex-wrap items-center gap-3 text-xs text-dark/60">
+              <span class="rounded-full bg-white px-3 py-1 font-semibold">支持 8 种教学模板</span>
+              <span class="rounded-full bg-white px-3 py-1 font-semibold">可导出 PPTX / PDF</span>
+              <span class="rounded-full bg-white px-3 py-1 font-semibold">v0.1.15 上线</span>
+            </div>
+          </div>
+          <div class="flex shrink-0 items-center justify-center md:w-64">
+            <div
+              class="flex aspect-[4/3] w-full max-w-[240px] flex-col rounded-2xl border border-white/40 bg-white p-4 shadow-wpx"
+            >
+              <div class="mb-2 flex items-center gap-1.5">
+                <span class="h-2 w-2 rounded-full bg-rose-400" />
+                <span class="h-2 w-2 rounded-full bg-amber-400" />
+                <span class="h-2 w-2 rounded-full bg-emerald-400" />
+              </div>
+              <div class="flex-1 space-y-1.5">
+                <div class="h-1.5 w-3/4 rounded bg-primary-500/60" />
+                <div class="h-1 w-full rounded bg-dark/10" />
+                <div class="h-1 w-5/6 rounded bg-dark/10" />
+                <div class="my-2 h-px bg-dark/10" />
+                <div class="grid grid-cols-2 gap-1.5">
+                  <div class="aspect-video rounded bg-primary-500/15" />
+                  <div class="aspect-video rounded bg-primary-500/15" />
+                  <div class="aspect-video rounded bg-primary-500/15" />
+                  <div class="aspect-video rounded bg-primary-500/15" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Tabs -->
       <div class="mt-12 flex flex-wrap items-center justify-center gap-2">
         <button
@@ -137,6 +206,31 @@ const groupedSkills = computed(() => {
         >
           {{ t.label }}
         </button>
+      </div>
+
+      <!-- 搜索框 -->
+      <div class="mx-auto mt-6 max-w-md">
+        <label class="relative block">
+          <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-dark/40">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+            </svg>
+          </span>
+          <input
+            v-model="keyword"
+            type="search"
+            placeholder="搜索 Skills：论文 / 教案 / 翻译…"
+            class="w-full rounded-full border border-dark/10 bg-white py-2.5 pl-10 pr-4 text-sm text-dark outline-none transition-all focus:border-primary-500/40 focus:ring-2 focus:ring-primary-500/20"
+          />
+        </label>
+      </div>
+
+      <!-- 空结果 -->
+      <div v-if="groupedSkills.length === 0" class="mt-12 text-center text-dark/50">
+        <div class="mx-auto mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-dark/5 text-2xl">
+          🔍
+        </div>
+        <p>没找到匹配的 Skill。试试换个关键词，或者切到「全部」看看？</p>
       </div>
 
       <!-- Grouped Skill Cards -->
@@ -153,7 +247,7 @@ const groupedSkills = computed(() => {
           <article
             v-for="s in g.items"
             :key="s.id"
-            class="group rounded-2xl border border-dark/5 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-primary-500/30 hover:shadow-wpx"
+            class="group flex flex-col rounded-2xl border border-dark/5 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-primary-500/30 hover:shadow-wpx"
           >
             <div class="flex items-start justify-between gap-3">
               <h3 class="text-base font-bold group-hover:text-primary-600">
@@ -163,12 +257,22 @@ const groupedSkills = computed(() => {
                 内置
               </span>
             </div>
-            <p class="mt-2 text-sm leading-relaxed text-dark/60">
+            <p class="mt-2 flex-1 text-sm leading-relaxed text-dark/60">
               {{ s.desc }}
             </p>
-            <code class="mt-3 inline-block rounded bg-dark/5 px-2 py-0.5 text-[11px] font-mono text-dark/60">
-              {{ s.id }}
-            </code>
+            <div class="mt-4 flex items-center justify-between">
+              <code class="rounded bg-dark/5 px-2 py-0.5 text-[11px] font-mono text-dark/60">
+                {{ s.id }}
+              </code>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-full bg-wpx-gradient px-3 py-1.5 text-[11px] font-semibold text-white shadow-wpx transition-all hover:-translate-y-0.5"
+                @click="trySkill(s)"
+              >
+                立即体验
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
           </article>
         </div>
       </div>

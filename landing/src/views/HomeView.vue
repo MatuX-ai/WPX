@@ -101,7 +101,7 @@ function scrollToShowcase(e) {
             aria-hidden="true"
             class="h-1.5 w-1.5 rounded-full bg-primary-from"
           />
-          v1.0 · 全新发布
+          v0.1.16 · 已迭代 6 个版本
         </span>
 
         <h1
@@ -119,8 +119,8 @@ function scrollToShowcase(e) {
           ref="heroSub"
           class="mt-6 max-w-xl text-lg leading-relaxed text-dark/70"
         >
-          WPX 把多窗口编辑、AI 改写、虚拟纸张与文件管理融于一体。
-          论文、报告、随笔、研究资料，从构思到定稿，一处完成。
+          编辑器 + AI 助手 + 本地指令 + 演示文稿生成，多窗口一处搞定。
+          论文、报告、随笔、研究资料、备课课件，从构思到定稿，一处完成。
         </p>
 
         <div
@@ -150,28 +150,28 @@ function scrollToShowcase(e) {
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-accent-mint"
             />
-            完全本地化
+            多窗口独立
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-accent-yellow"
             />
-            多模型切换
+            64 条本地指令
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-primary-from"
             />
-            多窗口独立
+            32+ Skills
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-primary-to"
             />
-            学生 / 教师技能
+            完全免费
           </li>
         </ul>
       </div>
@@ -221,37 +221,38 @@ function scrollToShowcase(e) {
           </div>
         </div>
 
-        <!-- 浮动徽标 -->
+        <!-- 浮动徽标 · 左下：教师 PPT 一键生成 -->
         <div
           aria-hidden="true"
           class="absolute -left-6 -bottom-6 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx md:flex"
         >
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-yellow/30">
-            🪄
+            🎓
           </div>
           <div>
             <div class="text-xs font-semibold">
-              图片去背景
+              教师课件 PPT 一键生成
             </div>
             <div class="text-[10px] text-dark/50">
-              本地推理 · 隐私无忧
+              教案 → 大纲 → 课件
             </div>
           </div>
         </div>
+        <!-- 浮动徽标 · 右上：PDF 离线 OCR -->
         <div
           aria-hidden="true"
           class="absolute -right-4 -top-4 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx md:flex"
           style="animation-delay: -3s"
         >
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-mint/30">
-            📦
+            🔍
           </div>
           <div>
             <div class="text-xs font-semibold">
-              7z 压缩
+              PDF 离线 OCR
             </div>
             <div class="text-[10px] text-dark/50">
-              一键打包研究资料
+              本地推理 · 扫描件可读
             </div>
           </div>
         </div>
