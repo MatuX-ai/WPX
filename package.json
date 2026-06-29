@@ -1,6 +1,6 @@
 {
   "name": "wpx",
-  "version": "0.1.12",
+  "version": "0.1.14",
   "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
   "author": {
     "name": "WPX Team",

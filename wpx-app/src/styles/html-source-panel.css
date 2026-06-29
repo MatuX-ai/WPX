@@ -74,12 +74,24 @@
   background-color: var(--theme-accent, #7c3aed);
 }
 
+/**
+ * 主编辑区容器。
+ *
+ * 历史背景：在添加 HTML 源码分屏面板前，这里曾设置 `overflow: hidden`，
+ * 用于让源码面板与编辑器在水平方向严格分屏；副作用是 `.app-main--immersive`
+ * 作为滚动容器无法触达超出视口的内容，导致「网页导入后编辑器无法上下滚动」。
+ *
+ * 修复：改为水平 hidden + 垂直 auto/visible，让父级滚动容器（AppLayout 的
+ * `.app-main--immersive`，`overflow-y: auto`）接管垂直滚动；
+ * 水平方向仍保持 hidden，避免出现横向滚动条。
+ */
 .editor-layout__main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 /* ------------------------------------------------------------------ */
