@@ -932,6 +932,32 @@ watch(
   width: auto;
 }
 
+/*
+ * 焦点写作模式下保留 AI「对齐图片」指令的语义：
+ *  - fill 模式仍占满文本区域宽度（100%）
+ *  - narrow 模式为窄边距居中（65%）
+ *  - keep / 未设置时回落 width: auto（默认原始尺寸）
+ * 同时复位 margin-left/right：避免 .editor-prose max-width 限制时双侧自动外边距失效。
+ */
+.editor-layout__editor--focus :deep(.editor-prose .editor-image[data-float='none']) {
+  margin: 0.75rem auto;
+}
+
+.editor-layout__editor--focus
+  :deep(.editor-prose .editor-image[data-float='none'][data-fill='fill']) {
+  width: 100%;
+}
+
+.editor-layout__editor--focus
+  :deep(.editor-prose .editor-image[data-float='none'][data-fill='narrow']) {
+  width: 65%;
+}
+
+.editor-layout__editor--focus
+  :deep(.editor-prose .editor-image[data-float='none'][data-fill='keep']) {
+  width: auto;
+}
+
 .editor-layout__editor :deep(.editor-shell) {
   min-height: calc(100vh - var(--title-bar-height, 36px));
   display: flex;

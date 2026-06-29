@@ -240,20 +240,22 @@ function stripAllImages(editor, options = {}) {
   if (!editor || !editor.state || !editor.state.doc) return 0
   const { state, view } = editor
   const tr = options.sharedTransaction || state.tr
-  const positions = []
+  const ranges = []
   state.doc.descendants((node, pos) => {
     if (node && node.type && node.type.name === 'image') {
-      positions.push(pos)
+      // 必须删除整个 image 节点范围（pos 到 pos + nodeSize），否则只删 1 个字符会留下空节点
+      ranges.push({ from: pos, to: pos + node.nodeSize })
     }
     return true
   })
-  for (let i = positions.length - 1; i >= 0; i -= 1) {
-    tr.delete(positions[i], positions[i] + 1)
+  // 从后往前删，避免位置漂移
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    tr.delete(ranges[i].from, ranges[i].to)
   }
-  if (positions.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
+  if (ranges.length > 0 && !options.sharedTransaction && !options.skipDispatch) {
     view.dispatch(tr)
   }
-  return positions.length
+  return ranges.length
 }
 
 // ── 批量清洗聚合工具（Level 3 提示气泡配套）─────────

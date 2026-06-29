@@ -1238,16 +1238,30 @@ const toolbarItems = computed(() => {
   margin: 0 0 8px 12px;
 }
 
+/*
+ * AI「对齐图片」本地指令（alignImages / fill 模式）将 data-float 设为 'none'，
+ * 并在 HTML attribute 输出 width="100%"。
+ *
+ * 关键修复：HTML5 <img> 的 width attribute 仅允许「非负整数」，
+ * 浏览器会把 width="100%" 当作 100 像素，而非 CSS 百分比，
+ * 导致 importHtml 后看不到任何「撑满宽度」效果。
+ *
+ * 因此这里用 CSS 强制 width: 100% 真正撑满父容器，
+ * 同时配合 max-width: 100% 防止超出。
+ * alignImages(narrow) 会使用 data-fill="narrow" 单独采用 65%。
+ */
 .editor-content :deep(.editor-image[data-float='none']) {
   display: block;
   float: none;
   clear: both;
-  margin: 0.75rem 0;
+  margin: 0.75rem auto;
   max-width: 100%;
+  width: 100%;
+  height: auto;
 }
 
-.editor-content :deep(.editor-image[data-float='none'][data-align='center']) {
-  margin-left: auto;
+.editor-content :deep(.editor-image[data-float='none'][data-align='left']) {
+  margin-left: 0;
   margin-right: auto;
 }
 
@@ -1256,9 +1270,12 @@ const toolbarItems = computed(() => {
   margin-right: 0;
 }
 
-.editor-content :deep(.editor-image[data-float='none'][data-align='left']) {
-  margin-left: 0;
-  margin-right: auto;
+.editor-content :deep(.editor-image[data-float='none'][data-fill='narrow']) {
+  width: 65%;
+}
+
+.editor-content :deep(.editor-image[data-float='none'][data-fill='keep']) {
+  width: auto;
 }
 
 .editor-content :deep(.editor-prose)::after {

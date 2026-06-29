@@ -700,6 +700,15 @@ export function alignImages(editor, mode) {
 
 /**
  * 根据 mode 计算图片 attrs
+ *
+ * 幂等性设计：
+ *  - 保留所有现有 key（包括 height: null），避免 attrsEqual 因为 key 数不同
+ *    而误判 nextAttrs !== existing 从而每次都触发 setNodeMarkup。
+ *  - Tiptap renderHTML 通过 mergeAttributes 过滤 null/undefined，
+ *    所以 height=null 不会出现在最终 <img> 属性中。
+ *  - 仅在 mode='keep' 且原 width 为「百分比字符串」时才删除 width，
+ *    使其返回「原始尺寸」。
+ *
  * @param {Object} existing
  * @param {'fill'|'narrow'|'keep'} mode
  */
@@ -707,14 +716,21 @@ function computeImageAlignAttrs(existing, mode) {
   const attrs = { ...existing }
   attrs.align = 'center'
   attrs.float = 'none'
+  // 记录填充模式，让 EditorImage 扩展输出的 data-fill 属性驱动 CSS
+  // （HTML5 <img width="100%"> 会被浏览器当作 100px，所以需要 CSS 额外覆盖）
+  attrs.fill = mode
   if (mode === 'fill') {
     attrs.width = '100%'
-    delete attrs.height
+    // height 置 null：避免 fill 模式被外部 height 拉伸变形；
+    // 由 Tiptap renderHTML 的 mergeAttributes 过滤 null，输出中不含 height。
+    // 用 null（而非 delete）保证 key 数不变，让下次同模式调用保持幂等。
+    attrs.height = null
   } else if (mode === 'narrow') {
     attrs.width = '65%'
-    delete attrs.height
+    attrs.height = null
   } else if (mode === 'keep') {
-    // 保持原尺寸：删除 width/height（CSS 限制 max-width: 100%）
+    // 保持原尺寸：只删除「百分比字符串」宽，避免 narrow/fill 过后仍占 65%；
+    // height 保留原值（可能被外部网页刻意设定）。
     if (typeof attrs.width === 'string' && attrs.width.endsWith('%')) {
       delete attrs.width
     }
