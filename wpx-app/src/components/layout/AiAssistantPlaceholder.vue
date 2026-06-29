@@ -16,7 +16,7 @@ import {
 } from '@/composables/useFloatingWindows'
 import AiAvatar from '@/components/ai/AiAvatar.vue'
 import AiChatWindow from '@/components/ai/AiChatWindow.vue'
-import { getMessageText, useAiChat } from '@/composables/useAiChat'
+import { getMessageText, getMessageReasoning, hasMessageReasoning, useAiChat } from '@/composables/useAiChat'
 import { useSkillExecutor } from '@/composables/useSkillExecutor'
 import { useLocalCommands, getLocalCommandPlaceholders, countCleanableItems, runBatchClean, runBatchCleanAsync } from '@/composables/useLocalCommands'
 import { getActiveEditor } from '@/composables/useEditorRegistry'
@@ -1129,6 +1129,22 @@ function syncLatestAssistantMessage() {
   if (!lastAssistant) return
 
   const content = extractReplacementText(getMessageText(lastAssistant))
+  // 提取 reasoning（思考过程）以便在折叠面板中渲染，仅供展示，不会插入编辑器
+  const reasoning = getMessageReasoning(lastAssistant)
+
+  // chat.error 不为空 → API 错误，需要明确提示用户
+  if (!content && chat.error) {
+    const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
+    if (lastDisplay?.role === 'assistant' && lastDisplay.chatErrorMessage === chat.error?.message) return
+    displayMessages.value.push({
+      id: createMessageId(),
+      role: 'assistant',
+      content: `⚠️ AI 调用失败：${chat.error?.message || '未知错误'}`,
+      chatErrorMessage: chat.error?.message || '',
+    })
+    return
+  }
+
   if (!content) return
 
   const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
@@ -1138,6 +1154,7 @@ function syncLatestAssistantMessage() {
     id: createMessageId(),
     role: 'assistant',
     content,
+    reasoning: reasoning || undefined,
   })
 
   if (editorStore.pendingReplace) {

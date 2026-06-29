@@ -345,3 +345,50 @@ describe('useAiChat — jcode 路由降级提示（验收 #7）', () => {
     expect(mockToast.warning).not.toHaveBeenCalled()
   })
 })
+
+// ── reasoning（思考过程）提取与识别函数 ──
+describe('useAiChat — reasoning 提取', () => {
+  it('getMessageText 只返回 type=text 的 part，不包含 reasoning', async () => {
+    const { getMessageText } = await import('@/composables/useAiChat')
+    const message = {
+      parts: [
+        { type: 'reasoning', text: '我需要先思考...' },
+        { type: 'text', text: '这是最终答案' },
+        { type: 'reasoning', text: '继续思考' },
+      ],
+    }
+    expect(getMessageText(message)).toBe('这是最终答案')
+  })
+
+  it('getMessageText 对空 message 返回空字符串', async () => {
+    const { getMessageText } = await import('@/composables/useAiChat')
+    expect(getMessageText(null)).toBe('')
+    expect(getMessageText({})).toBe('')
+    expect(getMessageText({ parts: [] })).toBe('')
+  })
+
+  it('getMessageReasoning 拼接所有 type=reasoning 的 part', async () => {
+    const { getMessageReasoning } = await import('@/composables/useAiChat')
+    const message = {
+      parts: [
+        { type: 'reasoning', text: '第一步思考\n' },
+        { type: 'text', text: '答案' },
+        { type: 'reasoning', text: '第二步思考' },
+      ],
+    }
+    expect(getMessageReasoning(message)).toBe('第一步思考\n第二步思考')
+  })
+
+  it('getMessageReasoning 在没有 reasoning 时返回空字符串', async () => {
+    const { getMessageReasoning } = await import('@/composables/useAiChat')
+    expect(getMessageReasoning(null)).toBe('')
+    expect(getMessageReasoning({ parts: [{ type: 'text', text: 'hi' }] })).toBe('')
+  })
+
+  it('hasMessageReasoning 仅在有非空 reasoning 时为 true', async () => {
+    const { hasMessageReasoning } = await import('@/composables/useAiChat')
+    expect(hasMessageReasoning({ parts: [{ type: 'text', text: 'hi' }] })).toBe(false)
+    expect(hasMessageReasoning({ parts: [{ type: 'reasoning', text: '' }] })).toBe(false)
+    expect(hasMessageReasoning({ parts: [{ type: 'reasoning', text: '我先想' }] })).toBe(true)
+  })
+})

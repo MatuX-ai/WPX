@@ -17,6 +17,16 @@ import {
   downloadSlidesAsPdf,
 } from '@/utils/slideExport'
 
+// 思考过程展开状态：key 是消息 id，value 是是否展开。默认收起，避免长思考占据主屏。
+const reasoningOpenMap = ref({})
+function toggleReasoning(messageId) {
+  if (!messageId) return
+  reasoningOpenMap.value = {
+    ...reasoningOpenMap.value,
+    [messageId]: !reasoningOpenMap.value[messageId],
+  }
+}
+
 const props = defineProps({
   messages: {
     type: Array,
@@ -887,11 +897,28 @@ watch(
               </button>
             </div>
           </div>
-          <AiMarkdownContent
-            v-else
-            class="ai-chat-panel__message-md"
-            :content="message.content"
-          />
+          <div v-else class="ai-chat-panel__assistant-block">
+            <details
+              v-if="message.reasoning"
+              class="ai-chat-panel__reasoning"
+              :open="Boolean(reasoningOpenMap[message.id])"
+              @toggle="(event) => {
+                if (event.target.tagName === 'DETAILS') {
+                  reasoningOpenMap[message.id] = event.target.open
+                }
+              }"
+            >
+              <summary class="ai-chat-panel__reasoning-summary">
+                <span class="ai-chat-panel__reasoning-icon" aria-hidden="true">🧠</span>
+                <span class="ai-chat-panel__reasoning-label">查看思考过程</span>
+              </summary>
+              <pre class="ai-chat-panel__reasoning-content">{{ message.reasoning }}</pre>
+            </details>
+            <AiMarkdownContent
+              class="ai-chat-panel__message-md"
+              :content="message.content"
+            />
+          </div>
         </div>
       </TransitionGroup>
 
@@ -1433,6 +1460,79 @@ watch(
 
 .ai-chat-panel__message-md {
   min-width: 0;
+}
+
+/* ── 思考过程折叠面板（DeepSeek R1 等推理模型） ── */
+.ai-chat-panel__assistant-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-chat-panel__reasoning {
+  border: 1px solid var(--theme-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--theme-bg-subtle, #f8fafc);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-chat-panel--dark .ai-chat-panel__reasoning {
+  border-color: #444;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ai-chat-panel__reasoning-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  color: var(--theme-fg-muted, #64748b);
+  font-weight: 500;
+}
+
+.ai-chat-panel__reasoning-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-chat-panel__reasoning-summary::before {
+  content: '▶';
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 0.15s ease;
+  margin-right: 2px;
+}
+
+.ai-chat-panel__reasoning[open] > .ai-chat-panel__reasoning-summary::before {
+  transform: rotate(90deg);
+}
+
+.ai-chat-panel__reasoning-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ai-chat-panel__reasoning-content {
+  margin: 0;
+  padding: 6px 10px 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--theme-fg-muted, #475569);
+  font-family: var(--theme-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  line-height: 1.55;
+  border-top: 1px solid var(--theme-border, #e2e8f0);
+}
+
+.ai-chat-panel--dark .ai-chat-panel__reasoning-content {
+  color: #94a3b8;
+  border-top-color: #444;
 }
 
 .ai-chat-panel__quota-exhausted {

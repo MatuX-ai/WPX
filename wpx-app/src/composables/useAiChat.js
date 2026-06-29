@@ -85,7 +85,22 @@ function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {
     },
     onError: (error) => {
       syncTick.value += 1
-      callbacks.onError?.(error)
+      // 重要：让用户立刻看到错误原因，而不是仅仅在 chat 面板中静默失败。
+      // syncLatestAssistantMessage 依赖 isLoading 触发，但 toast 能让用户第一时间感知到问题。
+      const errMsg = error?.message || String(error) || '未知错误'
+      // eslint-disable-next-line no-console
+      console.error('[useAiChat] chat error:', error)
+      // 避免重复提示：syncLatestAssistantMessage 也已经会推入错误消息
+      if (!callbacks.onError) {
+        try {
+          const t = useToast()
+          t?.error?.(`AI 调用失败：${errMsg}`)
+        } catch {
+          /* toast 不可用时静默 */
+        }
+      } else {
+        callbacks.onError(error)
+      }
     },
   })
 }
@@ -542,6 +557,10 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
 
 /**
  * Extract plain text from AI SDK UIMessage parts.
+ *
+ * 仅返回 type === 'text' 的 part，**不包含 reasoning**。
+ * 因为 reasoning 是模型的思考过程，复制到文档里会污染用户内容。
+ * 若需要把 reasoning 展示给用户，请用 getMessageReasoning() 单独渲染折叠面板。
  */
 export function getMessageText(message) {
   if (!message?.parts?.length) return ''
@@ -550,4 +569,32 @@ export function getMessageText(message) {
     .filter((part) => part.type === 'text')
     .map((part) => part.text)
     .join('')
+}
+
+/**
+ * Extract reasoning (thinking) content from AI SDK UIMessage parts.
+ *
+ * 适用于 DeepSeek R1（deepseek-reasoner）等会输出 reasoning_content 的推理模型。
+ * 返回的字符串可能为空（普通模型不会产生 reasoning part）。
+ *
+ * @param {object} message
+ * @returns {string}
+ */
+export function getMessageReasoning(message) {
+  if (!message?.parts?.length) return ''
+
+  return message.parts
+    .filter((part) => part.type === 'reasoning')
+    .map((part) => part.text || '')
+    .join('')
+}
+
+/**
+ * 是否该消息包含 reasoning 内容（用于决定是否渲染「思考过程」折叠面板）。
+ * @param {object} message
+ * @returns {boolean}
+ */
+export function hasMessageReasoning(message) {
+  if (!message?.parts?.length) return false
+  return message.parts.some((part) => part.type === 'reasoning' && part.text)
 }
