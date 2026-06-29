@@ -12,13 +12,15 @@ const TARGET = process.env.API_TARGET || 'https://api.prowpx.com/admin'
 
 // 允许触发反代的来源白名单（逗号分隔）。为空时默认允许同源请求。
 // 防止本反代函数被外部站点滥用为开放 HTTP 代理。
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://prowpx.com')
+// 默认同时放行 apex 与 www 子域，避免 www → apex 308 重定向阻断 preflight。
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://prowpx.com,https://www.prowpx.com')
   .split(',')
   .map((s) => s.trim().toLowerCase().replace(/\/$/, ''))
   .filter(Boolean)
 
 // 允许反代的路径前缀白名单。仅 admin 业务 API 需要经过此代理，
 // 拒绝对未知路径的请求，降低被用作通用 HTTP 代理的风险。
+// 兼容直接调用 /api/auth/* 与被重写后的 /admin/api/* 两种来源。
 const FORWARDABLE_PATH_PREFIXES = [
   'auth/',
   'admin/',
@@ -34,6 +36,19 @@ const FORWARDABLE_PATH_PREFIXES = [
   'dashboard/',
   'token/',
 ]
+
+// 同源白名单（用于反射 Access-Control-Allow-Origin，必须精确匹配）
+// 包含所有需要走该反代的前端入口（apex / www / 任意预览环境）。
+const CORS_ALLOW_LIST = (process.env.CORS_ALLOW_LIST || 'https://prowpx.com,https://www.prowpx.com')
+  .split(',')
+  .map((s) => s.trim().toLowerCase().replace(/\/$/, ''))
+  .filter(Boolean)
+
+function resolveCorsOrigin(req) {
+  const origin = (req.headers.origin || '').trim().toLowerCase().replace(/\/$/, '')
+  if (!origin) return ''
+  return CORS_ALLOW_LIST.includes(origin) ? origin : ''
+}
 
 // 请求超时（毫秒）
 const REQUEST_TIMEOUT = 25000
@@ -97,10 +112,28 @@ function validatePath(path) {
 }
 
 module.exports = async (req, res) => {
-  // CORS 预检直接放行（同源不会出现，但安全起见保留）
+  // CORS 预检：本函数直接响应，**绝不**转发到上游，避免上游 30x 让 preflight 失败
+  // （CORS 规范：preflight 响应不允许 3xx 状态码，浏览器会直接阻断）
   if (req.method === 'OPTIONS') {
+    const allowOrigin = resolveCorsOrigin(req)
+    if (allowOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', allowOrigin)
+      res.setHeader('Vary', 'Origin')
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
+      res.setHeader('Access-Control-Allow-Credentials', 'true')
+      res.setHeader('Access-Control-Max-Age', '86400')
+    }
     res.status(204).end()
     return
+  }
+
+  // 对真实请求也主动回写 CORS 头，覆盖代理链上缺失或被剥离的 CORS 头
+  const allowOrigin = resolveCorsOrigin(req)
+  if (allowOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowOrigin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
   }
 
   const path = (req.query && req.query.path) || ''
