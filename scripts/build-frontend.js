@@ -206,9 +206,15 @@ function main() {
     log('  ↳ 额外复制 admin/index.html → public/admin.html（备用）');
   }
 
-  // admin/api/proxy.js → public/api/proxy.js（Vercel Serverless Function）
-  // Vercel 自动从 outputDirectory/api/ 检测 Serverless Function
-  log('  - 复制 admin/api/proxy.js → public/api/proxy.js');
+  // admin/api/proxy.js → 项目根 api/proxy.js（Vercel Serverless Function 入口）
+  // Vercel 默认从项目根 api/ 扫描 Function（不受 outputDirectory 影响）。
+  // 同时复制到 public/api/proxy.js 作为老配置的兼容占位。
+  log('  - 复制 admin/api/proxy.js → 项目根 api/proxy.js（Vercel Function）');
+  const ROOT_API_DIR = path.join(ROOT, 'api');
+  fs.mkdirSync(ROOT_API_DIR, { recursive: true });
+  fs.copyFileSync(ADMIN_PROXY_SRC, path.join(ROOT_API_DIR, 'proxy.js'));
+
+  log('  - 复制 admin/api/proxy.js → public/api/proxy.js（兼容占位）');
   const PUBLIC_API_DIR = path.join(PUBLIC_DIR, 'api');
   fs.mkdirSync(PUBLIC_API_DIR, { recursive: true });
   fs.copyFileSync(ADMIN_PROXY_SRC, path.join(PUBLIC_API_DIR, 'proxy.js'));
