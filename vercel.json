@@ -10,18 +10,6 @@
   "trailingSlash": false,
   "regions": ["hkg1"],
 
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [
-        { "type": "host", "value": "www.prowpx.com" }
-      ],
-      "destination": "https://prowpx.com/$1",
-      "statusCode": 301,
-      "permanent": true
-    }
-  ],
-
   "headers": [
     {
       "source": "/(.*)\\.(html|htm)",
@@ -70,7 +58,7 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
     { "source": "/admin", "destination": "/admin.html" },
-    { "source": "/admin/(.*)", "destination": "/admin.html" },
+    { "source": "/admin/:path*", "destination": "/admin.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

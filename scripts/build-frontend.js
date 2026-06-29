@@ -206,6 +206,27 @@ function main() {
     log('  ↳ 额外复制 admin/index.html → public/admin.html（备用）');
   }
 
+  // ⚠️ Vercel 项目中 rewrites 规则不生效（已知问题）。
+  //    为 admin SPA 的顶层路由生成物理 HTML 文件，让 /admin/users 这种路径
+  //    能被 Vercel 当作静态文件返回 admin SPA 入口，再由 vue-router 客户端处理。
+  //    若遗漏新路由，在 admin SPA 访问该路径时会得到 404。
+  const ADMIN_SPA_ROUTES = [
+    'login', 'dashboard', 'users', 'fonts', 'skills', 'orders', 'announcements',
+    'settings', 'logs', 'feedbacks', 'forbidden',
+    'users/visitors', 'models', 'models/monitor', 'fonts/stats',
+    'skills/builtin', 'skills/online', 'skills/community',
+    'orders/recharge', 'orders/consumption', 'orders/revenue',
+    'announcements/versions',
+    'settings/basic', 'settings/cdn', 'settings/admins'
+  ];
+  for (const route of ADMIN_SPA_ROUTES) {
+    const destDir = path.join(PUBLIC_DIR, 'admin', route);
+    const destFile = path.join(destDir, 'index.html');
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.copyFileSync(adminHtmlSrc, destFile);
+  }
+  log(`  ↳ 为 admin SPA 顶层路由生成物理 HTML（${ADMIN_SPA_ROUTES.length} 个路由）`);
+
   // admin/api/proxy.js → 项目根 api/proxy.js（Vercel Serverless Function 入口）
   // Vercel 默认从项目根 api/ 扫描 Function（不受 outputDirectory 影响）。
   // 同时复制到 public/api/proxy.js 作为老配置的兼容占位。
