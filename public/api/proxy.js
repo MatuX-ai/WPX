@@ -1,14 +1,26 @@
 // Vercel Serverless Function: API 反向代理
-// 路由：/api/*  ->  https://api.prowpx.com/admin/*
-// 用途：避免浏览器跨域（CORS），让 prowpx.com 与业务 API 同源
+// 路由: /api/*  ->  https://prowpx.com/admin/api/* （同源）
+// 用途: 让 prowpx.com 与业务 API 同源，避免浏览器 CORS
 // 管理后台部署在 https://prowpx.com/admin 下，前端 /api/* 请求
-// 由本 Serverless Function 反代到后端 https://api.prowpx.com/admin/*
+// 由本 Serverless Function 反代到同源后端 https://prowpx.com/admin/api/*
+// 后端本身也是 Vercel Function（部署在 api/admin/handler.js），
+// Vercel rewrites 会把 /admin/api/* 路由到该 Function 处理。
+// 这样 /api/* -> /api/proxy -> fetch prowpx.com/admin/api/* -> Vercel rewrite -> /api/admin/handler
+// 全程同源 + 无跨域 + 无 CORS preflight。
 //
-// 环境变量（在 Vercel 控制台配置）：
-//   API_TARGET = https://api.prowpx.com/admin   （默认）
+// 环境变量（在 Vercel 控制台配置）:
+//   API_TARGET = https://prowpx.com/admin/api   （默认）
 //   ALLOWED_ORIGINS = https://prowpx.com        （逗号分隔）
 
-const TARGET = process.env.API_TARGET || 'https://api.prowpx.com/admin'
+// 架构说明（2026-06-30 调整）:
+//  原来计划用独立子域 api.prowpx.com 部署 Express 后端，
+//  现已简化为“营销站 + 后端全部在 prowpx.com 下”：
+//    - Landing (WPX 营销站)        prowpx.com/*           (landing SPA)
+//    - Admin 前端                  prowpx.com/admin/*     (admin SPA)
+//    - Admin 后端 (本项目)         prowpx.com/admin/api/* (Vercel Function)
+//   这样所有请求同源，避免 apex↔www 308 重定向造成的 CORS preflight 阻断。
+
+const TARGET = process.env.API_TARGET || 'https://www.prowpx.com/admin/api'
 
 // 允许触发反代的来源白名单（逗号分隔）。为空时默认允许同源请求。
 // 防止本反代函数被外部站点滥用为开放 HTTP 代理。
@@ -185,7 +197,10 @@ module.exports = async (req, res) => {
       'last-modified',
       'content-disposition',
       'x-request-id',
-      'x-trace-id'
+      'x-trace-id',
+      // 透传 Location：proxy.js fetch 上游时如果上游返回 3xx（apex→www 308 等等），
+      // 必须把 Location 头带回去，否则浏览器会看到无 Location 的 3xx 死锁。
+      'location'
     ]
     for (const k of passthrough) {
       const v = headers.get(k)
@@ -204,11 +219,29 @@ module.exports = async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[api/proxy] error:', err)
     const isTimeout = err && err.name === 'AbortError'
+    // 把诊断信息写入响应体，浏览器 / 用户一查就能知道是后端不可达（DNS 失败 / 端口拒绝 / 超时）
+    // 同时写入 X-WPX-Gateway-Debug 头（供 devtools / 服务器日志使用）
+    const debugInfo = {
+      target: TARGET,
+      attempted: url,
+      method: req.method,
+      path: path || null,
+      errorName: (err && err.name) || 'UnknownError',
+      errorCode: (err && err.cause && err.cause.code) || (err && err.code) || null,
+      errorMessage: (err && err.message) || String(err),
+      timestamp: new Date().toISOString()
+    }
+    try {
+      res.setHeader('X-WPX-Gateway-Debug', Buffer.from(JSON.stringify(debugInfo)).toString('base64').slice(0, 512))
+    } catch (_) { /* ignore header set error */ }
     res.status(isTimeout ? 504 : 502).json({
       code: isTimeout ? 504 : 502,
       message: isTimeout
         ? 'API gateway timeout'
-        : 'API gateway error'
+        : 'API gateway error',
+      // 上游不可达场景下（DNS 失败 / TCP 拒绝 / 路由不可达），body 内同时携带调试信息，
+      // 避免用户误以为是 WPX 前端/反代函数本身故障。
+      debug: debugInfo
     })
   }
 }

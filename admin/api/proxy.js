@@ -20,7 +20,7 @@
 //    - Admin 后端 (本项目)         prowpx.com/admin/api/* (Vercel Function)
 //   这样所有请求同源，避免 apex↔www 308 重定向造成的 CORS preflight 阻断。
 
-const TARGET = process.env.API_TARGET || 'https://prowpx.com/admin/api'
+const TARGET = process.env.API_TARGET || 'https://www.prowpx.com/admin/api'
 
 // 允许触发反代的来源白名单（逗号分隔）。为空时默认允许同源请求。
 // 防止本反代函数被外部站点滥用为开放 HTTP 代理。
@@ -197,7 +197,10 @@ module.exports = async (req, res) => {
       'last-modified',
       'content-disposition',
       'x-request-id',
-      'x-trace-id'
+      'x-trace-id',
+      // 透传 Location：proxy.js fetch 上游时如果上游返回 3xx（apex→www 308 等等），
+      // 必须把 Location 头带回去，否则浏览器会看到无 Location 的 3xx 死锁。
+      'location'
     ]
     for (const k of passthrough) {
       const v = headers.get(k)
