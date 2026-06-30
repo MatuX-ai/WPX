@@ -132,10 +132,14 @@ export const useGeneralSettingsStore = defineStore('generalSettings', () => {
     if (isElectron()) {
       const api = getElectronAPI()
       if (api?.preferences?.set) {
+        const generalSnapshot = mergeGeneralSettings({}, snapshot)
+        // 同时镜像写入顶层 libraryRootPath，以兼容 Electron 端
+        // knowledge-service.js 的读取路径（双重读取已实现，这里只保证一致性）。
         await api.preferences.set({
           theme: snapshot.theme,
           language: snapshot.language,
-          general: mergeGeneralSettings({}, snapshot),
+          general: generalSnapshot,
+          libraryRootPath: generalSnapshot.knowledgeBasePath || '',
         })
       }
     } else {

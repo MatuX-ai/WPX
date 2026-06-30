@@ -577,18 +577,33 @@ function registerKnowledgeIpcHandlers() {
   })
 }
 
+/**
+ * 解析资料库根目录。
+ * 优先使用 `general.knowledgeBasePath`（通用设置面板写入），
+ * 其次回退到顶层 `libraryRootPath`（历史 settings store 写入），
+ * 都为空时回退到 Electron `app.getPath('userData')`。
+ *
+ * @param {Record<string, any> | null | undefined} prefs
+ * @param {string} userDataPath
+ * @returns {string}
+ */
+function resolveKnowledgeRoot(prefs, userDataPath) {
+  const generalKnowledge = prefs?.general?.knowledgeBasePath?.trim?.()
+  const legacyLibraryRoot = prefs?.libraryRootPath?.trim?.()
+  const customRoot = generalKnowledge || legacyLibraryRoot || ''
+  if (customRoot) {
+    return path.join(customRoot, 'knowledge')
+  }
+  return path.join(userDataPath, 'knowledge')
+}
+
 async function initKnowledgeService() {
   if (db) return
 
-  // 尝试从用户偏好读取自定义资料库根目录
+  // 尝试从用户偏好读取自定义资料库根目录（详见 resolveKnowledgeRoot）
   const prefs = getPreferences()
-  const customRoot = prefs.libraryRootPath?.trim()
-
-  if (customRoot) {
-    knowledgeDir = path.join(customRoot, 'knowledge')
-  } else {
-    knowledgeDir = path.join(app.getPath('userData'), 'knowledge')
-  }
+  const userDataPath = app.getPath('userData')
+  knowledgeDir = resolveKnowledgeRoot(prefs, userDataPath)
 
   filesDir = path.join(knowledgeDir, 'files')
   textDir = path.join(knowledgeDir, 'text')
@@ -609,6 +624,7 @@ async function initKnowledgeService() {
 
 module.exports = {
   initKnowledgeService,
+  resolveKnowledgeRoot,
   getKnowledgeList,
   uploadKnowledge,
   deleteKnowledge,
