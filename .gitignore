@@ -10,24 +10,27 @@ dist/
 # 不要把这些提交到 git：它们是 build-frontend.js 的输出，
 # Vercel 部署时会在自己的服务器上重新跑 buildCommand 生成。
 # 提交这些会导致 PR diff 噪音 + 仓库体积膨胀 + 误以为部署源。
-public/
+# 注意：必须用 /public/ 锚定到仓库根 public/，否则会误伤 landing/public/ 中的源资源（favicon.ico / apple-touch-icon.png）
+/public/
+# 注意：以下产物只忽略仓库根层（用 / 前缀锚定），
+# 避免误伤 landing/ 与 admin/ 子项目下同名的源资源（如 landing/public/favicon.ico、landing/dist/）。
 landing/dist/
 admin/dist/
-index.html
-index.html.br
-index.html.gz
-about/
-blog/
-assets/
-api/
-wp-admin/
-favicon.svg
-og-image.svg
-browserconfig.xml
-robots.txt
-sitemap.xml
-_redirects
-_headers
+/index.html
+/index.html.br
+/index.html.gz
+/about/
+/blog/
+/assets/
+/api/
+/wp-admin/
+/favicon.svg
+/og-image.svg
+/browserconfig.xml
+/robots.txt
+/sitemap.xml
+/_redirects
+/_headers
 
 # Logs & temp
 *.log

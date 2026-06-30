@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <!-- ========== Favicon & 主题色（构建时由 vite-plugin-html 注入路径） ========== -->
+    <!-- 现代浏览器优先使用 SVG；ico/png 作为兜底，避免 /favicon.ico /apple-touch-icon.png 默认请求 404 -->
     <link rel="icon" type="image/svg+xml" href="<%= favicon %>" />
+    <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <meta name="theme-color" content="<%= themeColor %>" />
     <meta name="color-scheme" content="light" />
 
