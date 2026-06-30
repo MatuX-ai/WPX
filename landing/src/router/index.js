@@ -173,10 +173,36 @@ export function createRouter(opts = {}) {
   const router = createVueRouter({
     history,
     routes,
+    // 重要：返回 Promise 以等待 HomeView 等路由级 lazy chunk 挂载完成，
+    // 否则 #features 这种 hash 锄点跳转时 document.getElementById 返 null。
     scrollBehavior(to, from, savedPosition) {
-      if (savedPosition) return savedPosition
-      if (to.hash) return { el: to.hash, behavior: 'smooth', top: 80 }
-      return { left: 0, top: 0, behavior: 'smooth' }
+      return new Promise((resolve) => {
+        // 双重 rAF + 100ms  fallback，确保 SectionFeatures 等 asyncComponent 已 mount 到 DOM
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (savedPosition) {
+              resolve(savedPosition)
+            } else if (to.hash) {
+              // 如果锄点元素尚未存在，再给一个最大 600ms 的轮询机会
+              const tryResolve = (attempt = 0) => {
+                if (typeof document === 'undefined' || attempt > 30) {
+                  resolve({ el: to.hash, behavior: 'smooth', top: 80 })
+                  return
+                }
+                const id = to.hash.startsWith('#') ? to.hash.slice(1) : to.hash
+                if (document.getElementById(id) || document.querySelector(to.hash)) {
+                  resolve({ el: to.hash, behavior: 'smooth', top: 80 })
+                } else {
+                  setTimeout(() => tryResolve(attempt + 1), 20)
+                }
+              }
+              tryResolve()
+            } else {
+              resolve({ left: 0, top: 0, behavior: 'smooth' })
+            }
+          })
+        })
+      })
     }
   })
   return router
