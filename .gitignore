@@ -23,6 +23,11 @@ admin/dist/
 /blog/
 /assets/
 /api/
+# 白名单：admin 后端 handler 是 Vercel Function 源文件，需要随仓库提交
+# （不是 build-frontend.js 的产物，是项目源代码）
+!/api/
+!/api/admin/
+!/api/admin/handler.js
 /wp-admin/
 /favicon.svg
 /og-image.svg

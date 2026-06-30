@@ -43,6 +43,7 @@ const ADMIN_DIR = path.join(ROOT, 'admin');
 const LANDING_DIST = path.join(LANDING_DIR, 'dist');
 const ADMIN_DIST = path.join(ADMIN_DIR, 'dist');
 const ADMIN_PROXY_SRC = path.join(ADMIN_DIR, 'api', 'proxy.js');
+// Admin 后端 handler（Vercel Function，源在项目根 api/admin/handler.js）
 
 // Vercel 项目 Dashboard 持久配置了 outputDirectory: "public"
 // 所有构建产物必须放在 public/ 下，包括 api/proxy.js（Serverless Function）
@@ -239,6 +240,19 @@ function main() {
   const PUBLIC_API_DIR = path.join(PUBLIC_DIR, 'api');
   fs.mkdirSync(PUBLIC_API_DIR, { recursive: true });
   fs.copyFileSync(ADMIN_PROXY_SRC, path.join(PUBLIC_API_DIR, 'proxy.js'));
+
+  // Admin 后端 handler → public/api/admin/handler.js（Vercel Function 入口）
+  // 项目根 api/admin/handler.js 已是源文件，Vercel 默认从项目根 api/ 扫描 Function。
+  // 但 Dashboard 配了 outputDirectory: public，所以需要同步一份到 public/api/admin/handler.js。
+  const ROOT_ADMIN_HANDLER = path.join(ROOT, 'api', 'admin', 'handler.js');
+  if (fs.existsSync(ROOT_ADMIN_HANDLER)) {
+    log('  - 复制 api/admin/handler.js → public/api/admin/handler.js（Vercel Function）');
+    const PUBLIC_ADMIN_API_DIR = path.join(PUBLIC_DIR, 'api', 'admin');
+    fs.mkdirSync(PUBLIC_ADMIN_API_DIR, { recursive: true });
+    fs.copyFileSync(ROOT_ADMIN_HANDLER, path.join(PUBLIC_ADMIN_API_DIR, 'handler.js'));
+  } else {
+    log('  ! api/admin/handler.js 不存在，跳过复制（后续 deploy 可能报 404）');
+  }
 
   // 5. 打印统计
   log('========== ✅ 构建完成 ==========');
