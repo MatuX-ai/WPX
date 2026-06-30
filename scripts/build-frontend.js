@@ -254,6 +254,35 @@ function main() {
     log('  ! api/admin/handler.js 不存在，跳过复制（后续 deploy 可能报 404）');
   }
 
+  // Admin 后端 server/ → public/server/（Vercel Function 运行时必须）
+  // handler.js 在 /var/task/api/admin/handler.js 中 require('./../server/app.js')，
+  // 因此 /var/task/server/ 目录必须在部署包内。否则 Vercel 容器中根本找不到 Express app，
+  // 报错 "server/app.js not found within 6 levels up from /var/task/api/admin"。
+  //
+  // 跳过：
+  //   - node_modules  → Vercel installCommand 已跑 npm install --prefix server，依赖自动注入
+  //   - .env / .env.example → 敏感信息 + 示例文件，运行时用 Vercel Dashboard 环境变量
+  //   - Dockerfile / docker-compose.yml / nginx / ecosystem.config.cjs → 独立服务器部署用
+  //   - DEPLOY.md / README.md / scripts / __tests__ → 与 Vercel 部署无关
+  const ROOT_SERVER = path.join(ROOT, 'server');
+  const PUBLIC_SERVER = path.join(PUBLIC_DIR, 'server');
+  if (fs.existsSync(ROOT_SERVER)) {
+    log('  - 复制 server/ → public/server/（Vercel Function 运行时需要，跳过 node_modules/.env）');
+    copyDir(ROOT_SERVER, PUBLIC_SERVER, {
+      skip: [
+        'node_modules',
+        '.env', '.env.example', '.env.local', '.env.production',
+        'Dockerfile', 'docker-compose.yml', 'nginx',
+        'ecosystem.config.cjs', 'ecosystem.config.js',
+        'DEPLOY.md', 'README.md',
+        'scripts',
+        '__tests__'
+      ]
+    });
+  } else {
+    log('  ! server/ 不存在，跳过复制（后端将无法启动）');
+  }
+
   // 5. 打印统计
   log('========== ✅ 构建完成 ==========');
   log('public/ 产物：');
