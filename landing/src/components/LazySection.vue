@@ -20,14 +20,20 @@ const props = defineProps({
   // 元素 tag
   tag: { type: String, default: 'div' },
   // 自定义根元素 class
-  rootClass: { type: String, default: '' }
+  rootClass: { type: String, default: '' },
+  // 初始是否可见（默认 false = 纯懒加载，true = 立即渲染 slot）
+  // 用例：包含 hash 锚点（如 #features、#download）的 section 需要 true，
+  //      保证页面加载后 document.getElementById 能立即命中，vue-router 的 scrollBehavior 才会滑过去
+  initialVisible: { type: Boolean, default: false }
 })
 
-const visible = ref(false)
+const visible = ref(props.initialVisible)
 const el = ref(null)
 let observer = null
 
 onMounted(() => {
+  // 如果初始可见，无需观察器（节省 IO 性能开销）
+  if (visible.value) return
   // 老浏览器 fallback：直接可见
   if (typeof IntersectionObserver === 'undefined') {
     visible.value = true

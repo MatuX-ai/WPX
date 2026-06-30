@@ -260,12 +260,15 @@ function scrollToShowcase(e) {
     </div>
   </section>
 
-  <!-- ============== 非首屏：按 section 懒加载 ============== -->
-  <LazySection min-height="640px">
+  <!-- ============== 非首屏：按 section 懒加载 ==============
+       钺点 section 强制初始可见（initial-visible="true"），
+       保证 hash 跳转 (#features / #download / ...) 时 document.getElementById 能立即命中
+       -->
+  <LazySection min-height="640px" initial-visible>
     <SectionFeatures />
   </LazySection>
 
-  <LazySection min-height="520px">
+  <LazySection min-height="520px" initial-visible>
     <SectionShowcase />
   </LazySection>
 
@@ -273,15 +276,15 @@ function scrollToShowcase(e) {
     <SectionSkills />
   </LazySection>
 
-  <LazySection min-height="680px">
+  <LazySection min-height="680px" initial-visible>
     <SectionPricing />
   </LazySection>
 
-  <LazySection min-height="520px">
+  <LazySection min-height="520px" initial-visible>
     <SectionFAQ />
   </LazySection>
 
-  <LazySection min-height="420px">
+  <LazySection min-height="420px" initial-visible>
     <SectionDownload />
   </LazySection>
 </template>
