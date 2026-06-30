@@ -35,7 +35,7 @@ const groups = [
     icon: '👋',
     links: [
       { label: 'Bug 提交', to: '/about#bug-report' },
-      { label: 'GitHub', to: 'https://github.com/wpx-team/wpx', external: true },
+      { label: 'GitHub', to: 'https://github.com/MatuX-ai/WPX', external: true },
       { label: '联系我们', to: 'mailto:hello@wpx.app', external: true }
     ]
   },
@@ -53,7 +53,7 @@ const groups = [
 const socials = [
   {
     name: 'GitHub',
-    href: 'https://github.com/wpx-team/wpx',
+    href: 'https://github.com/MatuX-ai/WPX',
     icon: `<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.5 2.87 8.32 6.84 9.67.5.1.68-.22.68-.49l-.01-1.72c-2.78.62-3.37-1.36-3.37-1.36-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05A9.4 9.4 0 0 1 12 7.07c.85 0 1.71.12 2.51.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.6.69.49C19.14 20.54 22 16.72 22 12.22 22 6.58 17.52 2 12 2z"/></svg>`
   },
   {
@@ -103,13 +103,13 @@ const socials = [
           <a
             href="/changelog"
             class="mt-5 inline-flex items-center gap-2 rounded-full border border-primary-from/20 bg-wpx-gradient-soft px-3 py-1 text-xs font-semibold text-primary-600 transition-all hover:-translate-y-0.5 hover:shadow-wpx"
-            aria-label="当前桌面端版本 v0.1.16，点击查看完整更新日志"
+            aria-label="当前桌面端版本 v0.1.17，点击查看完整更新日志"
           >
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
             />
-            当前桌面端 v0.1.16 · 已迭代 6 个版本
+            当前桌面端 v0.1.17 · 已迭代 7 个版本
             <span aria-hidden="true">→</span>
           </a>
 
@@ -206,7 +206,7 @@ const socials = [
         </p>
         <div class="flex items-center gap-3 text-xs text-dark/40">
           <a
-            href="https://github.com/wpx-team/wpx/releases.atom"
+            href="https://github.com/MatuX-ai/WPX/releases.atom"
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex items-center gap-1 transition-colors hover:text-primary-600"
@@ -226,7 +226,7 @@ const socials = [
           >RSS</a>
           <span>·</span>
           <a
-            href="https://github.com/wpx-team/wpx/blob/main/LICENSE"
+            href="https://github.com/MatuX-ai/WPX/blob/main/LICENSE"
             target="_blank"
             rel="noopener noreferrer"
             class="transition-colors hover:text-primary-600"

@@ -24,13 +24,29 @@ const chipLabels = {
   breaking: '不兼容'
 }
 
-// 倒序：v0.1.16 → v0.1.10 → v1.0.0 → v0.9.x ……
+// 倒序：v0.1.17 → v0.1.16 → v0.1.15 → v1.0.0 → v0.9.x ……
 const releases = [
+  {
+    version: 'v0.1.17',
+    date: '2026-06-30',
+    badge: '最新',
+    badgeClass: 'bg-wpx-gradient text-white',
+    summary: '资料库路径用户可配置 + PDF 转换崩溃修复 + 提交资料库选项上线。',
+    docLink: null,
+    changes: [
+      { type: 'feature', text: '通用设置新增「资料库保存路径」卡片，支持桌面端文件夹选择器配置自定义根目录' },
+      { type: 'feature', text: '导出对话框新增「同步到资料库」复选框，默认勾选，导出后自动归档' },
+      { type: 'feature', text: '保存到文库对话框新增「同时提交到资料库」复选框，默认勾选' },
+      { type: 'fix', text: '修复 PDF 转换报错 `Package keyval Error: 20mm undefined`（移除冗余 hmargin 参数）' },
+      { type: 'fix', text: '修复用户配置的「资料库保存路径」不生效的严重缺陷（双字段读取 + 镜像写入双向兼容）' },
+      { type: 'fix', text: '资料库上传失败时改为静默降级（不阻断主流程），容错率提升' }
+    ]
+  },
   {
     version: 'v0.1.16',
     date: '2026-06-29',
-    badge: '最新',
-    badgeClass: 'bg-wpx-gradient text-white',
+    badge: '特性',
+    badgeClass: 'bg-primary-from/10 text-primary-600',
     summary: 'Excel 导入支持 (.xls / .xlsx) + 标题字号 / 段距 / 列表样式优化。',
     docLink: null,
     changes: [
@@ -175,12 +191,12 @@ const showAll = () => {
           <span class="wpx-gradient-text">WPX 的每一次小步快跑</span>
         </h1>
         <p class="mt-4 text-dark/60">
-          桌面端 v0.1.10 → v0.1.16 一口气迭代 6 个版本，所有 feature / fix / breaking 都有迹可循。
+          桌面端 v0.1.10 → v0.1.17 一口气迭代 7 个版本，所有 feature / fix / breaking 都有迹可循。
         </p>
         <!-- 订阅 CTA -->
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="https://github.com/wpx-team/wpx/releases.atom"
+            href="https://github.com/MatuX-ai/WPX/releases.atom"
             target="_blank"
             rel="noopener noreferrer"
             class="wpx-btn-primary"
@@ -188,7 +204,7 @@ const showAll = () => {
             <span aria-hidden="true">📡</span> 订阅 GitHub Releases
           </a>
           <a
-            href="https://github.com/wpx-team/wpx/releases"
+            href="https://github.com/MatuX-ai/WPX/releases"
             target="_blank"
             rel="noopener noreferrer"
             class="wpx-btn-ghost"
@@ -297,7 +313,7 @@ const showAll = () => {
         </p>
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="https://github.com/wpx-team/wpx/releases"
+            href="https://github.com/MatuX-ai/WPX/releases"
             target="_blank"
             rel="noopener noreferrer"
             class="wpx-btn-primary"

@@ -101,7 +101,7 @@ function scrollToShowcase(e) {
             aria-hidden="true"
             class="h-1.5 w-1.5 rounded-full bg-primary-from"
           />
-          v0.1.16 · 已迭代 6 个版本
+          v0.1.17 · 已迭代 7 个版本
         </span>
 
         <h1

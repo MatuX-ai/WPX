@@ -240,7 +240,7 @@ const lastUpdated = '2026-06-18'
             <ul class="mt-3 space-y-2 text-dark/75">
               <li>邮箱：<a class="text-primary-600 hover:underline" href="mailto:privacy@wpx.app">privacy@wpx.app</a></li>
               <li>一般咨询：<a class="text-primary-600 hover:underline" href="mailto:hello@wpx.app">hello@wpx.app</a></li>
-              <li>GitHub Issues：<a class="text-primary-600 hover:underline" href="https://github.com/wpx-team/wpx/issues" target="_blank" rel="noopener noreferrer">wpx-team/wpx</a></li>
+              <li>GitHub Issues：<a class="text-primary-600 hover:underline" href="https://github.com/MatuX-ai/WPX/issues" target="_blank" rel="noopener noreferrer">MatuX-ai/WPX</a></li>
             </ul>
           </section>
 

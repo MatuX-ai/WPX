@@ -248,7 +248,7 @@ const quickStarts = [
         </p>
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="https://github.com/wpx-team/wpx/wiki"
+            href="https://github.com/MatuX-ai/WPX/wiki"
             target="_blank"
             rel="noopener noreferrer"
             class="wpx-btn-primary"
@@ -256,7 +256,7 @@ const quickStarts = [
             前往 GitHub Wiki
           </a>
           <a
-            href="https://github.com/wpx-team/wpx/discussions"
+            href="https://github.com/MatuX-ai/WPX/discussions"
             target="_blank"
             rel="noopener noreferrer"
             class="wpx-btn-ghost"

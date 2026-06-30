@@ -632,7 +632,7 @@ const importRules = [
             </p>
             <div class="mt-6 flex flex-wrap gap-3">
               <a
-                href="https://github.com/wpx-team/wpx/discussions"
+                href="https://github.com/MatuX-ai/WPX/discussions"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="wpx-btn-primary"

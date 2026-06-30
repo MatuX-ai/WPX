@@ -78,7 +78,7 @@ const otherDeps = [
                 与
                 <code class="rounded bg-dark/5 px-1.5 py-0.5 text-sm">license: "UNLICENSED"</code>
                 （见
-                <a class="text-primary-600 hover:underline" href="https://github.com/wpx-team/wpx/blob/main/package.json" target="_blank" rel="noopener noreferrer">package.json</a>
+                <a class="text-primary-600 hover:underline" href="https://github.com/MatuX-ai/WPX/blob/main/package.json" target="_blank" rel="noopener noreferrer">package.json</a>
                 ）。
                 我们正在为开源版本做最后的代码清理与依赖检查，<strong class="text-dark">正式开源时间另行公告</strong>。
               </p>

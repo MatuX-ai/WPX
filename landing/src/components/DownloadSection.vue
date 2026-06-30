@@ -52,14 +52,14 @@ const platforms = [
 ]
 
 // ---------------- GitHub Releases API ----------------
-const GH_API = 'https://api.github.com/repos/wpx-team/wpx/releases/latest'
+const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
 // 静态 fallback
 const fallbackVersion = {
   version: 'v1.0.0',
   date: '2026-06-18',
   size: '15 MB',
-  url: 'https://github.com/wpx-team/wpx/releases/latest'
+  url: 'https://github.com/MatuX-ai/WPX/releases/latest'
 }
 
 const release = ref({ ...fallbackVersion, loading: true, source: 'static' })
@@ -128,7 +128,7 @@ async function startDownload() {
   // 在生产环境可以替换为 CDN 链接
   const url =
     release.value.url ||
-    `https://github.com/wpx-team/wpx/releases/latest`
+    `https://github.com/MatuX-ai/WPX/releases/latest`
 
   // 打开新窗口触发下载
   window.open(url, '_blank', 'noopener,noreferrer')

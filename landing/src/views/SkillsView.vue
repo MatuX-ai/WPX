@@ -289,7 +289,7 @@ const groupedSkills = computed(() => {
         </p>
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="https://github.com/wpx-team/wpx/discussions/categories/skills"
+            href="https://github.com/MatuX-ai/WPX/discussions/categories/skills"
             target="_blank"
             rel="noopener noreferrer"
             class="wpx-btn-primary"
