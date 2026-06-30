@@ -97,11 +97,17 @@ async function createUser(payload) {
   const verifyExpiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3600 * 1000);
   const nickname = payload.nickname ? String(payload.nickname).trim().slice(0, 32) : null;
 
+  // Bootstrap: 表中第一个用户自动获得 admin 角色（方便 bootstrap / Vercel Function 部署）
+  // 后续用户默认 ['user']。如需手动晋升 admin，可直接 UPDATE users SET roles = ARRAY['admin','user'] WHERE email = ...
+  const countRes = await db.query(`SELECT COUNT(*)::int AS n FROM ${TABLE}`);
+  const isFirstUser = countRes.rows[0].n === 0;
+  const roles = isFirstUser ? ['admin', 'user'] : ['user'];
+
   const res = await db.query(
     `INSERT INTO ${TABLE} (email, password_hash, nickname, email_verify_token, email_verify_expires_at, roles)
-     VALUES ($1, $2, $3, $4, $5, ARRAY['user']::TEXT[])
+     VALUES ($1, $2, $3, $4, $5, $6::TEXT[])
      RETURNING *`,
-    [email, passwordHash, nickname, verifyToken, verifyExpiresAt]
+    [email, passwordHash, nickname, verifyToken, verifyExpiresAt, roles]
   );
 
   const user = res.rows[0];

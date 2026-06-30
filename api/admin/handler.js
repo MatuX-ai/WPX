@@ -1,219 +1,126 @@
-// Vercel Serverless Function: WPX Admin 后端（in-memory 实现）
-// 路径：/admin/api/* （通过 Vercel rewrites 路由）
+// Vercel Serverless Function: WPX Admin 后端（生产实现）
+// 路由：/admin/api/* （通过 Vercel rewrites 路由）
 //
 // 设计动机（2026-06-30）：
-//  WPX 是营销站 + 桌面端下载页，admin 后台仅作演示用途。
-//  不需要 Express + PostgreSQL + Redis 的完整后端，
-//  用 Vercel Function + in-memory Map 提供最小可用 API。
-//  状态仅在 Vercel 实例内存（冷启动会清空，足够 demo）。
+//  WPX 是营销站，但 admin 后台要真实可用。
+//  把现有 server/（完整 Express + PostgreSQL + Redis + SMTP + JWT）作为
+//  Vercel Function 运行，避免重复开发后端业务逻辑。
 //
-// 接口（与 admin/src/utils/auth-api.js 对齐）：
-//   POST /api/auth/register            { email, password, nickname? } -> { code:0, data:{ token, refreshToken, user } }
-//   POST /api/auth/login               { email, password }            -> { code:0, data:{ token, refreshToken, user } }
-//   POST /api/auth/refresh                                           -> { code:0, data:{ token, refreshToken } }
-//   POST /api/auth/logout                                             -> { code:0, data:{ ok: true } }
-//   POST /api/auth/forgot-password    { email }                       -> { code:0, data:{ ok: true } }
-//   POST /api/auth/reset-password     { token, password }             -> { code:0, data:{ ok: true } }
-//   GET  /api/auth/verify-email?token=...                             -> { code:0, data:{ ok: true } }
-//   GET  /api/auth/me                                                  -> { code:0, data:{ user, profile } }
-//   GET  /api/admin/dashboard/stats                                    -> { code:0, data:{...} } (运营概览占位)
+// 架构：
+//   server/         - 完整 Node.js + Express 后端（PG/Redis/JWT/SMTP/bcrypt）
+//   api/admin/handler.js - Vercel Function 入口（薄包装）
+//
+// 为什么不在 Vercel 跑 server/server.js（启动 listen）：
+//  Vercel Function 是无服务器模式，每个请求可视为独立进程；
+//  Express app 本质是 (req, res) → Promise 的中间件链，
+//  把 app 作为 (req, res) 函数直接调用即可，无需 listen。
+//  pg.Pool/redis client 都在模块加载时实例化并跨请求复用，
+//  Vercel Function 容器复用机制会保持连接（避免每次冷启动都新建连接）。
+//
+// 路径处理：
+//  Vercel rewrites 把 /admin/api/* → /api/admin/handler?path=<rest>
+//  server/ 内部路由全是 /api/* 形式（/api/auth/login 等）；
+//  本 handler 必须把入站 url 改写成 /api/* 形式再交给 Express。
 
-const crypto = require('crypto')
+'use strict'
 
-// in-memory store（冷启动会清空）
-const users = new Map() // email -> { id, email, passwordHash, nickname, role, createdAt, emailVerified }
-const tokens = new Map() // token -> { email, expiresAt, refreshToken? }
+const path = require('path')
+const fs = require('fs')
 
-// 简单密码 hash（不要用于生产；demo 用）
-function hashPassword(pwd) {
-  return crypto.createHash('sha256').update(String(pwd) + 'wpx-demo-salt').digest('hex')
-}
-
-function generateToken(email) {
-  return crypto.randomBytes(24).toString('base64url')
-}
-
-function generateRefreshToken() {
-  return crypto.randomBytes(32).toString('base64url')
-}
-
-function generateId() {
-  return crypto.randomBytes(8).toString('hex')
-}
-
-function publicUser(u) {
-  if (!u) return null
-  return {
-    id: u.id,
-    email: u.email,
-    nickname: u.nickname || u.email.split('@')[0],
-    role: u.role,
-    createdAt: u.createdAt,
-    emailVerified: u.emailVerified
+// 定位 server/app.js 的绝对路径
+// 兼容两种部署位置（两个位置共享同一份 server/ 源码）：
+//   - 项目根 api/admin/handler.js  → ../../server/app.js
+//   - 项目根 public/api/admin/handler.js  → ../../../server/app.js
+function locateServerApp() {
+  let dir = __dirname
+  for (let depth = 0; depth < 6; depth++) {
+    const candidate = path.join(dir, 'server', 'app.js')
+    if (fs.existsSync(candidate)) return candidate
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
   }
+  throw new Error(
+    `[wpx-admin-handler] server/app.js not found within 6 levels up from ${__dirname}`
+  )
 }
 
-function ok(res, data, status = 200) {
-  res.status(status).json({ code: 0, message: 'ok', data })
+const serverAppPath = locateServerApp()
+// eslint-disable-next-line no-console
+console.log('[wpx-admin-handler] loading', serverAppPath)
+
+// 加载 server/ 后端
+const { createApp } = require(serverAppPath)
+
+// 单例 Express app（Vercel Function 容器复用 + pg pool 复用）
+let cachedApp = null
+function getApp() {
+  if (!cachedApp) cachedApp = createApp()
+  return cachedApp
 }
 
-function fail(res, status, code, message) {
-  res.status(status).json({ code, message, data: null })
-}
-
-function readPath(req) {
-  // Vercel rewrites 把 /admin/api/<path> -> /api/admin/handler?path=<path>
-  // proxy.js 也用同款 ?path= 协议
-  const fromQuery = (req.query && req.query.path) || ''
-  if (fromQuery) return String(fromQuery).replace(/^\/+/, '')
-  // 兜底：直接看 req.url（如 Vercel Function 自身被 hit）
-  const u = req.url || ''
-  return u.replace(/^\/+/, '').split('?')[0]
-}
-
-function parseBody(req) {
-  if (!req.body) return {}
-  if (typeof req.body === 'string') {
-    try { return JSON.parse(req.body) } catch (_) { return {} }
-  }
-  if (typeof req.body === 'object') return req.body
-  return {}
-}
-
-async function handle(req, res) {
-  // CORS：handler 也作为 Function 直接被 hit 时（同源）需透传 CORS 头
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
-
-  if (req.method === 'OPTIONS') {
-    res.status(204).end()
-    return
-  }
-
-  const path = readPath(req) // e.g. "auth/login", "auth/me", "admin/dashboard/stats"
-  const body = parseBody(req)
-  const method = req.method
-
-  // ============ /auth/register ============
-  if (path === 'auth/register' && method === 'POST') {
-    const { email, password, nickname } = body
-    if (!email || !password) return fail(res, 400, 4001, '邮箱和密码必填')
-    const lower = String(email).trim().toLowerCase()
-    if (users.has(lower)) return fail(res, 409, 4091, '邮箱已注册')
-    const user = {
-      id: generateId(),
-      email: lower,
-      passwordHash: hashPassword(password),
-      nickname: nickname || lower.split('@')[0],
-      role: 'user',
-      createdAt: new Date().toISOString(),
-      emailVerified: true // demo: 跳过邮件验证
+// 错误兜底中间件（防止异步异常泄漏到 Vercel）
+function safeError(res, err) {
+  // eslint-disable-next-line no-console
+  console.error('[wpx-admin-handler] unhandled error', err)
+  if (!res.headersSent) {
+    try {
+      res.status(500).json({
+        ok: false,
+        error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' }
+      })
+    } catch (_) {
+      // ignore
     }
-    users.set(lower, user)
-    const token = generateToken(lower)
-    const refreshToken = generateRefreshToken()
-    tokens.set(token, { email: lower, expiresAt: Date.now() + 24 * 3600 * 1000, refreshToken })
-    return ok(res, { token, refreshToken, user: publicUser(user) })
   }
+}
 
-  // ============ /auth/login ============
-  if (path === 'auth/login' && method === 'POST') {
-    const { email, password } = body
-    if (!email || !password) return fail(res, 400, 4001, '邮箱和密码必填')
-    const lower = String(email).trim().toLowerCase()
-    const user = users.get(lower)
-    // demo 友好：邮箱不存在时自动注册（让用户能直接登录）
-    let finalUser = user
-    if (!finalUser) {
-      finalUser = {
-        id: generateId(),
-        email: lower,
-        passwordHash: hashPassword(password),
-        nickname: lower.split('@')[0],
-        role: lower === '[email protected]' ? 'admin' : 'user',
-        createdAt: new Date().toISOString(),
-        emailVerified: true
+module.exports = async function handler(req, res) {
+  try {
+    // /admin/api/* → /api/*
+    // Vercel rewrites 把 path 写到 ?path= 查询参数；
+    // req.url 通常是 /api/admin/handler?path=auth/login
+    // 我们要把 req.url 改写成 /api/auth/login 再交给 Express
+    const originalUrl = req.url || '/'
+
+    // 方案 A: Vercel rewrites 用 ?path= 参数（/admin/api/(.*) → /api/admin/handler?path=$1）
+    let rewrittenUrl = originalUrl
+    try {
+      const u = new URL(originalUrl, 'http://localhost')
+      const p = u.searchParams.get('path')
+      if (p) {
+        // 移除 ?path= 参数（Express 会自己读 req.query）
+        u.searchParams.delete('path')
+        rewrittenUrl = u.pathname + (u.search ? u.search : '')
       }
-      users.set(lower, finalUser)
-    } else if (finalUser.passwordHash !== hashPassword(password)) {
-      return fail(res, 401, 4011, '邮箱或密码错误')
+    } catch (_) {
+      // URL 解析失败就用原 url
     }
-    const token = generateToken(lower)
-    const refreshToken = generateRefreshToken()
-    tokens.set(token, { email: lower, expiresAt: Date.now() + 24 * 3600 * 1000, refreshToken })
-    return ok(res, { token, refreshToken, user: publicUser(finalUser) })
-  }
 
-  // ============ /auth/me ============
-  if (path === 'auth/me' && method === 'GET') {
-    const auth = req.headers.authorization || ''
-    const token = auth.replace(/^Bearer\s+/i, '').trim()
-    if (!token) return fail(res, 401, 4011, '未登录')
-    const session = tokens.get(token)
-    if (!session || session.expiresAt < Date.now()) {
-      tokens.delete(token)
-      return fail(res, 401, 4011, 'token 已过期')
-    }
-    const user = users.get(session.email)
-    if (!user) return fail(res, 401, 4011, '用户不存在')
-    return ok(res, { user: publicUser(user), profile: { permissions: ['read', 'write'] } })
-  }
+    // 兜底：如果 url 仍然包含 /admin 前缀，手动剥除
+    // （兼容直接调用 /admin/api/auth/login 而非 rewrite 场景）
+    rewrittenUrl = rewrittenUrl.replace(/^\/admin/, '') || '/'
 
-  // ============ /auth/refresh ============
-  if (path === 'auth/refresh' && method === 'POST') {
-    const auth = req.headers.authorization || ''
-    const oldToken = auth.replace(/^Bearer\s+/i, '').trim()
-    const session = oldToken ? tokens.get(oldToken) : null
-    if (!session) return fail(res, 401, 4011, 'refresh 失败')
-    const newToken = generateToken(session.email)
-    tokens.set(newToken, { email: session.email, expiresAt: Date.now() + 24 * 3600 * 1000, refreshToken: session.refreshToken })
-    if (oldToken) tokens.delete(oldToken)
-    return ok(res, { token: newToken, refreshToken: session.refreshToken })
-  }
+    req.url = rewrittenUrl
 
-  // ============ /auth/logout ============
-  if (path === 'auth/logout' && method === 'POST') {
-    const auth = req.headers.authorization || ''
-    const token = auth.replace(/^Bearer\s+/i, '').trim()
-    if (token) tokens.delete(token)
-    return ok(res, { ok: true })
-  }
-
-  // ============ /auth/forgot-password ============
-  if (path === 'auth/forgot-password' && method === 'POST') {
-    // demo: 直接返回 ok，不发邮件
-    return ok(res, { ok: true })
-  }
-
-  // ============ /auth/reset-password ============
-  if (path === 'auth/reset-password' && method === 'POST') {
-    return ok(res, { ok: true })
-  }
-
-  // ============ /auth/verify-email ============
-  if (path === 'auth/verify-email' && method === 'GET') {
-    return ok(res, { ok: true })
-  }
-
-  // ============ /admin/dashboard/stats ============
-  if (path === 'admin/dashboard/stats' && method === 'GET') {
-    return ok(res, {
-      users: users.size,
-      orders: 0,
-      announcements: 0,
-      logs: 0,
-      feedback: 0,
-      skills: 32,
-      models: 0,
-      generatedAt: new Date().toISOString()
+    const app = getApp()
+    await new Promise((resolve, reject) => {
+      const onFinish = () => resolve()
+      const onClose = () => resolve()
+      const onError = (err) => reject(err)
+      res.once('finish', onFinish)
+      res.once('close', onClose)
+      res.once('error', onError)
+      try {
+        app(req, res)
+      } catch (err) {
+        reject(err)
+      }
     })
+  } catch (err) {
+    safeError(res, err)
   }
-
-  // ============ 兜底：未实现路径返回 404 ============
-  return fail(res, 404, 4041, `Not implemented: ${method} /${path}`)
 }
 
-module.exports = handle
 // 兼容 Vercel Node.js Function 导出风格
-module.exports.default = handle
+module.exports.default = module.exports

@@ -48,6 +48,7 @@ test-write.txt
 .env
 .env.*
 !.env.example
+!.env.example.vercel
 
 # Push artifacts
 push.*
