@@ -47,8 +47,31 @@ admin/public/**
 electron/**
 wpx-app/**
 
-# === Express 后端（部署到 Render/Railway，不上 Vercel） ===
-server/**
+# === Express 后端（现在作为 Vercel Function 跑，与营销站同域名） ===
+# 只保留 Vercel Function 运行所需文件：
+#   - server/package.json + package-lock.json（npm install 需要）
+#   - server/app.js + routes/ + controllers/ + models/ + middleware/ + utils/ + services/ + adapters/ + config/（require 链）
+#   - server/sql/init.sql（给 Neon PostgreSQL 初始化用，未来如需远程运行初始化脚本）
+# 排除：
+#   - Dockerfile / docker-compose.yml / nginx/ （独立服务器部署用的，与 Vercel 无关）
+#   - ecosystem.config.cjs（PM2 配置，与 Vercel 无关）
+#   - DEPLOY.md / README.md（独立部署文档，避免仓库体积膨胀）
+#   - scripts/（独立部署脚本，如 setup-db.sh）
+#   - .env.example（不提交真实密钥，参考 server/.env.example.vercel）
+# 保留：
+!server/package.json
+!server/package-lock.json
+!server/app.js
+!server/server.js
+!server/config/**
+!server/controllers/**
+!server/middleware/**
+!server/models/**
+!server/routes/**
+!server/services/**
+!server/utils/**
+!server/adapters/**
+!server/sql/**
 
 # === 打包产物 / 资源 ===
 release/**
