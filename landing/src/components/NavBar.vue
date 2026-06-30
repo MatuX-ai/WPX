@@ -7,7 +7,7 @@
  * 特性：
  *  - 滚动后背景从透明 → 白色 + backdrop-blur（500ms 缓动）
  *  - 左侧：Logo（图标 + WPX 文字）
- *  - 中间：5 项混合导航：功能 / 下载（锚点）、技能 / 更新日志 / 关于（路由）、GitHub（外链）
+ *  - 中间：5 项混合导航：功能 / 下载（锚点）、技能 / 更新日志 / 关于（路由）
  *  - 右侧：【免费下载】CTA，自带 2s 脉冲动画
  *  - 移动端：汉堡按钮 → 全屏覆盖菜单，自动锁 body 滚动
  *  - 点击下载/锚点：跨页先回首页再平滑滚动
@@ -166,25 +166,6 @@ onBeforeUnmount(() => {
             {{ link.label }}
           </a>
         </template>
-        <a
-          href="https://github.com/wpx-team/wpx"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="WPX on GitHub"
-          class="ml-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-dark/70 transition-colors hover:bg-primary-500/5 hover:text-primary-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              d="M12 2C6.48 2 2 6.58 2 12.22c0 4.5 2.87 8.32 6.84 9.67.5.1.68-.22.68-.49l-.01-1.72c-2.78.62-3.37-1.36-3.37-1.36-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05A9.4 9.4 0 0 1 12 7.07c.85 0 1.71.12 2.51.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.6.69.49C19.14 20.54 22 16.72 22 12.22 22 6.58 17.52 2 12 2z"
-            />
-          </svg>
-        </a>
       </nav>
 
       <!-- ========== 右侧：脉冲 CTA ========== -->
@@ -333,36 +314,6 @@ onBeforeUnmount(() => {
               </a>
             </li>
           </template>
-          <li
-            :style="{
-              transitionDelay: mobileOpen ? `${(navLinks.length + 1) * 50}ms` : '0ms'
-            }"
-            class="fullscreen-item"
-          >
-            <a
-              href="https://github.com/wpx-team/wpx"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
-              @click="closeMobile"
-            >
-              <span class="flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M12 2C6.48 2 2 6.58 2 12.22c0 4.5 2.87 8.32 6.84 9.67.5.1.68-.22.68-.49l-.01-1.72c-2.78.62-3.37-1.36-3.37-1.36-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05A9.4 9.4 0 0 1 12 7.07c.85 0 1.71.12 2.51.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.6.69.49C19.14 20.54 22 16.72 22 12.22 22 6.58 17.52 2 12 2z"
-                  />
-                </svg>
-                GitHub
-              </span>
-              <span class="text-dark/30">↗</span>
-            </a>
-          </li>
         </ul>
       </nav>
 
