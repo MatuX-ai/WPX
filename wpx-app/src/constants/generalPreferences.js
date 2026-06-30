@@ -47,6 +47,7 @@ const VALID_INTERVALS = new Set(AUTO_SAVE_INTERVAL_OPTIONS.map((item) => item.va
 export function createDefaultGeneralSettings() {
   return {
     defaultSavePath: '',
+    knowledgeBasePath: '',
     autoSave: {
       enabled: true,
       intervalMs: 30000,
@@ -69,6 +70,7 @@ export function mergeGeneralSettings(current, partial) {
   }
 
   next.defaultSavePath = typeof next.defaultSavePath === 'string' ? next.defaultSavePath : ''
+  next.knowledgeBasePath = typeof next.knowledgeBasePath === 'string' ? next.knowledgeBasePath : ''
 
   const autoSave = {
     ...base.autoSave,

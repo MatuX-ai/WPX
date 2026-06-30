@@ -34,7 +34,7 @@ const groups = [
     title: '关于',
     icon: '👋',
     links: [
-      { label: '团队', to: '/about#careers' },
+      { label: 'Bug 提交', to: '/about#bug-report' },
       { label: 'GitHub', to: 'https://github.com/wpx-team/wpx', external: true },
       { label: '联系我们', to: 'mailto:hello@wpx.app', external: true }
     ]

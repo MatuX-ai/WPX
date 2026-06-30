@@ -67,6 +67,7 @@ export const useGeneralSettingsStore = defineStore('generalSettings', () => {
   const theme = computed(() => data.value.theme)
   const language = computed(() => data.value.language)
   const defaultSavePath = computed(() => data.value.defaultSavePath)
+  const knowledgeBasePath = computed(() => data.value.knowledgeBasePath || '')
   const autoSaveEnabled = computed(() => data.value.autoSave.enabled)
   const autoSaveIntervalMs = computed(() => data.value.autoSave.intervalMs)
   const editorFontSize = computed(() => data.value.editorFontSize)
@@ -74,6 +75,10 @@ export const useGeneralSettingsStore = defineStore('generalSettings', () => {
   const editorFontSizePx = computed(
     () => EDITOR_FONT_SIZE_PX[data.value.editorFontSize] || EDITOR_FONT_SIZE_PX.medium,
   )
+
+  async function updateKnowledgeBasePath(path) {
+    return updateSettings({ knowledgeBasePath: String(path || '') })
+  }
 
   function applySideEffects() {
     applySideEffectsToDocument(data.value)
@@ -162,11 +167,13 @@ export const useGeneralSettingsStore = defineStore('generalSettings', () => {
     theme,
     language,
     defaultSavePath,
+    knowledgeBasePath,
     autoSaveEnabled,
     autoSaveIntervalMs,
     editorFontSize,
     editorFontSizePx,
     startupBehavior,
+    updateKnowledgeBasePath,
     applySideEffects,
     hydrateFromPreferences,
     initFromLocalStorage,

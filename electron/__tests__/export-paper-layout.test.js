@@ -156,17 +156,17 @@ describe('export-paper-layout — PDF 几何参数', () => {
     expect(args).toHaveLength(1)
     const [flag, value] = args[0]
     expect(flag).toBe('-V')
-    expect(value).toBe('geometry:paper=a4paper,top=20mm,bottom=20mm,left=20mm,right=20mm,hmargin=20mm,20mm')
+    expect(value).toBe('geometry:paper=a4paper,top=20mm,bottom=20mm,left=20mm,right=20mm')
   })
 
   it('Letter + wide 生成 letterpaper geometry', () => {
     const args = buildPdfGeometryArgs({ paperSize: 'Letter', paperMargin: 'wide' })
-    expect(args[0][1]).toBe('geometry:paper=letterpaper,top=25mm,bottom=25mm,left=25mm,right=25mm,hmargin=25mm,25mm')
+    expect(args[0][1]).toBe('geometry:paper=letterpaper,top=25mm,bottom=25mm,left=25mm,right=25mm')
   })
 
   it('16K + narrow 使用 16k 名与 15mm 边距', () => {
     const args = buildPdfGeometryArgs({ paperSize: '16K', paperMargin: 'narrow' })
-    expect(args[0][1]).toBe('geometry:paper=16k,top=15mm,bottom=15mm,left=15mm,right=15mm,hmargin=15mm,15mm')
+    expect(args[0][1]).toBe('geometry:paper=16k,top=15mm,bottom=15mm,left=15mm,right=15mm')
   })
 
   it('custom 边距使用传入的 customMargin 值', () => {
@@ -175,7 +175,7 @@ describe('export-paper-layout — PDF 几何参数', () => {
       paperMargin: 'custom',
       customMargin: { top: 12, bottom: 18, left: 24, right: 30 },
     })
-    expect(args[0][1]).toBe('geometry:paper=a4paper,top=12mm,bottom=18mm,left=24mm,right=30mm,hmargin=24mm,30mm')
+    expect(args[0][1]).toBe('geometry:paper=a4paper,top=12mm,bottom=18mm,left=24mm,right=30mm')
   })
 
   it('none 返回空数组', () => {
@@ -184,7 +184,7 @@ describe('export-paper-layout — PDF 几何参数', () => {
 
   it('非法 paperSize 由 normalizePaper 回退到 A4', () => {
     const args = buildPdfGeometryArgs({ paperSize: 'unknown' })
-    expect(args[0][1]).toBe('geometry:paper=a4paper,top=20mm,bottom=20mm,left=20mm,right=20mm,hmargin=20mm,20mm')
+    expect(args[0][1]).toBe('geometry:paper=a4paper,top=20mm,bottom=20mm,left=20mm,right=20mm')
   })
 })
 

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { analyzeDocument, saveDocument } from '@/utils/libraryApi'
 import { useLibraryStore } from '@/stores/library'
+import { getElectronAPI, isElectron } from '@/utils/electron'
 
 const props = defineProps({
   visible: {
@@ -35,6 +36,8 @@ const error = ref('')
 const pathModified = computed(
   () => path.value.trim() !== suggestedPath.value.trim(),
 )
+
+const submitToKnowledge = ref(true)
 
 function resetForm() {
   title.value = props.defaultTitle
@@ -136,6 +139,20 @@ async function handleSave() {
         title: title.value.trim(),
         tags: tags.value,
       })
+    }
+
+    // 保存成功后，若勾选了同时提交到资料库
+    if (submitToKnowledge.value && isElectron()) {
+      try {
+        const api = getElectronAPI()
+        await api.knowledge.upload({
+          filename: `${title.value.trim() || props.defaultTitle}.md`,
+          data: new TextEncoder().encode(props.content),
+        })
+      } catch (err) {
+        console.warn('[SaveDialog] 同步到资料库失败:', err)
+        // 不阻断主流程
+      }
     }
 
     emit('saved', result.item)
@@ -288,6 +305,11 @@ watch(
         </div>
 
         <footer class="save-dialog__footer">
+          <label class="save-dialog__knowledge-checkbox">
+            <input v-model="submitToKnowledge" type="checkbox" :disabled="saving" />
+            <span>同时提交到资料库</span>
+          </label>
+          <div class="save-dialog__footer-actions">
           <button
             type="button"
             class="save-dialog__cancel-btn wpx-btn"
@@ -304,6 +326,7 @@ watch(
           >
             {{ saving ? '保存中…' : '确认保存' }}
           </button>
+          </div>
         </footer>
       </div>
     </div>
@@ -588,10 +611,30 @@ watch(
 
 .save-dialog__footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 12px 20px 20px;
   border-top: 1px solid #f1f5f9;
+}
+
+.save-dialog__knowledge-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+
+.save-dialog__knowledge-checkbox input {
+  accent-color: #7c3aed;
+}
+
+.save-dialog__footer-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .save-dialog__cancel-btn,

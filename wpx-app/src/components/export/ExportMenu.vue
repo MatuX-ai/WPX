@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, watch, inject, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
+import { getElectronAPI, isElectron } from '@/utils/electron'
 import { downloadBlob, exportViaApi } from '@/utils/documentExport'
 import {
   analyzeExportFonts,
@@ -231,6 +232,24 @@ async function performExport(option, exportOptions = null) {
   }
 
   await exportViaApi(exportContent, option.format, props.filename, exportOptionsPayload)
+
+  // 导出成功后，若勾选了同步到资料库则提交
+  const submitToKnowledge =
+    exportOptions && typeof exportOptions === 'object'
+      ? exportOptions.submitToKnowledge
+      : false
+  if (submitToKnowledge && isElectron()) {
+    try {
+      const api = getElectronAPI()
+      await api.knowledge.upload({
+        filename: `${resolveDocumentTitle()}.md`,
+        data: new TextEncoder().encode(markdown),
+      })
+    } catch (err) {
+      console.warn('[ExportMenu] 同步到资料库失败:', err)
+      // 不阻断主流程
+    }
+  }
 }
 
 function buildExportOptionsPayload(options) {

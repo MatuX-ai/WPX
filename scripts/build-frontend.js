@@ -254,20 +254,22 @@ function main() {
     log('  ! api/admin/handler.js 不存在，跳过复制（后续 deploy 可能报 404）');
   }
 
-  // Admin 后端 server/ → public/server/（Vercel Function 运行时必须）
-  // handler.js 在 /var/task/api/admin/handler.js 中 require('./../server/app.js')，
-  // 因此 /var/task/server/ 目录必须在部署包内。否则 Vercel 容器中根本找不到 Express app，
-  // 报错 "server/app.js not found within 6 levels up from /var/task/api/admin"。
+  // Admin 后端 server/ → public/api/admin/server/（与 handler.js 同目录）
+  // handler.js 在 /var/task/api/admin/handler.js 中 require(__dirname/server/app.js)，
+  // 搜索路径从 __dirname 向上 6 层，因此放在 /var/task/server/、/var/task/api/server/ 等
+  // 任意层级都能找到。但因为 .vercelignore 里的 server/** 白名单不适用于 outputDirectory
+  // 下的文件（只适用于项目根），且 Vercel Function 容器不递归把 public/ 子目录当函数打包，
+  // 我们把 server/ 放在 handler.js 的同目录 public/api/admin/server/ 下，保证 0 层就能定位。
   //
-  // 跳过：
+  // 跳�?
   //   - node_modules  → Vercel installCommand 已跑 npm install --prefix server，依赖自动注入
   //   - .env / .env.example → 敏感信息 + 示例文件，运行时用 Vercel Dashboard 环境变量
   //   - Dockerfile / docker-compose.yml / nginx / ecosystem.config.cjs → 独立服务器部署用
   //   - DEPLOY.md / README.md / scripts / __tests__ → 与 Vercel 部署无关
   const ROOT_SERVER = path.join(ROOT, 'server');
-  const PUBLIC_SERVER = path.join(PUBLIC_DIR, 'server');
+  const PUBLIC_SERVER = path.join(PUBLIC_DIR, 'api', 'admin', 'server');
   if (fs.existsSync(ROOT_SERVER)) {
-    log('  - 复制 server/ → public/server/（Vercel Function 运行时需要，跳过 node_modules/.env）');
+    log('  - 复制 server/ → public/api/admin/server/（同 handler.js 目录，保证 0 层定位）');
     copyDir(ROOT_SERVER, PUBLIC_SERVER, {
       skip: [
         'node_modules',

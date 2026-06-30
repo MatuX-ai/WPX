@@ -4,6 +4,7 @@ const fsp = require('node:fs/promises')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
 const { extractUrl, fetchUrlPreview, buildWebImportRecord } = require('./services/url-extractor')
+const { getPreferences } = require('./user-data-service')
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -579,7 +580,16 @@ function registerKnowledgeIpcHandlers() {
 async function initKnowledgeService() {
   if (db) return
 
-  knowledgeDir = path.join(app.getPath('userData'), 'knowledge')
+  // 尝试从用户偏好读取自定义资料库根目录
+  const prefs = getPreferences()
+  const customRoot = prefs.libraryRootPath?.trim()
+
+  if (customRoot) {
+    knowledgeDir = path.join(customRoot, 'knowledge')
+  } else {
+    knowledgeDir = path.join(app.getPath('userData'), 'knowledge')
+  }
+
   filesDir = path.join(knowledgeDir, 'files')
   textDir = path.join(knowledgeDir, 'text')
   versionsDir = path.join(knowledgeDir, 'versions')

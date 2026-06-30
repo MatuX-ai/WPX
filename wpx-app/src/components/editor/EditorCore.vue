@@ -43,7 +43,6 @@ import { detectMarkdown, extractMarkdownSnippet } from '@/utils/markdownDetector
 import { hasImagesInDoc } from '@/composables/useMarkdownFormatter'
 import { useMarkdownFormatPromptStore } from '@/stores/markdownFormatPrompt'
 import {
-  importHtmlString,
   extractHtmlFromClipboard,
   hasHtmlImport,
 } from '@/composables/useHtmlImporter'
@@ -288,17 +287,34 @@ const editor = useEditor({
       // 2) HTML 粘贴检测（新增，优先级高于纯文本）
       //    从其他网页/富文本编辑器复制的内容会同时含 text/html 和 text/plain。
       //    仅当 HTML 长度 > 100 才视为真实 HTML，避免误判普通文本中偶然出现的尖括号。
+      //    注意：必须使用 insertContent 而非 importHtmlString，因为
+      //    importHtmlString 内部调用 setContent 会替换整个文档内容，
+      //    导致 Ctrl+V 粘贴时清空页面原有内容。
       const htmlContent = extractHtmlFromClipboard(event.clipboardData)
       if (htmlContent) {
-        const result = importHtmlString(editor.value, htmlContent, { importSource: 'paste' })
-        if (result.ok) {
-          toast.info('网页已导入', 3000)
-          // 进入焦点模式 + 含 htmlSource → 触发排版弹窗（在 AiAssistantPlaceholder 层 watch）
+        // 大小检查：超过 2MB 拒绝（与 importHtmlString 的 validateHtmlSize 一致）
+        if (htmlContent.length * 2 > 2 * 1024 * 1024) {
+          toast.warning('粘贴内容过大，已拒绝（超过 2MB）', 3000)
+          return true
+        }
+        try {
+          // 在光标位置插入 HTML，保留文档原有内容
+          // 注意：必须使用完整可选链避免 editor.value 为 null 时抛 TypeError
+          editor.value?.chain()?.focus()?.insertContent(htmlContent)?.run()
+          // 写入 htmlSource 元数据（用于焦点模式排版弹窗检测）
+          editor.value?.commands?.setHtmlSource?.({
+            htmlSource: htmlContent,
+            sourceUrl: null,
+            importedAt: new Date().toISOString(),
+            importSource: 'paste',
+          })
+          toast.info('网页内容已插入', 3000)
           if (userPreferencesStore.paper.focusMode) {
             useHtmlFormatPromptStore().trigger({ source: 'manual' })
           }
-        } else {
-          toast.warning(result.message || 'HTML 导入失败', 3000)
+        } catch (e) {
+          console.warn('[EditorCore] HTML paste failed:', e)
+          toast.warning('HTML 粘贴失败：' + (e?.message || '未知错误'), 3000)
         }
         return true
       }

@@ -132,7 +132,6 @@ function buildPdfGeometryArgs(paper) {
     parts.push(`bottom=${margins.bottom}mm`)
     parts.push(`left=${margins.left}mm`)
     parts.push(`right=${margins.right}mm`)
-    parts.push(`hmargin=${margins.left}mm,${margins.right}mm`)
   }
 
   return [['-V', `geometry:${parts.join(',')}`]]

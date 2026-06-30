@@ -88,7 +88,7 @@ const ALL_MENUS = [
   { path: '/announcements', title: '公告与版本', icon: '📢', permission: 'module:announcements' },
   { path: '/settings', title: '系统设置', icon: '⚙️', permission: 'module:settings' },
   { path: '/logs', title: '操作日志', icon: '📋', permission: 'module:logs' },
-  { path: '/feedbacks', title: '用户反馈', icon: '💬', permission: 'module:feedbacks' }
+  { path: '/feedbacks', title: 'Bug & 反馈', icon: '🐛', permission: 'module:feedbacks' }
 ]
 
 const visibleMenus = computed(() =>

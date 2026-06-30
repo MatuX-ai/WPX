@@ -1,4 +1,6 @@
 <script setup>
+import { ref } from 'vue'
+
 const values = [
   {
     title: '本地优先',
@@ -14,12 +16,38 @@ const values = [
   }
 ]
 
-const team = [
-  { name: 'Leo', role: '产品 / 架构', emoji: '🦊' },
-  { name: 'Mira', role: '前端 / 设计', emoji: '🐰' },
-  { name: 'Tomo', role: 'AI / 工程', emoji: '🦉' },
-  { name: 'Kai', role: '后端 / DevOps', emoji: '🐧' }
-]
+const form = ref({ title: '', content: '', contact: '' })
+const submitting = ref(false)
+const submitted = ref(false)
+const error = ref('')
+
+async function submitBug() {
+  if (!form.value.content.trim()) {
+    error.value = '请描述你遇到的问题'
+    return
+  }
+  error.value = ''
+  submitting.value = true
+  try {
+    const res = await fetch('/api/feedback/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: 'bug',
+        title: form.value.title,
+        content: form.value.content,
+        contact: form.value.contact,
+      }),
+    })
+    if (!res.ok) throw new Error('提交失败')
+    submitted.value = true
+    form.value = { title: '', content: '', contact: '' }
+  } catch (e) {
+    error.value = '提交失败，请稍后重试或通过邮件反馈'
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -53,29 +81,106 @@ const team = [
         </div>
       </div>
 
-      <!-- Team -->
+      <!-- Bug 提交区 -->
       <div
-        id="careers"
+        id="bug-report"
         class="mt-20"
       >
-        <h2 class="text-2xl font-extrabold md:text-3xl">团队</h2>
-        <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div
-            v-for="m in team"
-            :key="m.name"
-            class="rounded-2xl border border-dark/5 bg-white p-5 text-center"
-          >
-            <div
-              class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-wpx-gradient-soft text-3xl"
+        <h2 class="text-2xl font-extrabold md:text-3xl">Bug 提交区</h2>
+        <p class="mt-2 text-dark/60">遇到问题了吗？请在下方描述，我们会尽快处理。</p>
+
+        <!-- 成功提示 -->
+        <div
+          v-if="submitted"
+          class="mt-6 rounded-2xl border border-green-200 bg-green-50 p-6 text-center"
+        >
+          <span class="text-3xl">✅</span>
+          <p class="mt-2 text-sm text-green-700">已收到你的反馈，我们会尽快跟进处理！</p>
+          <button
+            class="mt-3 text-sm text-green-600 underline hover:text-green-800"
+            @click="submitted = false"
+          >继续提交</button>
+        </div>
+
+        <div
+          v-else
+          class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          <!-- 在线提交 -->
+          <div class="rounded-2xl border border-dark/5 bg-white p-6 sm:col-span-2 lg:col-span-2">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🐛</span>
+              <h3 class="text-base font-bold">在线提交</h3>
+            </div>
+            <form
+              class="mt-4 space-y-3"
+              @submit.prevent="submitBug"
             >
-              {{ m.emoji }}
+              <div>
+                <input
+                  v-model="form.title"
+                  type="text"
+                  placeholder="标题（选填）"
+                  class="w-full rounded-lg border border-dark/10 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-wpx-primary focus:ring-1 focus:ring-wpx-primary/30"
+                >
+              </div>
+              <div>
+                <textarea
+                  v-model="form.content"
+                  rows="4"
+                  placeholder="请描述你遇到的问题…"
+                  class="w-full rounded-lg border border-dark/10 bg-gray-50 px-3 py-2 text-sm outline-none resize-none focus:border-wpx-primary focus:ring-1 focus:ring-wpx-primary/30"
+                ></textarea>
+              </div>
+              <div>
+                <input
+                  v-model="form.contact"
+                  type="text"
+                  placeholder="联系方式（选填，邮箱或微信号）"
+                  class="w-full rounded-lg border border-dark/10 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-wpx-primary focus:ring-1 focus:ring-wpx-primary/30"
+                >
+              </div>
+              <p
+                v-if="error"
+                class="text-xs text-red-500"
+              >{{ error }}</p>
+              <button
+                type="submit"
+                :disabled="submitting"
+                class="wpx-btn-primary text-sm"
+              >{{ submitting ? '提交中…' : '提交反馈' }}</button>
+            </form>
+          </div>
+
+          <!-- 邮件反馈 -->
+          <div class="rounded-2xl border border-dark/5 bg-white p-6">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">📧</span>
+              <h3 class="text-base font-bold">邮件反馈</h3>
             </div>
-            <div class="mt-3 text-base font-bold">
-              {{ m.name }}
+            <p class="mt-3 text-sm leading-relaxed text-dark/60">
+              适合附截图或日志文件的大段反馈。
+            </p>
+            <a
+              href="mailto:hello@wpx.app"
+              class="mt-4 inline-block text-sm font-semibold text-wpx-primary hover:underline"
+            >
+              发送邮件 →
+            </a>
+          </div>
+
+          <!-- 提交指南 -->
+          <div class="rounded-2xl border border-dark/5 bg-white p-6 sm:col-span-2 lg:col-span-1">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">📋</span>
+              <h3 class="text-base font-bold">提交指南</h3>
             </div>
-            <div class="text-xs text-dark/50">
-              {{ m.role }}
-            </div>
+            <ul class="mt-3 text-sm leading-relaxed text-dark/60 space-y-1.5 list-disc list-inside">
+              <li>WPX 版本与操作系统</li>
+              <li>复现步骤（做了什么）</li>
+              <li>期望结果与实际结果</li>
+              <li>如有截图或日志更好</li>
+            </ul>
           </div>
         </div>
       </div>

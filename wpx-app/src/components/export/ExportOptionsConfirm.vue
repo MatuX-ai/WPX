@@ -15,6 +15,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   autoPaginate: true,
   fitImagesToWidth: true,
   generateToc: false,
+  submitToKnowledge: true,
 })
 
 const props = defineProps({
@@ -60,6 +61,7 @@ function cloneOptions(input) {
     autoPaginate: base.autoPaginate !== false,
     fitImagesToWidth: base.fitImagesToWidth !== false,
     generateToc: Boolean(base.generateToc),
+    submitToKnowledge: base.submitToKnowledge !== false,
   }
 }
 
@@ -294,6 +296,16 @@ function handleGenerateTocChange(event) {
                   ? `本文档含 ${props.headingCount} 个标题，可生成目录`
                   : tocDisabledHint }}
               </span>
+            </label>
+
+            <label class="export-options-confirm__checkbox">
+              <input
+                v-model="localOptions.submitToKnowledge"
+                type="checkbox"
+                :disabled="loading"
+              />
+              <span class="export-options-confirm__checkbox-label">同步到资料库</span>
+              <span class="export-options-confirm__checkbox-hint">导出完成后将文档提交到资料库</span>
             </label>
           </section>
         </div>

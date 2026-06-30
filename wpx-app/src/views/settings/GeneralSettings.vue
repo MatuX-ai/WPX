@@ -84,6 +84,10 @@ const defaultSavePathLabel = computed(() =>
   generalSettingsStore.defaultSavePath.trim() || '未设置（保存时使用系统默认位置）',
 )
 
+const knowledgeBasePathLabel = computed(() =>
+  generalSettingsStore.knowledgeBasePath.trim() || '未设置（使用默认用户数据目录）',
+)
+
 const paperSize = computed({
   get: () => paperForm.paperSize,
   set: (value) => {
@@ -164,6 +168,15 @@ async function handlePickSavePath() {
   }
 }
 
+async function handlePickKnowledgePath() {
+  if (!isElectron()) return
+
+  const result = await pickExtractDirectory(generalSettingsStore.knowledgeBasePath || undefined)
+  if (result?.ok && result.directoryPath) {
+    await generalSettingsStore.updateKnowledgeBasePath(result.directoryPath)
+  }
+}
+
 onMounted(() => {
   if (!generalSettingsStore.hydrated) {
     generalSettingsStore.initFromLocalStorage()
@@ -229,6 +242,24 @@ watch(
             </button>
           </div>
           <p v-if="!isElectron()" class="settings-hint">桌面版可用文件夹选择器；浏览器环境请在保存时指定位置。</p>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-field">
+          <span class="settings-label">资料库保存路径</span>
+          <p class="settings-path">{{ knowledgeBasePathLabel }}</p>
+          <div class="settings-input-row">
+            <button
+              type="button"
+              class="settings-btn-secondary"
+              :disabled="!isElectron()"
+              @click="handlePickKnowledgePath"
+            >
+              选择路径
+            </button>
+          </div>
+          <p v-if="!isElectron()" class="settings-hint">桌面版可用文件夹选择器。</p>
         </div>
       </div>
 
