@@ -204,11 +204,29 @@ module.exports = async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[api/proxy] error:', err)
     const isTimeout = err && err.name === 'AbortError'
+    // 把诊断信息写入响应体，浏览器 / 用户一查就能知道是后端不可达（DNS 失败 / 端口拒绝 / 超时）
+    // 同时写入 X-WPX-Gateway-Debug 头（供 devtools / 服务器日志使用）
+    const debugInfo = {
+      target: TARGET,
+      attempted: url,
+      method: req.method,
+      path: path || null,
+      errorName: (err && err.name) || 'UnknownError',
+      errorCode: (err && err.cause && err.cause.code) || (err && err.code) || null,
+      errorMessage: (err && err.message) || String(err),
+      timestamp: new Date().toISOString()
+    }
+    try {
+      res.setHeader('X-WPX-Gateway-Debug', Buffer.from(JSON.stringify(debugInfo)).toString('base64').slice(0, 512))
+    } catch (_) { /* ignore header set error */ }
     res.status(isTimeout ? 504 : 502).json({
       code: isTimeout ? 504 : 502,
       message: isTimeout
         ? 'API gateway timeout'
-        : 'API gateway error'
+        : 'API gateway error',
+      // 上游不可达场景下（DNS 失败 / TCP 拒绝 / 路由不可达），body 内同时携带调试信息，
+      // 避免用户误以为是 WPX 前端/反代函数本身故障。
+      debug: debugInfo
     })
   }
 }
