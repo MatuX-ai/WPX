@@ -58,9 +58,11 @@ export default defineConfig(({ mode }) => {
       __APP_INFO__: JSON.stringify({
         title: env.VITE_APP_TITLE || 'WPX 管理后台',
         shortName: env.VITE_APP_SHORT_NAME || 'WPX Admin',
-        // WPX 自托管邮箱认证，主域名 prowpx.com
-        accountBaseUrl: env.VITE_ACCOUNT_BASE_URL || 'https://prowpx.com',
-        apiBaseUrl: env.VITE_API_BASE_URL || 'https://api.prowpx.com/admin',
+        // WPX 自托管邮箱认证，默认同源（避免 apex→www 308 preflight 阻断）
+        // 同源请求走 vercel.json rewrites /api/* -> /api/proxy 反代到后端
+        // 需要跨域时通过环境变量覆盖（如独立子域部署场景）
+        accountBaseUrl: env.VITE_ACCOUNT_BASE_URL || '/',
+        apiBaseUrl: env.VITE_API_BASE_URL || '/api',
         themeColor: env.VITE_THEME_COLOR || '#4F46E5'
       })
     }
