@@ -126,23 +126,6 @@ const socials = [
               v-html="s.icon"
             />
           </div>
-
-          <!-- 二维码占位（可选） -->
-          <div class="mt-6 inline-flex items-center gap-3 rounded-xl border border-dark/5 bg-light/50 p-3">
-            <div
-              class="flex h-14 w-14 items-center justify-center rounded-md bg-white text-[10px] text-dark/40 shadow-sm"
-            >
-              QR
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-dark">
-                扫码加群
-              </div>
-              <div class="text-[10px] text-dark/50">
-                与 5000+ 写作者一起
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- 四列链接（占 8 列） -->
