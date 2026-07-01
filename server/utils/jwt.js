@@ -17,16 +17,19 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 
 function signAccessToken(payload) {
+  // 注意：jsonwebtoken 不允许同时在 payload 和 options.subject 里设置 sub，
+  // 否则报 'Bad "options.subject" option. The payload already has a "sub" property.'。
+  // payload 里已包含 sub（参见 models/user.js issueTokensForUser），这里不再重复设置。
   return jwt.sign(payload, config.auth.secret, {
     algorithm: config.auth.algorithm,
     expiresIn: config.auth.accessTokenTtl,
     issuer: config.auth.issuer,
-    audience: config.auth.audience,
-    subject: payload.sub
+    audience: config.auth.audience
   });
 }
 
 function signRefreshToken(payload) {
+  // 同上，payload 已包含 sub，不重复设置 options.subject
   return jwt.sign(
     { ...payload, kind: 'refresh' },
     config.auth.secret,
@@ -34,8 +37,7 @@ function signRefreshToken(payload) {
       algorithm: config.auth.algorithm,
       expiresIn: config.auth.refreshTokenTtl,
       issuer: config.auth.issuer,
-      audience: config.auth.audience,
-      subject: payload.sub
+      audience: config.auth.audience
     }
   );
 }
