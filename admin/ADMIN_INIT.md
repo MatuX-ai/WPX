@@ -47,7 +47,7 @@ SET password_hash = EXCLUDED.password_hash,
 ## 通过 API 创建（如后端提供 admin 接口）
 
 ```bash
-curl -X POST https://api.prowpx.com/admin/admins \
+curl -X POST https://www.prowpx.com/admin/admins \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <bootstrap-token>" \
   -d '{

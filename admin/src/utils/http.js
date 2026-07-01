@@ -13,14 +13,25 @@
 import axios from 'axios'
 
 // 应用配置（由 vite.config.js 通过 __APP_INFO__ 注入）
+// 默认值必须使用相对路径（同源请求），绝不能硬编码为 https://prowpx.com 等绝对域名。
+// 原因：当前 Vercel 项目对 apex 域名（prowpx.com）配置了 "Redirect to www"（308 重定向，
+// 在 Vercel Dashboard 的 Domain Settings 里手动启用），任何对 apex 域名的请求都会被
+// Vercel Edge Network 在到达 Function 之前重定向到 www 子域。
+// 而 CORS preflight（OPTIONS）响应不允许 3xx 状态码，浏览器会直接阻断 preflight，
+// 导致 POST /api/auth/login 等跨子域请求彻底失败：
+//   "Response to preflight request doesn't pass access control check:
+//    Redirect is not allowed for a preflight request."
+// 修复办法：使用 '/' 作为 baseURL，让 axios 解析为当前 origin 的相对路径，
+// 用户从 www.prowpx.com 进入就请求 www，从 prowpx.com 进入就请求 prowpx.com，
+// 同源请求不会触发 preflight 的 308 重定向问题。
 const APP_INFO =
   typeof __APP_INFO__ !== 'undefined'
     ? __APP_INFO__
     : {
-        // WPX 自托管邮箱认证主域
-        accountBaseUrl: 'https://prowpx.com',
-        // 后端 API
-        apiBaseUrl: 'https://api.prowpx.com/admin'
+        // 自托管认证入口：默认同源（走 /api/* → /api/proxy 反代）
+        accountBaseUrl: '/',
+        // 业务 API：默认同源（走 /api/* → /api/proxy 反代）
+        apiBaseUrl: '/api'
       }
 
 export const ACCOUNT_BASE_URL = APP_INFO.accountBaseUrl

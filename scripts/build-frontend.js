@@ -50,7 +50,7 @@ const ADMIN_PROXY_SRC = path.join(ADMIN_DIR, 'api', 'proxy.js');
 // 使用 module.exports.config 替代 functions 字段，绕过 CLI 54.10.2+ glob 匹配回归
 const PUBLIC_DIR = path.join(ROOT, 'public');
 
-const SKIP_INSTALL = process.env.WPX_SKIP_INSTALL === '1';
+const SKIP_INSTALL = process.env.WPX_SKIP_INSTALL === '1' || process.env.VERCEL === '1' || process.env.NOW === '1';
 
 // 每次构建前要清掉的 public/ 下旧产物（避免上次构建残留）
 // 注意：不能写 'admin'！会误删源码 admin/ 目录
@@ -103,9 +103,15 @@ function assertExists(p, label) {
 }
 
 function runNpm(prefix, args) {
-  const cmd = `npm --prefix "${prefix}" ${args}`;
-  log(`$ ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', cwd: ROOT });
+  const cmd = `npm ${args}`;
+  log(`$ cd "${prefix}" && ${cmd}`);
+  // ⚠️ 关键（2026-06-30 修正）：Vercel 容器上使用 `npm --prefix X run build` 不会自动把
+  //   X/node_modules/.bin 加到 PATH，会报 "sh: vite: command not found"。
+  //   正确做法是手动 PATH 拼接：cd X && PATH="$PWD/node_modules/.bin:$PATH" npm run build
+  //   （即使 npm run 理论上自动加 PATH，Vercel 容器的 sh 实现 + npm 版本组合下偶尔失效，
+  //   显式 PATH 拼接是 100% 可移植的兑底。）
+  const cmdWithPath = `PATH="$PWD/node_modules/.bin:$PATH" ${cmd}`;
+  execSync(cmdWithPath, { stdio: 'inherit', cwd: prefix, shell: true });
 }
 
 function countFiles(dir) {
@@ -139,8 +145,8 @@ function main() {
   if (!SKIP_INSTALL) {
     log('步骤 1/4：安装子项目依赖（installCommand 已执行则可跳过）');
     try {
-      runNpm(LANDING_DIR, 'install --no-audit --no-fund');
-      runNpm(ADMIN_DIR, 'install --no-audit --no-fund');
+      runNpm(LANDING_DIR, 'install --no-audit --no-fund --include=dev');
+      runNpm(ADMIN_DIR, 'install --no-audit --no-fund --include=dev');
     } catch (err) {
       console.error('[build-frontend] ❌ npm install 失败：', err.message);
       process.exit(1);
@@ -254,33 +260,60 @@ function main() {
     log('  ! api/admin/handler.js 不存在，跳过复制（后续 deploy 可能报 404）');
   }
 
-  // Admin 后端 server/ → public/api/admin/server/（与 handler.js 同目录）
-  // handler.js 在 /var/task/api/admin/handler.js 中 require(__dirname/server/app.js)，
-  // 搜索路径从 __dirname 向上 6 层，因此放在 /var/task/server/、/var/task/api/server/ 等
-  // 任意层级都能找到。但因为 .vercelignore 里的 server/** 白名单不适用于 outputDirectory
-  // 下的文件（只适用于项目根），且 Vercel Function 容器不递归把 public/ 子目录当函数打包，
-  // 我们把 server/ 放在 handler.js 的同目录 public/api/admin/server/ 下，保证 0 层就能定位。
+  // 共享模块复制：项目根 api/_shared/* → public/api/_shared/*
+  // handler.js 与 proxy.js 均 require('../_shared/parse-body')；下划线开头的文件名/目录名
+  // Vercel 不会扫描为独立 Function（仅作为运行时被 require 的辅助模块）。
+  // outputDirectory=public 模式下，必须同步到 public 下，否则运行时会找不到。
+  const ROOT_SHARED = path.join(ROOT, 'api', '_shared');
+  if (fs.existsSync(ROOT_SHARED)) {
+    log('  - 复制 api/_shared/* → public/api/_shared/*（handler/proxy 共享模块）');
+    copyDir(ROOT_SHARED, path.join(PUBLIC_DIR, 'api', '_shared'));
+  }
+
+  // Admin 后端 server/ → public/api/admin/_server/（与 handler.js 同目录）
+  // handler.js 在 Vercel 部署后位于 /var/task/api/admin/handler.js，模块顶层 require：
+  //   const primary  = path.join(__dirname, '..', '..', '_server', 'app.js')  // /var/task/_server/app.js
+  //   const fallback = path.join(__dirname, '_server', 'app.js')               // /var/task/api/admin/_server/app.js
+  // outputDirectory=public 模式下，Vercel 部署根 = public/，因此 __dirname/../../_server/ ↔ public/_server/，
+  // __dirname/_server/ ↔ public/api/admin/_server/。两者必须至少存在一个，
+  // 否则 handler.js 模块加载 throw → Vercel Function 启动失败 → 502 FUNCTION_INVOCATION_FAILED。
   //
-  // 跳�?
-  //   - node_modules  → Vercel installCommand 已跑 npm install --prefix server，依赖自动注入
+  // ⚠️ 必须复制到 _server/（下划线前缀）而不是 server/ —— Vercel 不扫描下划线开头的目录为 Function。
+  //   如果复制到 server/，server/ 下 46 个 .js 文件（routes/controllers/middleware/utils/services/models）
+  //   会被全部识别为 Function，超过 Vercel Hobby 计划 12 Function 限制，报错：
+  //   "No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan"。
+  //
+  // ⚠️ 必须包含 node_modules —— Vercel installCommand 跑的 `npm install --prefix server`
+  //   只在 build 阶段执行（Vercel CLI 验证代码完整性），不影响 runtime。
+  //   outputDirectory=public 模式下，部署包只包含 public/ 下的文件，
+  //   运行时只能从部署包内 require 模块（Lambda 环境），因此 server/node_modules 必须一起打包。
+  //   server/ 总大小 ~6.4MB（含 node_modules 6.1MB），远低于 Vercel Function 250MB 限制，安全打包。
+  //
+  // 跳过：
   //   - .env / .env.example → 敏感信息 + 示例文件，运行时用 Vercel Dashboard 环境变量
   //   - Dockerfile / docker-compose.yml / nginx / ecosystem.config.cjs → 独立服务器部署用
   //   - DEPLOY.md / README.md / scripts / __tests__ → 与 Vercel 部署无关
+  //   - .gitignore / .dockerignore → Vercel 无关
+  //   - server/node_modules/.cache → 各种构建工具缓存
   const ROOT_SERVER = path.join(ROOT, 'server');
-  const PUBLIC_SERVER = path.join(PUBLIC_DIR, 'api', 'admin', 'server');
+  const PUBLIC_UNDERSCORE_SERVER = path.join(PUBLIC_DIR, 'api', 'admin', '_server');
+  const ROOT_UNDERSCORE_SERVER = path.join(ROOT, '_server');
+  const SERVER_SKIP = [
+    '.env', '.env.example', '.env.local', '.env.production',
+    'Dockerfile', 'docker-compose.yml', 'nginx',
+    'ecosystem.config.cjs', 'ecosystem.config.js',
+    'DEPLOY.md', 'README.md',
+    'scripts',
+    '__tests__'
+  ];
   if (fs.existsSync(ROOT_SERVER)) {
-    log('  - 复制 server/ → public/api/admin/server/（同 handler.js 目录，保证 0 层定位）');
-    copyDir(ROOT_SERVER, PUBLIC_SERVER, {
-      skip: [
-        'node_modules',
-        '.env', '.env.example', '.env.local', '.env.production',
-        'Dockerfile', 'docker-compose.yml', 'nginx',
-        'ecosystem.config.cjs', 'ecosystem.config.js',
-        'DEPLOY.md', 'README.md',
-        'scripts',
-        '__tests__'
-      ]
-    });
+    // 1) 主路径：复制到 public/api/admin/_server/（Vercel Function 部署能找到）
+    log('  - 复制 server/ → public/api/admin/_server/（Vercel Function 运行时定位）');
+    copyDir(ROOT_SERVER, PUBLIC_UNDERSCORE_SERVER, { skip: SERVER_SKIP });
+
+    // 2) 兼容路径：复制到项目根 _server/（本地 dev 直接 node _server/server.js 启动，git untracked）
+    log('  - 复制 server/ → 项目根 _server/（本地 dev 兼容，git untracked）');
+    copyDir(ROOT_SERVER, ROOT_UNDERSCORE_SERVER, { skip: SERVER_SKIP });
   } else {
     log('  ! server/ 不存在，跳过复制（后端将无法启动）');
   }

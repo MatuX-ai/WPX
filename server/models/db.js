@@ -8,16 +8,26 @@ const { Pool } = require('pg');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-const pool = new Pool({
-  host: config.pg.host,
-  port: config.pg.port,
-  user: config.pg.user,
-  password: config.pg.password,
-  database: config.pg.database,
-  max: config.pg.max,
-  idleTimeoutMillis: config.pg.idleTimeoutMillis,
-  ssl: config.pg.ssl || false
-});
+// 优先使用 config.pg.connectionString（DATABASE_URL），未配置时退回拆分的 host/port/user/password/database 字段
+const poolConfig = config.pg.connectionString
+  ? {
+      connectionString: config.pg.connectionString,
+      max: config.pg.max,
+      idleTimeoutMillis: config.pg.idleTimeoutMillis,
+      ssl: config.pg.ssl || false
+    }
+  : {
+      host: config.pg.host,
+      port: config.pg.port,
+      user: config.pg.user,
+      password: config.pg.password,
+      database: config.pg.database,
+      max: config.pg.max,
+      idleTimeoutMillis: config.pg.idleTimeoutMillis,
+      ssl: config.pg.ssl || false
+    }
+
+const pool = new Pool(poolConfig);
 
 pool.on('error', (err) => {
   logger.error('PostgreSQL pool error', { err: err.message });

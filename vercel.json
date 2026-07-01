@@ -3,7 +3,7 @@
   "version": 2,
   "name": "wpx-frontend",
   "framework": null,
-  "installCommand": "npm install --prefix landing --no-audit --no-fund && npm install --prefix admin --no-audit --no-fund && npm install --prefix server --no-audit --no-fund",
+  "installCommand": "npm install --prefix landing --no-audit --no-fund --include=dev && npm install --prefix admin --no-audit --no-fund --include=dev",
   "buildCommand": "node scripts/build-frontend.js",
   "outputDirectory": "public",
   "cleanUrls": true,
@@ -56,7 +56,7 @@
   ],
 
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
+    { "source": "/api/(.*)", "destination": "/api/admin/handler?path=$1" },
     { "source": "/admin/api/(.*)", "destination": "/api/admin/handler?path=$1" },
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/admin/:path*", "destination": "/admin.html" },

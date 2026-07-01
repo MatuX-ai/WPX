@@ -47,31 +47,15 @@ admin/public/**
 electron/**
 wpx-app/**
 
-# === Express 后端（现在作为 Vercel Function 跑，与营销站同域名） ===
-# 只保留 Vercel Function 运行所需文件：
-#   - server/package.json + package-lock.json（npm install 需要）
-#   - server/app.js + routes/ + controllers/ + models/ + middleware/ + utils/ + services/ + adapters/ + config/（require 链）
-#   - server/sql/init.sql（给 Neon PostgreSQL 初始化用，未来如需远程运行初始化脚本）
-# 排除：
-#   - Dockerfile / docker-compose.yml / nginx/ （独立服务器部署用的，与 Vercel 无关）
-#   - ecosystem.config.cjs（PM2 配置，与 Vercel 无关）
-#   - DEPLOY.md / README.md（独立部署文档，避免仓库体积膨胀）
-#   - scripts/（独立部署脚本，如 setup-db.sh）
-#   - .env.example（不提交真实密钥，参考 server/.env.example.vercel）
-# 保留：
-!server/package.json
-!server/package-lock.json
-!server/app.js
-!server/server.js
-!server/config/**
-!server/controllers/**
-!server/middleware/**
-!server/models/**
-!server/routes/**
-!server/services/**
-!server/utils/**
-!server/adapters/**
-!server/sql/**
+# === Express 后端（仅作为代码仓库，不上传到 Vercel） ===
+# ⚠️ 关键：必须完全排除项目根 server/！
+#   否则 Vercel 会部署 server/ 下的 46 个 .js 文件（routes/controllers/middleware/utils/services/models），
+#   全部被识别为 Serverless Function，超出 Hobby 计划 12 Function 限制，报错：
+#   "No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan"。
+#   build-frontend.js 把 server/ 复制到 public/api/admin/_server/（Vercel Function 运行时定位）
+#   + 项目根 _server/（本地 dev 兼容）。下划线开头 _server/ 使 Vercel 不扫描其内部为 Function，
+#   避免 12 Function 限制，同时仍会上传到部署包。
+server/
 
 # === 打包产物 / 资源 ===
 release/**
@@ -79,6 +63,27 @@ resources/**
 
 # 依赖相关
 **/node_modules/
+# ⚠️ 例外（2026-06-30 修正）：必须保留 _server/ 下的 node_modules。
+#   build-frontend.js 把 server/node_modules 复制到 _server/node_modules/
+#   让 Vercel Function 容器运行时能找到 express/cors/helmet/pg/redis 等依赖。
+#   若保留上面 **/node_modules/ 全局规则，_server/ 下的依赖会被全部排除，
+#   运行时 require('express') 会报 Cannot find module，返回 500 FUNCTION_INVOCATION_FAILED。
+#   关键：_server/ 必须在项目根顶层（不在 api/ 下），Vercel 不扫描整个目录；
+#   否则即使下划线前缀，Vercel 仍会扫描 api/_server/ 下 46 个 .js 触发 12 Function 限制。
+#   ⚠️ Vercel 部署调试发现：!_server/node_modules/** 在某些场景下未被识别，
+#   需要补上更明确的 !_server/node_modules 和 !_server/node_modules/** 两个例外。
+!_server/node_modules
+!_server/node_modules/**
+
+# ⚠️ 例外（2026-07-01 修正）：必须保留 public/api/admin/_server/node_modules/。
+#   build-frontend.js 把 server/node_modules 复制到 public/api/admin/_server/node_modules/
+#   （路径：/var/task/api/admin/_server/node_modules/），
+#   这是 handler.js 运行时实际依赖的位置。上面的 **/node_modules/ 全局规则会默认排除它，
+#   必须加 ! 例外保留，否则运行时 require('express') 会报 Cannot find module → 502/500。
+#   注意：_server/ 以下划线开头，Vercel 不扫描其内部 .js 为 Function（避免 12 Function 限制），
+#   但仍会上传到部署包供运行时 require 解析。
+!public/api/admin/_server/node_modules
+!public/api/admin/_server/node_modules/**
 
 # Vite/Vitest 缓存
 .vite/

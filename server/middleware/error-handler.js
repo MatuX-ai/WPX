@@ -56,6 +56,14 @@ function errorHandler(err, req, res, next) {
   if (status >= 500 && config.env !== 'production') {
     body.error.stack = err.stack;
   }
+  // ⚠️ 调试：WPX_DEBUG_ERROR=true 时强制返回错误堆栈（即使 production 环境）
+  if (status >= 500 && process.env.WPX_DEBUG_ERROR === 'true') {
+    body.error.debug = {
+      name: err.name,
+      message: err.message,
+      stack: (err.stack || '').split('\n').slice(0, 12).join('\n')
+    };
+  }
 
   res.status(status).json(body);
 }

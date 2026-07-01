@@ -42,12 +42,12 @@ npm run build
                               Functions / Serverless 反向代理
                                          │
                                          ▼
-                              https://api.prowpx.com/admin/*
-                              https://prowpx.com/api/auth/* (CORS)
+                              https://www.prowpx.com/admin/api/* （同源，API_TARGET）
+                              https://www.prowpx.com/api/auth/* (认证服务，同源)
 ```
 
-- **业务 API**：`/admin/api/*` 通过 Pages Functions / Vercel Serverless Function 反向代理到 `api.prowpx.com/admin`，避免 CORS
-- **认证 API**：登录页直接调用 `prowpx.com/api/auth/*`，由本项目后端在 CORS 白名单中放行 `https://prowpx.com`
+- **业务 API**：`/admin/api/*` 通过 Pages Functions / Vercel Serverless Function 反向代理到 `https://www.prowpx.com/admin/api/*`（同源，避免 CORS）
+- **认证 API**：登录页直接调用 `https://www.prowpx.com/api/auth/*`（同源），由本项目后端在 CORS 白名单中放行前端 origin
 
 ---
 
@@ -150,10 +150,10 @@ vercel --prod
 
 ### 6.1 反向代理（推荐，避免 CORS）
 
-admin 项目默认采用**反代模式**（`.env.production` 中 `VITE_API_BASE_URL=/admin/api`）：
+admin 项目默认采用**反代模式**（`.env.production` 中 `VITE_API_BASE_URL=/api`）：
 
-- **Cloudflare Pages**：`functions/api/[[path]].js` 转发 `/admin/api/*` → `https://api.prowpx.com/admin/*`
-- **Vercel**：`api/proxy.js` 转发 `/admin/api/*` → `https://api.prowpx.com/admin/*`
+- **Cloudflare Pages**：通过 `functions/api/[[path]].js`（待实现）转发 `/api/*` → `/admin/api/*`
+- **Vercel**：`api/proxy.js` 转发 `/api/*` → `https://www.prowpx.com/admin/api/*`（默认 `API_TARGET`，同源）
 
 优势：
 - 浏览器看到的是同源请求，无 CORS 限制
@@ -163,26 +163,26 @@ admin 项目默认采用**反代模式**（`.env.production` 中 `VITE_API_BASE_
 如需自定义目标，配置环境变量 `API_TARGET`：
 
 ```bash
-# Cloudflare Pages
-API_TARGET=https://staging-api.prowpx.com/admin
-
-# Vercel
-API_TARGET=https://staging-api.prowpx.com/admin
+# Cloudflare Pages / Vercel 同源反代目标地址（推荐）
+# 默认就是 https://www.prowpx.com/admin/api（同源，不会有 CORS 跨域问题）
+# 仅当后端部署到独立域名（如 staging 环境）时才需要覆盖：
+# API_TARGET=https://staging.prowpx.com/admin/api
 ```
 
 ### 6.2 直连后端（CORS 模式）
 
-如不想走反代，可修改 `.env.production`：
+如不想走反代（例如后端部署到独立域名），可修改 `.env.production`：
 
 ```env
-VITE_API_BASE_URL=https://api.prowpx.com/admin
+# 示例：staging 环境独立部署的后端（实际使用时替换为你的后端域名）
+VITE_API_BASE_URL=https://staging.prowpx.com/admin/api
 ```
 
-此时需要后端在响应头中放行 `https://prowpx.com`：
+此时需要后端在响应头中放行 `https://www.prowpx.com` 与 `https://prowpx.com`：
 
 ```nginx
 # Nginx 示例
-add_header Access-Control-Allow-Origin https://prowpx.com always;
+add_header Access-Control-Allow-Origin https://www.prowpx.com always;
 add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
 add_header Access-Control-Allow-Headers "Authorization, Content-Type" always;
 add_header Access-Control-Allow-Credentials true always;
@@ -191,6 +191,21 @@ if ($request_method = OPTIONS) {
     return 204;
 }
 ```
+
+> ⚠️ **直连模式下严禁使用 apex 域名 `https://prowpx.com` 作为 baseURL**，原因：
+> 当前 Vercel 项目对 apex 域名（`prowpx.com`）配置了 "Redirect to www"（308 重定向，
+> 在 Vercel Dashboard 的 Domain Settings 里手动启用），跨子域请求会让 CORS preflight
+> 被 308 阻断，POST 完全失败：
+>
+> ```
+> Access to XMLHttpRequest at 'https://prowpx.com/api/auth/login' from origin
+> 'https://www.prowpx.com' has been blocked by CORS policy: Response to preflight
+> request doesn't pass access control check: Redirect is not allowed for a
+> preflight request.
+> ```
+>
+> 解决办法：要么用 `https://www.prowpx.com`（同子域），要么用反代模式（同源）。
+> 同理 `VITE_ACCOUNT_BASE_URL` 也不能设为 `https://prowpx.com`。
 
 ### 6.3 认证服务 CORS
 
@@ -206,8 +221,11 @@ Access-Control-Allow-Credentials: true
 后端 `.env` 中配置：
 
 ```env
-CORS_ORIGIN=https://prowpx.com,https://www.prowpx.com,https://api.prowpx.com,http://localhost:5174,http://localhost:5175
+CORS_ORIGIN=https://prowpx.com,https://www.prowpx.com,http://localhost:5174,http://localhost:5175
 ```
+
+> ⚠️ 同 6.2 节：CORS 白名单中不要包含独立的 `api.*` 子域作为 Origin，应该
+> 放行真正的"调用方"（即前端页面所在域名 www.prowpx.com 等）。
 
 ---
 
@@ -218,9 +236,23 @@ CORS_ORIGIN=https://prowpx.com,https://www.prowpx.com,https://api.prowpx.com,htt
 | `VITE_APP_TITLE` | ✗ | `WPX 管理后台` | 浏览器标签标题 |
 | `VITE_APP_SHORT_NAME` | ✗ | `WPX Admin` | PWA 短名称 |
 | `VITE_THEME_COLOR` | ✗ | `#4F46E5` | 品牌主色 |
-| `VITE_API_BASE_URL` | ✓ | `/admin/api` | 业务 API 入口（推荐走反代）。同源路径 |
-| `VITE_ACCOUNT_BASE_URL` | ✓ | `https://prowpx.com` | 自托管认证入口（主域名） |
-| `API_TARGET` | ✗ | `https://api.prowpx.com/admin` | 反代目标地址（仅 Cloudflare Pages / Vercel Functions 使用） |
+| `VITE_API_BASE_URL` | ✓ | `/api` | 业务 API 入口（走反代，同源）。**必须用相对路径**，不要写成 apex 域名 |
+| `VITE_ACCOUNT_BASE_URL` | ✓ | `/` | 自托管认证入口。**必须用相对路径`** `/`，不要写 `https://prowpx.com` |
+| `API_TARGET` | ✗ | `https://www.prowpx.com/admin/api` | 反代目标地址（仅 Cloudflare Pages / Vercel Functions 使用） |
+
+> ⚠️ **`VITE_API_BASE_URL` 与 `VITE_ACCOUNT_BASE_URL` 必须用相对路径（`/`、`/api`）**。
+> 历史经验（2026-06-30）：曾经误把 `VITE_ACCOUNT_BASE_URL` 设为 `https://prowpx.com`，
+> 前端硬编码为 apex 域名，触发跨子域请求；又因为当前 Vercel 项目对 apex 配置了 "Redirect to www"
+> 的 308 重定向（在 Vercel Dashboard → Domain Settings → Redirect to www 里手动启用），
+> CORS preflight 被阻断，POST `/api/auth/login` 完全失败：
+>
+> ```
+> Response to preflight request doesn't pass access control check:
+> Redirect is not allowed for a preflight request.
+> ```
+>
+> 修复办法：用相对路径让 axios 解析为同源 URL，走 `/api/* → /api/proxy` 同源反代，
+> 不再触发跨子域 preflight。
 
 ### Cloudflare Pages 配置
 
@@ -228,10 +260,10 @@ CORS_ORIGIN=https://prowpx.com,https://www.prowpx.com,https://api.prowpx.com,htt
 
 | Variable name | Value | Environment |
 |---------------|-------|-------------|
-| `VITE_API_BASE_URL` | `/admin/api` | Production / Preview |
-| `VITE_ACCOUNT_BASE_URL` | `https://prowpx.com` | Production / Preview |
-| `API_TARGET` | `https://api.prowpx.com/admin` | Production |
-| `API_TARGET` | `https://staging-api.prowpx.com/admin` | Preview |
+| `VITE_API_BASE_URL` | `/api` | Production / Preview |
+| `VITE_ACCOUNT_BASE_URL` | `/` | Production / Preview |
+| `API_TARGET` | `https://www.prowpx.com/admin/api` | Production |
+| `API_TARGET` | `https://staging.prowpx.com/admin/api` | Preview（仅当 staging 后端真实存在时配置） |
 
 ### Vercel 配置
 
@@ -239,9 +271,14 @@ Project → **Settings** → **Environment Variables**：
 
 | Name | Value | Environment |
 |------|-------|-------------|
-| `VITE_API_BASE_URL` | `/admin/api` | All |
-| `VITE_ACCOUNT_BASE_URL` | `https://prowpx.com` | All |
-| `API_TARGET` | `https://api.prowpx.com/admin` | Production |
+| `VITE_API_BASE_URL` | `/api` | All |
+| `VITE_ACCOUNT_BASE_URL` | `/` | All |
+| `API_TARGET` | `https://www.prowpx.com/admin/api` | Production |
+| `API_TARGET` | `https://staging.prowpx.com/admin/api` | Preview（仅当 staging 后端真实存在时配置） |
+
+> **Vercel 配置变更历史**：
+> - 早期版本：错误配置为 `VITE_ACCOUNT_BASE_URL=https://prowpx.com`，导致登录 CORS 308 阻断
+> - 当前版本（2026-06-30 修复）：改为 `/`，恢复同源反代
 
 ---
 
@@ -294,9 +331,31 @@ JWT 未被后端识别。检查 `prowpx.com/api/auth/login` 是否正确签发 t
 
 Cloudflare Pages `_redirects` 与 Vercel `vercel.json` 均已配置 SPA fallback。如仍 404，请确认 `_redirects` 文件在 `public/` 目录且未在 `dist/` 中被覆盖。
 
-### Q5. 跨域错误
+### Q5. 跨域错误（CORS preflight 308 阻断）
 
-如使用直连模式且遇到 CORS 错误，请改用反代模式（`VITE_API_BASE_URL=/admin/api`），或在 `prowpx.com/api/auth/*` 与 `api.prowpx.com` 响应头中添加 `Access-Control-Allow-Origin: https://prowpx.com`。
+**症状**：登录报错：
+
+```
+Access to XMLHttpRequest at 'https://prowpx.com/api/auth/login' from origin
+'https://www.prowpx.com' has been blocked by CORS policy: Response to preflight
+request doesn't pass access control check: Redirect is not allowed for a
+preflight request.
+```
+
+**原因**：前端硬编码 `VITE_ACCOUNT_BASE_URL=https://prowpx.com`（apex 域名），加上
+当前 Vercel 项目对 apex 域名配置了 "Redirect to www"（308 重定向，在 Vercel Dashboard
+的 Domain Settings 里手动启用），跨子域请求的 CORS preflight 被 308 阻断。
+
+**修复**：
+1. 检查 `.env` / Vercel 环境变量：删除 `VITE_ACCOUNT_BASE_URL=https://prowpx.com` ，
+   改用默认值 `/`（同源）。
+2. 重新构建：`cd admin && npm run build && cd .. && node scripts/build-frontend.js`。
+3. 重新部署：`vercel --prod` 或 push 到 main 触发自动部署。
+4. 验证：浏览器 DevTools Network 中看到 POST `/api/auth/login` 走的是 www.prowpx.com
+   （同源），不是 apex 域名。
+
+更彻底的办法：始终使用反代模式（`VITE_API_BASE_URL=/api`），浏览器与后端同源，
+从根上避免跨域 CORS。
 
 ### Q6. 自定义构建参数
 

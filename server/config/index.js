@@ -53,6 +53,10 @@ const config = {
   },
 
   pg: {
+    // 优先认 DATABASE_URL（Neon / Supabase / RDS 标准连接串）
+    // 格式如：postgres://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
+    // 未设置 DATABASE_URL 时退回独立字段（PG_HOST/PORT/USER/PASSWORD/DATABASE），便于本地直配
+    connectionString: (process.env.DATABASE_URL || process.env.PG_CONNECTION_STRING || '').trim() || undefined,
     host: process.env.PG_HOST || '127.0.0.1',
     port: int(process.env.PG_PORT, 5432),
     user: process.env.PG_USER || 'postgres',

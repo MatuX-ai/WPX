@@ -26,26 +26,21 @@
 
 const path = require('path')
 const fs = require('fs')
+const { parseBody, installParsedBody } = require('../_shared/parse-body')
 
-// 定位 server/app.js 的绝对路径
-// 兼容两种部署位置（两个位置共享同一份 server/ 源码）：
-//   - 项目根 api/admin/handler.js  → ../../server/app.js
-//   - 项目根 public/api/admin/handler.js  → ../../../server/app.js
-function locateServerApp() {
-  let dir = __dirname
-  for (let depth = 0; depth < 6; depth++) {
-    const candidate = path.join(dir, 'server', 'app.js')
-    if (fs.existsSync(candidate)) return candidate
-    const parent = path.dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
-  throw new Error(
-    `[wpx-admin-handler] server/app.js not found within 6 levels up from ${__dirname}`
-  )
-}
-
-const serverAppPath = locateServerApp()
+// 加载项目根 _server/app.js（Vercel 部署后位于 /var/task/_server/app.js）
+// _server/ 是项目根顶层目录，不在 api/ 下，Vercel 不会扫描其中 .js 为 Function。
+const ROOT_UNDERSCORE_SERVER = path.join(__dirname, '..', '..', '_server', 'app.js')
+const serverAppPath = fs.existsSync(ROOT_UNDERSCORE_SERVER)
+  ? ROOT_UNDERSCORE_SERVER
+  : (() => {
+      // 兑底：老路径 _server/（项目根 api/ 下的下划线目录），兼容旧部署。
+      const candidate = path.join(__dirname, '_server', 'app.js')
+      if (fs.existsSync(candidate)) return candidate
+      throw new Error(
+        `[wpx-admin-handler] _server/app.js not found. checked: ${ROOT_UNDERSCORE_SERVER} and ${candidate}`
+      )
+    })()
 // eslint-disable-next-line no-console
 console.log('[wpx-admin-handler] loading', serverAppPath)
 
@@ -59,16 +54,31 @@ function getApp() {
   return cachedApp
 }
 
-// 错误兜底中间件（防止异步异常泄漏到 Vercel）
+// 错误兑底中间件（防止异步异常泄漏到 Vercel）
 function safeError(res, err) {
   // eslint-disable-next-line no-console
   console.error('[wpx-admin-handler] unhandled error', err)
   if (!res.headersSent) {
     try {
-      res.status(500).json({
-        ok: false,
-        error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' }
-      })
+      const debugMode = String(process.env.WPX_DEBUG_ERROR || '').toLowerCase() === 'true'
+      const body = debugMode
+        ? {
+            ok: false,
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: '服务器内部错误',
+              debug: {
+                name: err.name,
+                message: err.message,
+                stack: (err.stack || '').split('\n').slice(0, 10).join('\n')
+              }
+            }
+          }
+        : {
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' }
+          }
+      res.status(500).json(body)
     } catch (_) {
       // ignore
     }
@@ -102,6 +112,36 @@ module.exports = async function handler(req, res) {
     rewrittenUrl = rewrittenUrl.replace(/^\/admin/, '') || '/'
 
     req.url = rewrittenUrl
+
+    // 诊断捷径（rewrite 后）：req.url 现在是 /api/health
+    if (req.url === '/api/health' || req.url.startsWith('/api/health?') || req.url.startsWith('/api/health/')) {
+      const diag = {
+        url: req.url,
+        method: req.method,
+        ct: req.headers['content-type'] || null,
+        cl: req.headers['content-length'] || null,
+        nodeEnv: process.env.NODE_ENV || null,
+        hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+        hasPgHost: Boolean(process.env.PG_HOST),
+        pgHost: process.env.PG_HOST || null,
+        pgPort: process.env.PG_PORT || null,
+        pgDb: process.env.PG_DATABASE || null,
+        pgSsl: process.env.PG_SSL || null,
+        hasRedis: Boolean(process.env.REDIS_URL),
+        hasJwt: Boolean(process.env.ACCOUNT_JWT_SECRET),
+        ts: new Date().toISOString()
+      }
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      res.setHeader('X-WPX-Diag', Buffer.from(JSON.stringify(diag)).toString('base64').slice(0, 768))
+      res.status(200).end(JSON.stringify({ ok: true, diag }))
+      return
+    }
+
+    // 业务层 body 解析兑底：detailed comment in api/_shared/parse-body.js
+    // 1) 顶先预解析，避免 Express body-parser 访问 Vercel getter 抛 'invalid media type'
+    // 2) 装到 req.body 并打 _body 标记，让后续 body-parser 跳过
+    const preParsed = await parseBody(req)
+    installParsedBody(req, preParsed)
 
     const app = getApp()
     await new Promise((resolve, reject) => {
