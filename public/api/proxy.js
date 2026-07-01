@@ -1,16 +1,16 @@
 // Vercel Serverless Function: API 反向代理
-// 路由: /api/*  ->  https://prowpx.com/admin/api/* （同源）
+// 路由: /api/*  ->  https://www.prowpx.com/admin/api/* （同源，默认 API_TARGET）
 // 用途: 让 prowpx.com 与业务 API 同源，避免浏览器 CORS
-// 管理后台部署在 https://prowpx.com/admin 下，前端 /api/* 请求
-// 由本 Serverless Function 反代到同源后端 https://prowpx.com/admin/api/*
+// 管理后台部署在 https://www.prowpx.com/admin 下，前端 /api/* 请求
+// 由本 Serverless Function 反代到同源后端 https://www.prowpx.com/admin/api/*
 // 后端本身也是 Vercel Function（部署在 api/admin/handler.js），
 // Vercel rewrites 会把 /admin/api/* 路由到该 Function 处理。
-// 这样 /api/* -> /api/proxy -> fetch prowpx.com/admin/api/* -> Vercel rewrite -> /api/admin/handler
+// 这样 /api/* -> /api/proxy -> fetch www.prowpx.com/admin/api/* -> Vercel rewrite -> /api/admin/handler
 // 全程同源 + 无跨域 + 无 CORS preflight。
 //
 // 环境变量（在 Vercel 控制台配置）:
-//   API_TARGET = https://prowpx.com/admin/api   （默认）
-//   ALLOWED_ORIGINS = https://prowpx.com        （逗号分隔）
+//   API_TARGET = https://www.prowpx.com/admin/api   （默认，同源，无跨域）
+//   ALLOWED_ORIGINS = https://prowpx.com,https://www.prowpx.com  （逗号分隔）
 
 // 架构说明（2026-06-30 调整）:
 //  原来计划用独立子域 api.prowpx.com 部署 Express 后端，
@@ -21,10 +21,13 @@
 //   这样所有请求同源，避免 apex↔www 308 重定向造成的 CORS preflight 阻断。
 
 const TARGET = process.env.API_TARGET || 'https://www.prowpx.com/admin/api'
+const { parseBody, installParsedBody } = require('../_shared/parse-body')
 
 // 允许触发反代的来源白名单（逗号分隔）。为空时默认允许同源请求。
 // 防止本反代函数被外部站点滥用为开放 HTTP 代理。
-// 默认同时放行 apex 与 www 子域，避免 www → apex 308 重定向阻断 preflight。
+// 默认同时放行 apex 与 www 子域，允许从前端两个入口域名调用本反代；
+// 注意：请求目标必须是 www.prowpx.com/admin/api/*（同源），不可指向 apex，
+// 否则会被 Vercel 的 apex→www 308 重定向阻断（OPTIONS preflight 不允许 3xx）。
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://prowpx.com,https://www.prowpx.com')
   .split(',')
   .map((s) => s.trim().toLowerCase().replace(/\/$/, ''))
@@ -65,7 +68,7 @@ function resolveCorsOrigin(req) {
 // 请求超时（毫秒）
 const REQUEST_TIMEOUT = 25000
 
-// 不透传的请求头（hop-by-hop + 主机头）
+// 不透传的请求头（hop-by-hop + 主机头 + undici 不支持的）
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -76,7 +79,11 @@ const HOP_BY_HOP = new Set([
   'transfer-encoding',
   'upgrade',
   'host',
-  'content-length'
+  'content-length',
+  // undici（Node.js 18+ 内置 fetch）不支持 expect header，
+  // 否则 fetch 报 "NotSupportedError: expect header not supported"。
+  // 通常由客户端 fetch 自动添加，需在反代层别手剥除。
+  'expect'
 ])
 
 function buildHeaders(req) {
@@ -90,6 +97,12 @@ function buildHeaders(req) {
   // 标识真实来源（供后端审计）
   out['X-Forwarded-Host'] = req.headers.host || ''
   out['X-Forwarded-Proto'] = 'https'
+  // ⚠️ Vercel Node.js Function（2026 年 Rust 实现）期望严格 Content-Type：
+  //   'application/json; charset=utf-8' 会导致下游 handler 访问 req.body 时抛
+  //   "TypeError: invalid media type"。需要去掉 charset 后缀，只保留 media type。
+  if (out['content-type']) {
+    out['content-type'] = String(out['content-type']).split(';')[0].trim().toLowerCase()
+  }
   return out
 }
 

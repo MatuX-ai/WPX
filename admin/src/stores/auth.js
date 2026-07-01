@@ -56,7 +56,27 @@ export const useAuthStore = defineStore('auth', () => {
     () => !!token.value && !isJwtExpired(token.value)
   )
 
-  const role = computed(() => user.value?.role || null)
+  // 角色来源（按优先级）：
+  //   1) user.role 顶层字段（兼容旧版定制登录返回）
+  //   2) user.roles 数组的第一个元素（与后端 users 表 roles 字段对齐）
+  //   3) 从 JWT payload 解出的 role/roles[0]
+  const role = computed(() => {
+    const u = user.value
+    if (!u) return null
+    if (u.role) return u.role
+    if (Array.isArray(u.roles) && u.roles.length) return u.roles[0]
+    if (token.value) return decodeRoleFromJwt(token.value)
+    return null
+  })
+
+  // 完整的角色数组（用于 hasPermission 等需要多角色检查的场景）
+  const roles = computed(() => {
+    const u = user.value
+    if (!u) return []
+    if (Array.isArray(u.roles) && u.roles.length) return u.roles
+    if (u.role) return [u.role]
+    return []
+  })
 
   const roleLabel = computed(() =>
     role.value ? ROLE_LABELS[role.value] || role.value : ''
@@ -172,6 +192,7 @@ export const useAuthStore = defineStore('auth', () => {
     // getters
     isAuthenticated,
     role,
+    roles,
     roleLabel,
     displayName,
     avatar,
