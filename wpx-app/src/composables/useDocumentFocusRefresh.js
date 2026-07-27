@@ -5,8 +5,9 @@ import { getDocPathFromUrl } from '@/utils/windowContext'
 /**
  * 记录文档来源路径及已知修改时间（打开文件时调用）。
  * @param {string} [filePath]
+ * @param {string} [extension]
  */
-export async function syncDocumentSource(filePath) {
+export async function syncDocumentSource(filePath, extension) {
   const appStore = useAppStore()
 
   if (!filePath) {
@@ -24,7 +25,7 @@ export async function syncDocumentSource(filePath) {
     }
   }
 
-  appStore.setDocumentSource({ path: filePath, mtimeMs })
+  appStore.setDocumentSource({ path: filePath, mtimeMs, extension })
 }
 
 /**

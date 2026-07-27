@@ -56,10 +56,11 @@ const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
 // 静态 fallback
 const fallbackVersion = {
-  version: 'v1.0.0',
-  date: '2026-06-18',
-  size: '15 MB',
-  url: 'https://github.com/MatuX-ai/WPX/releases/latest'
+  version: 'v0.1.18',
+  date: '2026-07-27',
+  size: '156 MB',
+  url: 'https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-Setup-0.1.18.exe',
+  sha256: '6b42e7724b03fc1b52cf706d0e0d49fac168227372fd63c30d91e334c8e77d27'
 }
 
 const release = ref({ ...fallbackVersion, loading: true, source: 'static' })
@@ -124,11 +125,13 @@ async function startDownload() {
   // 1.5s 召唤动画
   await new Promise((r) => setTimeout(r, 1500))
 
-  // 触发下载：跳转 GitHub Releases
-  // 在生产环境可以替换为 CDN 链接
-  const url =
-    release.value.url ||
-    `https://github.com/MatuX-ai/WPX/releases/latest`
+  const platformUrls = {
+    windows: release.value.url || `https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-Setup-0.1.18.exe`,
+    macos: `https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-${release.value.version.replace('v', '')}.dmg`,
+    linux: `https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-${release.value.version.replace('v', '')}.AppImage`
+  }
+
+  const url = platformUrls[activePlatform.value] || platformUrls.windows
 
   // 打开新窗口触发下载
   window.open(url, '_blank', 'noopener,noreferrer')

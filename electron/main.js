@@ -799,6 +799,22 @@ function registerIpcHandlers() {
     WindowManager.focusWindow(windowId)
   })
 
+  ipcMain.handle('window:close-other', (event, windowId) => {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!senderWindow || !WindowManager.findWindowId(senderWindow)) {
+      return { ok: false, error: 'INVALID_SENDER' }
+    }
+    if (typeof windowId !== 'number' || !Number.isFinite(windowId)) {
+      return { ok: false, error: 'INVALID_WINDOW_ID' }
+    }
+    const window = WindowManager.getWindow(windowId)
+    if (!window || window.isDestroyed()) {
+      return { ok: false, error: 'WINDOW_NOT_FOUND' }
+    }
+    window.close()
+    return { ok: true }
+  })
+
   ipcMain.handle('window:create', (_event, docPath) => {
     return createManagedWindow(docPath, { suppressDialog: true })
   })

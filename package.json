@@ -267,6 +267,7 @@
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "4.10.38",
     "subset-font": "^2.5.0",
-    "tesseract.js": "5.1.1"
+    "tesseract.js": "5.1.1",
+    "xlsx": "^0.18.5"
   }
 }

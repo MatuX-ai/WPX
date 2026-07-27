@@ -1,15 +1,15 @@
 <!--
   SectionDownload · 下载 CTA 区
-  - v0.1.17：点击下载指向 GitHub Releases 具体版本资产 + SHA256 一键复制
+  - v0.1.18：点击下载指向 GitHub Releases 具体版本资产 + SHA256 一键复制
 -->
 <script setup>
 import { ref } from 'vue'
 
-// v0.1.17 真实 GitHub Releases 资产链接
+// v0.1.18 真实 GitHub Releases 资产链接
 const WINDOWS_EXE_URL =
-  'https://github.com/MatuX-ai/WPX/releases/download/0.1.17/WPX-Setup-0.1.17.exe'
+  'https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-Setup-0.1.18.exe'
 const WINDOWS_EXE_SHA256 =
-  'c8b73102a9469bcb73135bafed2e03954369d8ce2280a430efa087fdf40712e1'
+  '6b42e7724b03fc1b52cf706d0e0d49fac168227372fd63c30d91e334c8e77d27'
 const GITHUB_RELEASES_URL = 'https://github.com/MatuX-ai/WPX/releases'
 
 const shaCopied = ref(false)
@@ -74,7 +74,7 @@ async function copySha256() {
             aria-hidden="true"
             class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400"
           />
-          当前桌面端：v0.1.17
+          当前桌面端：v0.1.18
         </div>
 
         <h2
@@ -84,7 +84,7 @@ async function copySha256() {
           开始你的下一篇佳作
         </h2>
         <p class="relative mx-auto mt-4 max-w-xl px-2 text-sm text-white/85 sm:text-base">
-          免费下载 WPX 桌面端（v0.1.17 · Windows · 155MB），立即拥有 AI 加持的写作工作台。
+          免费下载 WPX 桌面端（v0.1.18 · Windows · 156MB），立即拥有 AI 加持的写作工作台。
         </p>
 
         <div class="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
@@ -117,7 +117,7 @@ async function copySha256() {
         <div class="relative mt-6 flex flex-col items-center justify-center gap-3 text-xs text-white/75 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
           <div class="flex items-center gap-1.5">
             <span aria-hidden="true">📦</span>
-            <span>约 155 MB（v0.1.17，相比 WPS 轻量 10 倍）</span>
+            <span>约 156 MB（v0.1.18，相比 WPS 轻量 10 倍）</span>
           </div>
 
           <!-- 可点击复制的 SHA256 chip -->
@@ -133,7 +133,7 @@ async function copySha256() {
             <span
               id="wpx-sha256-text"
               class="font-semibold tracking-tight"
-            >c8b73102…df40712e1</span>
+            >6b42e772…8e77d27</span>
             <span
               aria-hidden="true"
               class="ml-0.5 inline-flex h-4 min-w-[1.5rem] items-center justify-center rounded-full bg-white/20 px-1.5 text-[10px] font-semibold text-white transition-colors group-hover:bg-white/30"
@@ -153,7 +153,7 @@ async function copySha256() {
             to="/changelog"
             class="text-white/80 underline-offset-4 hover:text-white hover:underline"
           >
-            v0.1.17 更新日志 →
+            v0.1.18 更新日志 →
           </router-link>
           <span class="text-white/40">·</span>
           <a

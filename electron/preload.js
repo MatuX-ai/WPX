@@ -29,6 +29,7 @@ const electronAPI = {
   requestWindowList: () => ipcRenderer.invoke('window:list-request'),
   createWindow: (docPath) => ipcRenderer.invoke('window:create', docPath),
   focusWindow: (windowId) => ipcRenderer.send('window:focus-other', windowId),
+  closeWindow: (windowId) => ipcRenderer.invoke('window:close-other', windowId),
   close: () => ipcRenderer.send('window:close'),
   requestClose: () => ipcRenderer.send('window:request-close'),
   confirmClose: () => ipcRenderer.send('window:confirm-close'),

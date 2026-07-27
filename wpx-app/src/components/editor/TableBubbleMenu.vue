@@ -1,7 +1,17 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
-import { exportTableToXls } from '@/utils/exportTableToXls'
+import { useAppStore } from '@/stores/app'
+import { exportTableToXls, exportTableToXlsx, exportTableByExtension } from '@/utils/exportTableToXls'
+
+const appStore = useAppStore()
+
+const defaultExportFormat = computed(() => {
+  const ext = appStore.documentSourceExtension?.toLowerCase()
+  if (ext === '.xls') return 'xls'
+  if (ext === '.xlsx' || ext === '.xlsm') return 'xlsx'
+  return 'xlsx'
+})
 
 const props = defineProps({
   editor: {
@@ -94,6 +104,27 @@ function handleExportXls() {
   }
 }
 
+function handleExportXlsx() {
+  exportMenuOpen.value = false
+  exportError.value = ''
+  try {
+    exportTableToXlsx(props.editor)
+  } catch (error) {
+    exportError.value = error?.message || '导出失败'
+  }
+}
+
+function handleExportDefault() {
+  exportMenuOpen.value = false
+  exportError.value = ''
+  try {
+    const filename = appStore.documentTitle?.replace(/\.[^.]+$/i, '') || 'table'
+    exportTableByExtension(props.editor, filename, appStore.documentSourceExtension)
+  } catch (error) {
+    exportError.value = error?.message || '导出失败'
+  }
+}
+
 function handleClickOutside(event) {
   if (exportMenuRef.value && !exportMenuRef.value.contains(event.target)) {
     exportMenuOpen.value = false
@@ -150,7 +181,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
             class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
             @click="toggleExportMenu"
           >
-            导出
+            导出 {{ defaultExportFormat.toUpperCase() }}
             <svg class="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path
                 fill-rule="evenodd"
@@ -161,14 +192,28 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           </button>
           <div
             v-if="exportMenuOpen"
-            class="absolute bottom-full left-0 z-10 mb-1 min-w-[7rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+            class="absolute bottom-full left-0 z-10 mb-1 min-w-[8rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
           >
+            <button
+              type="button"
+              class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              @click="handleExportDefault"
+            >
+              导出 {{ defaultExportFormat.toUpperCase() }}（默认）
+            </button>
             <button
               type="button"
               class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
               @click="handleExportXls"
             >
               导出 XLS
+            </button>
+            <button
+              type="button"
+              class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              @click="handleExportXlsx"
+            >
+              导出 XLSX
             </button>
           </div>
         </div>

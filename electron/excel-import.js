@@ -1,7 +1,8 @@
 /**
- * excel-import.js - Excel (.xlsx / .xlsm) 文件 → Markdown 表格 解析器
+ * excel-import.js - Excel (.xlsx / .xlsm / .xls) 文件 → Markdown 表格 解析器
  *
- * 走 ExcelJS 流式读取，避免大文件加载到内存。
+ * 走 ExcelJS 流式读取（xlsx/xlsm），避免大文件加载到内存。
+ * .xls 格式使用 xlsx（SheetJS）库读取。
  * 每个工作表输出为一个 Markdown 表格，多个 sheet 之间用 ## 标题分隔。
  *
  * 设计要点：
@@ -9,9 +10,6 @@
  *  - 空单元格：保留空白，避免被压缩破坏列对齐
  *  - Markdown 表格语法防御：转义 `|` `\` 和换行（HTML 转义由下游 markdownToHtml 负责）
  *  - 超大表格保护：单 sheet 超过 maxRows 时给出友好提示，不爆栈
- *
- * 注意：仅支持 .xlsx / .xlsm（ExcelJS 4.x 基于 ZIP 容器）。
- * 旧版 .xls（BIFF 二进制）不在支持范围内，需在 Excel 中另存为 .xlsx。
  *
  * @module excel-import
  */
@@ -27,8 +25,8 @@ const DEFAULT_MAX_COLS = 200
 /** Markdown 表格对齐分隔符：左对齐，保持和编辑器中表格一致 */
 const ALIGN_SEP = '---'
 
-/** ExcelJS 实际可解析的扩展名（ZIP 容器）；旧 BIFF 不在列 */
-const SUPPORTED_EXTS = new Set(['.xlsx', '.xlsm'])
+/** 支持的扩展名 */
+const SUPPORTED_EXTS = new Set(['.xlsx', '.xlsm', '.xls'])
 
 /**
  * 转义 Markdown 表格单元格中的特殊字符
@@ -45,7 +43,6 @@ function escapeCell(value) {
   if (value instanceof Date) {
     s = formatDate(value)
   } else if (typeof value === 'object') {
-    // ExcelJS 富文本 / 公式结果等对象 → JSON 序列化兜底
     try {
       s = JSON.stringify(value)
     } catch {
@@ -54,14 +51,13 @@ function escapeCell(value) {
   } else {
     s = String(value)
   }
-  // 处理布尔值：ExcelJS 会读到 true/false，输出成“是/否”更友好
   if (s === 'true') s = '✓'
   else if (s === 'false') s = '✗'
 
   return s
-    .replace(/\\/g, '\\\\')     // 反斜杠 → 双反斜杠（避免被 Markdown 解析为转义符）
-    .replace(/\|/g, '\\|')       // 表格列分隔符转义
-    .replace(/\r?\n/g, '<br>')   // 单元格内换行 → <br>（Markdown 表格友好）
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, '<br>')
     .trim()
 }
 
@@ -87,7 +83,6 @@ function formatDate(d) {
 function readRow(row) {
   const values = row.values
   if (!values) return []
-  // ExcelJS 用 1-based 索引：values[0] 是空，values[1]..values[N] 是单元格
   const out = []
   for (let i = 1; i < values.length; i++) {
     out.push(values[i])
@@ -96,7 +91,7 @@ function readRow(row) {
 }
 
 /**
- * 把单 sheet 转 Markdown 表格
+ * 把单 sheet 转 Markdown 表格（ExcelJS Worksheet）
  * @param {ExcelJS.Worksheet} worksheet
  * @param {{ maxRows?: number, maxCols?: number, sheetTitle?: string }} [opts]
  */
@@ -109,7 +104,7 @@ function worksheetToMarkdown(worksheet, opts = {}) {
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber > maxRows) {
       truncated.rows = true
-      return false // 停止遍历
+      return false
     }
     const values = readRow(row)
     if (values.length > maxCols) {
@@ -119,17 +114,24 @@ function worksheetToMarkdown(worksheet, opts = {}) {
     rawRows.push(values)
   })
 
+  return rawRowsToMarkdown(rawRows, { maxRows, maxCols, sheetTitle, truncated })
+}
+
+/**
+ * 将原始行数据转换为 Markdown 表格
+ */
+function rawRowsToMarkdown(rawRows, opts = {}) {
+  const { maxRows = DEFAULT_MAX_ROWS_PER_SHEET, maxCols = DEFAULT_MAX_COLS, sheetTitle, truncated = { rows: false, cols: false } } = opts
+
   if (rawRows.length === 0) {
     return { markdown: `*（工作表 ${sheetTitle || ''} 为空）*\n`, truncated }
   }
 
-  // 列数对齐：取所有行的最大列数，不足的补空字符串
   const colCount = rawRows.reduce((m, r) => Math.max(m, r.length), 0)
   for (const row of rawRows) {
     while (row.length < colCount) row.push('')
   }
 
-  // 第一行作为表头（如果首行全空，下移直到找到非空行）
   let headerIdx = 0
   while (headerIdx < rawRows.length && rawRows[headerIdx].every((c) => escapeCell(c) === '')) {
     headerIdx += 1
@@ -142,21 +144,15 @@ function worksheetToMarkdown(worksheet, opts = {}) {
   const body = rawRows.slice(headerIdx + 1)
 
   const lines = []
-  // Sheet 标题
   if (sheetTitle) lines.push(`## ${sheetTitle}`, '')
 
-  // 表头行
   lines.push(`| ${header.map(escapeCell).join(' | ')} |`)
-
-  // 分隔行
   lines.push(`| ${new Array(colCount).fill(ALIGN_SEP).join(' | ')} |`)
 
-  // 数据行
   for (const row of body) {
     lines.push(`| ${row.map(escapeCell).join(' | ')} |`)
   }
 
-  // 截断提示
   const tips = []
   if (truncated.rows) tips.push(`行数超过 ${maxRows}，已截断`)
   if (truncated.cols) tips.push(`列数超过 ${maxCols}，已截断`)
@@ -170,38 +166,60 @@ function worksheetToMarkdown(worksheet, opts = {}) {
 
 /**
  * 将 Excel 文件路径转换为 Markdown 内容
- * @param {string} filePath - .xlsx 或 .xlsm 文件绝对路径（不支持旧版 .xls）
+ * @param {string} filePath - .xlsx / .xlsm / .xls 文件绝对路径
  * @param {{ maxRows?: number, maxCols?: number }} [opts]
  * @returns {Promise<{ markdown: string, sheetNames: string[], sheetCount: number, warnings: string[] }>}
  */
 async function excelFileToMarkdown(filePath, opts = {}) {
   const ext = path.extname(filePath).toLowerCase()
-  if (ext === '.xls') {
-    // 旧版 BIFF 二进制 ExcelJS 不支持；提示用户先另存为 .xlsx
-    throw new Error(
-      '旧版 .xls（Excel 97-2003 BIFF 二进制）暂不支持。请在 Microsoft Excel 中打开后“另存为 .xlsx”，再重新打开。',
-    )
-  }
   if (!SUPPORTED_EXTS.has(ext)) {
-    throw new Error(`不支持的 Excel 格式：${ext}（仅支持 .xlsx / .xlsm）`)
+    throw new Error(`不支持的 Excel 格式：${ext}（仅支持 .xlsx / .xlsm / .xls）`)
   }
-
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(filePath)
 
   const sheetNames = []
   const sections = []
   const warnings = []
 
-  workbook.eachSheet((worksheet, sheetId) => {
-    const title = worksheet.name || `Sheet${sheetId}`
-    sheetNames.push(title)
-    const { markdown, truncated } = worksheetToMarkdown(worksheet, { ...opts, sheetTitle: title })
-    sections.push(markdown)
-    if (truncated.rows || truncated.cols) {
-      warnings.push(`工作表「${title}」已截断（${truncated.rows ? '行' : ''}${truncated.cols ? '列' : ''}）`)
+  if (ext === '.xls') {
+    const XLSX = require('xlsx')
+    const workbook = XLSX.readFile(filePath)
+
+    for (let i = 0; i < workbook.SheetNames.length; i++) {
+      const sheetName = workbook.SheetNames[i]
+      const worksheet = workbook.Sheets[sheetName]
+
+      const rawRows = []
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || '')
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        const row = []
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = worksheet[XLSX.utils.encode_cell({ r, c })]
+          row.push(cell ? cell.v : '')
+        }
+        rawRows.push(row)
+      }
+
+      const { markdown, truncated } = rawRowsToMarkdown(rawRows, { ...opts, sheetTitle: sheetName })
+      sheetNames.push(sheetName)
+      sections.push(markdown)
+      if (truncated.rows || truncated.cols) {
+        warnings.push(`工作表「${sheetName}」已截断（${truncated.rows ? '行' : ''}${truncated.cols ? '列' : ''}）`)
+      }
     }
-  })
+  } else {
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.readFile(filePath)
+
+    workbook.eachSheet((worksheet, sheetId) => {
+      const title = worksheet.name || `Sheet${sheetId}`
+      sheetNames.push(title)
+      const { markdown, truncated } = worksheetToMarkdown(worksheet, { ...opts, sheetTitle: title })
+      sections.push(markdown)
+      if (truncated.rows || truncated.cols) {
+        warnings.push(`工作表「${title}」已截断（${truncated.rows ? '行' : ''}${truncated.cols ? '列' : ''}）`)
+      }
+    })
+  }
 
   if (sheetNames.length === 0) {
     return {
@@ -212,7 +230,6 @@ async function excelFileToMarkdown(filePath, opts = {}) {
     }
   }
 
-  // 顶部摘要
   const header = [
     `# ${path.basename(filePath)}`,
     '',
@@ -233,6 +250,6 @@ module.exports = {
   escapeCell,
   formatDate,
   SUPPORTED_EXTS,
-  // 暴露给测试
   _worksheetToMarkdown: worksheetToMarkdown,
+  _rawRowsToMarkdown: rawRowsToMarkdown,
 }

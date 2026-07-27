@@ -172,11 +172,11 @@ describe('useLocalCommands - 基础 API', () => {
     __resetRegistry()
   })
 
-  it('内置指令数量应为 65（新增 CMD-057 教案生成课件后）', () => {
-    expect(LOCAL_COMMANDS_COUNT).toBe(65)
-    expect(LOCAL_COMMANDS.length).toBe(65)
-    expect(getBuiltInCommandCount()).toBe(65)
-    expect(getRegisteredCommandCount()).toBe(65)
+  it('内置指令数量应为 67（新增 CMD-057 教案生成课件 + CMD-058/059 帮助命令后）', () => {
+    expect(LOCAL_COMMANDS_COUNT).toBe(67)
+    expect(LOCAL_COMMANDS.length).toBe(67)
+    expect(getBuiltInCommandCount()).toBe(67)
+    expect(getRegisteredCommandCount()).toBe(67)
   })
 
   it('getLocalCommandPlaceholders 应返回非空数组', () => {
@@ -217,7 +217,7 @@ describe('useLocalCommands - 基础 API', () => {
       action: () => ({ ok: true }),
     })
     expect(unregisterLocalCommand('test-temp')).toBe(true)
-    expect(getRegisteredCommandCount()).toBe(65)
+    expect(getRegisteredCommandCount()).toBe(67)
   })
 
   it('registerLocalCommand 拒绝无效输入', () => {
@@ -841,6 +841,87 @@ describe('useLocalCommands - MD 智能排版（format-md / align-md-images）', 
   })
 })
 
+describe('useLocalCommands - 帮助命令 (CMD-058/059)', () => {
+  beforeEach(() => __resetRegistry())
+
+  it('输入"帮助"应命中 help 命令', () => {
+    const result = processUserInput('帮助', {})
+    expect(result.type).toBe('local')
+    expect(result.commandId).toBe('help')
+    expect(result.success).toBe(true)
+    expect(result.message).toContain('写作小助手')
+    expect(result.message).toContain('无需接入大模型')
+  })
+
+  it('输入"help"/"怎么用"/"你会什么"应命中 help 命令', () => {
+    ;['help', '怎么用', '你能做什么', '使用说明', '功能说明', '/help'].forEach((text) => {
+      const result = processUserInput(text, {})
+      expect(result.commandId, `text="${text}"`).toBe('help')
+      expect(result.success).toBe(true)
+    })
+  })
+
+  it('输入"command"/"命令列表"/"可用命令"应命中 commands 命令', () => {
+    ;['commands', 'command', '命令列表', '可用命令', '/commands', '/command'].forEach((text) => {
+      const result = processUserInput(text, {})
+      expect(result.commandId, `text="${text}"`).toBe('commands')
+      expect(result.success).toBe(true)
+    })
+  })
+
+  it('help/commands 命令无需编辑器即可执行（condition 始终为 true）', () => {
+    const result = processUserInput('帮助', { editor: null })
+    expect(result.type).toBe('local')
+    expect(result.success).toBe(true)
+
+    const result2 = processUserInput('命令列表', {})
+    expect(result2.type).toBe('local')
+    expect(result2.success).toBe(true)
+  })
+
+  it('help/commands 优先级 150 应高于其他所有命令', () => {
+    const helpCmd = LOCAL_COMMANDS.find((c) => c.id === 'help')
+    const commandsCmd = LOCAL_COMMANDS.find((c) => c.id === 'commands')
+    expect(helpCmd.priority).toBe(150)
+    expect(commandsCmd.priority).toBe(150)
+
+    const maxOtherPriority = LOCAL_COMMANDS
+      .filter((c) => c.id !== 'help' && c.id !== 'commands')
+      .reduce((max, c) => Math.max(max, c.priority), 0)
+    expect(maxOtherPriority).toBeLessThan(150)
+  })
+
+  it('help 命令返回的消息应包含所有命令分类', () => {
+    const result = processUserInput('帮助', {})
+    const helpText = result.message
+    expect(helpText).toContain('文本操作')
+    expect(helpText).toContain('格式操作')
+    expect(helpText).toContain('字体切换')
+    expect(helpText).toContain('对齐操作')
+    expect(helpText).toContain('标题与段落')
+    expect(helpText).toContain('插入操作')
+    expect(helpText).toContain('视图操作')
+    expect(helpText).toContain('文件操作')
+    expect(helpText).toContain('窗口操作')
+    expect(helpText).toContain('教案工具')
+  })
+
+  it('commands 命令返回的消息应包含所有命令分类', () => {
+    const result = processUserInput('命令列表', {})
+    const commandsText = result.message
+    expect(commandsText).toContain('文本操作')
+    expect(commandsText).toContain('格式操作')
+    expect(commandsText).toContain('字体切换')
+    expect(commandsText).toContain('对齐操作')
+    expect(commandsText).toContain('标题与段落')
+    expect(commandsText).toContain('插入操作')
+    expect(commandsText).toContain('视图操作')
+    expect(commandsText).toContain('文件操作')
+    expect(commandsText).toContain('窗口操作')
+    expect(commandsText).toContain('教案工具')
+  })
+})
+
 describe('useLocalCommands - 窗口/文件', () => {
   beforeEach(() => __resetRegistry())
 
@@ -1095,9 +1176,9 @@ describe('需求文档验收点 L805-L812（8 项）', () => {
   // ─── 7. placeholder 覆盖所有 64 条指令 ───
   it('L811 #7 placeholder 轮转示例覆盖 58 条内置指令的主要分类', () => {
     const placeholders = getLocalCommandPlaceholders()
-    // 文档原话 56 条；本地指令系统已扩到 65 条（含 CMD-057 教案生成课件），验收以实际为准
+    // 文档原话 56 条；本地指令系统已扩到 67 条（含 CMD-057 教案生成课件 + CMD-058/059 帮助命令），验收以实际为准
     expect(LOCAL_COMMANDS_COUNT).toBeGreaterThanOrEqual(56)
-    expect(LOCAL_COMMANDS_COUNT).toBe(65)
+    expect(LOCAL_COMMANDS_COUNT).toBe(67)
     // placeholder 必须覆盖主要分类（不能只有 1 条）
     expect(placeholders.length).toBeGreaterThanOrEqual(8)
     // 必须包含几个关键操作的引导语，让用户看到即可上手

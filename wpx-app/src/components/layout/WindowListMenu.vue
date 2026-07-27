@@ -1,5 +1,9 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Plus, X } from '@lucide/vue'
+import { requestCreateAppWindow } from '@/composables/useCreateAppWindow'
+import { getElectronAPI, isElectron } from '@/utils/electron'
+import { useToast } from '@/composables/useToast'
 
 const props = defineProps({
   open: {
@@ -48,6 +52,23 @@ function updatePosition() {
 
 function handleSelect(windowId) {
   emit('select', windowId)
+}
+
+async function handleCloseWindow(windowId) {
+  if (!isElectron()) return
+  const api = getElectronAPI()
+  if (typeof api?.closeWindow !== 'function') return
+  const result = await api.closeWindow(windowId)
+  if (!result?.ok) {
+    useToast().error('关闭窗口失败')
+    return
+  }
+  emit('close')
+}
+
+async function handleNewWindow() {
+  await requestCreateAppWindow()
+  emit('close')
 }
 
 function handleDocumentClick(event) {
@@ -99,10 +120,21 @@ onUnmounted(() => {
       >
         <p class="window-list-menu__title">窗口</p>
 
+        <button
+          type="button"
+          class="window-list-menu__new-btn"
+          role="menuitem"
+          aria-label="新建窗口"
+          @click="handleNewWindow"
+        >
+          <Plus :size="14" aria-hidden="true" />
+          <span>新建窗口</span>
+        </button>
+
         <p v-if="!hasWindows" class="window-list-menu__empty">暂无打开的窗口</p>
 
         <ul v-else class="window-list-menu__items">
-          <li v-for="item in windows" :key="item.id">
+          <li v-for="item in windows" :key="item.id" class="window-list-menu__item-row">
             <button
               type="button"
               class="window-list-menu__item"
@@ -114,6 +146,16 @@ onUnmounted(() => {
               <span v-if="item.id === currentWindowId" class="window-list-menu__check" aria-hidden="true">
                 ✓
               </span>
+            </button>
+            <button
+              v-if="item.id !== currentWindowId"
+              type="button"
+              class="window-list-menu__close-btn"
+              role="menuitem"
+              :aria-label="`关闭 ${item.title}`"
+              @click.stop="handleCloseWindow(item.id)"
+            >
+              <X :size="12" aria-hidden="true" />
             </button>
           </li>
         </ul>
@@ -144,6 +186,27 @@ onUnmounted(() => {
   color: var(--theme-fg-subtle);
 }
 
+.window-list-menu__new-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border: none;
+  border-radius: 8px;
+  background: var(--theme-accent);
+  color: #fff;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+  transition: background-color 0.12s ease;
+}
+
+.window-list-menu__new-btn:hover {
+  background: color-mix(in srgb, var(--theme-accent) 88%, #000 12%);
+}
+
 .window-list-menu__empty {
   margin: 0;
   padding: 8px;
@@ -157,15 +220,23 @@ onUnmounted(() => {
   list-style: none;
 }
 
+.window-list-menu__item-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .window-list-menu__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
+  flex: 1;
   padding: 8px 10px;
   border: none;
-  border-radius: 8px;
   background: transparent;
   color: var(--theme-fg);
   font-size: 13px;
@@ -189,6 +260,27 @@ onUnmounted(() => {
   color: var(--theme-accent);
   font-size: 12px;
   font-weight: 700;
+}
+
+.window-list-menu__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  align-self: stretch;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--theme-fg-muted);
+  cursor: default;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.window-list-menu__close-btn:hover {
+  background: var(--theme-bg-muted);
+  color: var(--theme-fg);
 }
 
 .window-list-menu-enter-active,

@@ -35,6 +35,7 @@ export function parseDocumentPayload(docPath, raw) {
         content: String(doc.markdown ?? doc.content ?? ''),
         title: String(doc.title || baseTitle),
         format: doc.format ?? null,
+        extension: ext,
       }
     } catch {
       return {
@@ -42,6 +43,7 @@ export function parseDocumentPayload(docPath, raw) {
         content: raw,
         title: baseTitle,
         format: null,
+        extension: ext,
       }
     }
   }
@@ -51,6 +53,7 @@ export function parseDocumentPayload(docPath, raw) {
     content: raw,
     title: baseTitle,
     format: null,
+    extension: ext,
   }
 }
 

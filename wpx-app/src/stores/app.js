@@ -20,6 +20,7 @@ export const useAppStore = defineStore('app', () => {
   const pendingExternalFile = ref(null)
   const documentSourcePath = ref('')
   const documentSourceMtime = ref(null)
+  const documentSourceExtension = ref('')
   const saveStatusRefreshTick = ref(0)
   const libraryRefreshTick = ref(0)
 
@@ -87,16 +88,18 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /**
-   * @param {{ path: string, mtimeMs?: number | null }} source
+   * @param {{ path: string, mtimeMs?: number | null, extension?: string }} source
    */
-  function setDocumentSource({ path, mtimeMs = null }) {
+  function setDocumentSource({ path, mtimeMs = null, extension = '' }) {
     documentSourcePath.value = path || ''
     documentSourceMtime.value = mtimeMs ?? null
+    documentSourceExtension.value = extension || ''
   }
 
   function clearDocumentSource() {
     documentSourcePath.value = ''
     documentSourceMtime.value = null
+    documentSourceExtension.value = ''
   }
 
   function bumpSaveStatusRefresh() {
@@ -146,6 +149,7 @@ export const useAppStore = defineStore('app', () => {
     takePendingExternalFile,
     documentSourcePath,
     documentSourceMtime,
+    documentSourceExtension,
     saveStatusRefreshTick,
     libraryRefreshTick,
     setDocumentSource,

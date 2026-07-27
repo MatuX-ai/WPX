@@ -410,7 +410,7 @@ function openExternalDocument(payload) {
 
     const sourcePath = payload.path || getDocPathFromUrl()
     if (sourcePath) {
-      await syncDocumentSource(sourcePath)
+      await syncDocumentSource(sourcePath, payload.extension)
     }
   })
 }

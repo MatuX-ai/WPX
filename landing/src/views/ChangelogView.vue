@@ -24,13 +24,29 @@ const chipLabels = {
   breaking: '不兼容'
 }
 
-// 倒序：v0.1.17 → v0.1.16 → v0.1.15 → v1.0.0 → v0.9.x ……
+// 倒序：v0.1.18 → v0.1.17 → v0.1.16 → v0.1.15 → v1.0.0 → v0.9.x ……
 const releases = [
+  {
+    version: 'v0.1.18',
+    date: '2026-07-27',
+    badge: '最新',
+    badgeClass: 'bg-wpx-gradient text-white',
+    summary: '新增窗口关闭/新建按钮 + Excel 格式导出默认值 + AI 助手本地指令帮助 + 多处 UI 布局优化。',
+    docLink: null,
+    changes: [
+      { type: 'feature', text: '主窗口导航新增「新建窗口」按钮，支持快速打开多个独立编辑器' },
+      { type: 'feature', text: '窗口列表菜单新增「关闭」按钮，支持关闭指定窗口' },
+      { type: 'feature', text: '文档导出格式默认与打开文件格式保持一致（.xls → XLS, .xlsx → XLSX）' },
+      { type: 'feature', text: 'AI 助手新增本地指令帮助系统，离线可用（help / commands 指令）' },
+      { type: 'fix', text: '修复窗口列表菜单按钮布局不一致问题（height: 100% → align-self: stretch）' },
+      { type: 'fix', text: 'IPC 消息增加发送者身份验证，防止未授权操作' }
+    ]
+  },
   {
     version: 'v0.1.17',
     date: '2026-06-30',
-    badge: '最新',
-    badgeClass: 'bg-wpx-gradient text-white',
+    badge: '特性',
+    badgeClass: 'bg-primary-from/10 text-primary-600',
     summary: '资料库路径用户可配置 + PDF 转换崩溃修复 + 提交资料库选项上线。',
     docLink: null,
     changes: [
@@ -191,7 +207,7 @@ const showAll = () => {
           <span class="wpx-gradient-text">WPX 的每一次小步快跑</span>
         </h1>
         <p class="mt-4 text-dark/60">
-          桌面端 v0.1.10 → v0.1.17 一口气迭代 7 个版本，所有 feature / fix / breaking 都有迹可循。
+          桌面端 v0.1.10 → v0.1.18 一口气迭代 8 个版本，所有 feature / fix / breaking 都有迹可循。
         </p>
         <!-- 订阅 CTA -->
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">

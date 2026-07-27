@@ -11,7 +11,7 @@ export const siteConfig = {
   // 基础站点信息
   name: 'WPX',
   shortName: 'WPX',
-  title: 'WPX - 免费多窗口 AI 文档编辑器 | 演示文稿/本地指令/v0.1.16',
+  title: 'WPX - 免费多窗口 AI 文档编辑器 | 演示文稿/本地指令/v0.1.18',
   description:
     '多窗口独立 AI 文档编辑器：Markdown、PDF、DOCX 互转，内置 32+ Skills 与 64 条本地指令、教师课件 PPT 一键生成、PDF 离线 OCR、HTML 源码分屏编辑，完全免费、开源本地优先。',
   keywords: [
@@ -52,7 +52,7 @@ export const siteConfig = {
   ogImagePng: '/og-image.svg', // 兼容旧客户端
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  ogImageAlt: 'WPX - 多窗口 AI 文档编辑器，演示文稿 / 本地指令 · v0.1.16',
+  ogImageAlt: 'WPX - 多窗口 AI 文档编辑器，演示文稿 / 本地指令 · v0.1.18',
   twitterHandle: '@wpx_app',
   locale: 'zh_CN',
   themeColor: '#4F46E5',

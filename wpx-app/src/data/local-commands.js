@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WPX AI 本地指令数据定义
  *
  * 定义 64 个本地指令的结构化元数据：
@@ -1511,6 +1511,127 @@ const windowCommands = [
   }),
 ]
 
+// ── 帮助命令（CMD-058 ~ CMD-059）───────────────────
+
+const helpCommands = [
+  defineCommand({
+    id: 'help',
+    category: 'help',
+    patterns: [
+      /^(帮助|help|帮忙|怎么用|使用说明|功能说明)$/i,
+      /^(你会什么|你能做什么|有什么功能)$/,
+      /^\/help$/i,
+    ],
+    priority: 150,
+    condition: () => true,
+    action: () => {
+      const helpMessage = `
+我是你的写作小助手，无需接入大模型即可使用以下本地功能：
+
+📝 文本操作
+• 删除 / 复制 / 剪切 / 粘贴 / 全选
+• 撤销 / 重做
+• 批量清洗（一键清理链接、URL、邮箱、手机号、Markdown标记、图片）
+• 删除链接 / 删除邮箱 / 删除手机号 / 删除图片 / 清洗格式
+
+🎨 格式操作
+• 加粗 / 斜体 / 删除线 / 下标 / 上标 / 下划线
+• 清除格式 / 字号增大 / 字号减小
+• 排版 / 格式化（Markdown智能排版）
+• 对齐图片（统一调整图片版式）
+
+🔤 字体切换
+• 用思源黑体 / 用思源宋体 / 用霞鹜文楷
+• 用阿里巴巴普惠体 / 用HarmonyOS Sans / 用JetBrains Mono
+• 用黑体 / 用宋体 / 用楷体 / 默认字体
+
+📐 对齐操作
+• 左对齐 / 居中 / 右对齐 / 两端对齐
+
+📌 标题与段落
+• 标题1~标题6 / 正文
+• 无序列表 / 有序列表 / 引用 / 代码块
+
+➕ 插入操作
+• 插入表格 / 插入图片 / 插入分隔线
+• 插入日期 / 插入时间
+
+👁️ 视图操作
+• 焦点模式 / 纸张模式 / 写作模式 / 专注模式
+• 暗色模式 / 深色模式 / 夜间模式
+
+📁 文件操作
+• 保存 / 新建 / 导出PDF / 导出Word / 导出Markdown
+
+🪟 窗口操作
+• 设置 / 字体商店 / 文库
+
+🎓 教案工具
+• 教案生成课件（一键制作PPT）
+
+💡 使用提示：直接输入指令即可执行，如"批量清洗"、"居中"、"保存"等。
+      `.trim()
+      return { ok: true, message: helpMessage }
+    },
+    successMessage: '📖 已显示帮助信息',
+    failureMessage: '',
+  }),
+  defineCommand({
+    id: 'commands',
+    category: 'help',
+    patterns: [
+      /^(命令列表|可用命令|指令列表|所有命令)$/,
+      /^commands?$/i,
+      /^\/commands?$/i,
+    ],
+    priority: 150,
+    condition: () => true,
+    action: () => {
+      const commandsList = `
+📋 可用本地命令（无需大模型）
+
+【文本操作】
+删除 / 复制 / 剪切 / 粘贴 / 全选 / 撤销 / 重做
+批量清洗 / 删除链接 / 删除邮箱 / 删除手机号 / 删除图片 / 清洗格式
+
+【格式操作】
+加粗 / 斜体 / 删除线 / 下标 / 上标 / 下划线 / 清除格式
+字号增大 / 字号减小 / 排版 / 格式化 / 对齐图片
+
+【字体切换】
+用思源黑体 / 用思源宋体 / 用霞鹜文楷 / 用阿里巴巴普惠体
+用HarmonyOS Sans / 用JetBrains Mono / 用黑体 / 用宋体 / 用楷体 / 默认字体
+
+【对齐操作】
+左对齐 / 居中 / 右对齐 / 两端对齐
+
+【标题与段落】
+标题1~标题6 / 正文 / 无序列表 / 有序列表 / 引用 / 代码块
+
+【插入操作】
+插入表格 / 插入图片 / 插入分隔线 / 插入日期 / 插入时间
+
+【视图操作】
+焦点模式 / 纸张模式 / 写作模式 / 专注模式 / 暗色模式 / 深色模式 / 夜间模式
+
+【文件操作】
+保存 / 新建 / 导出PDF / 导出Word / 导出Markdown
+
+【窗口操作】
+设置 / 字体商店 / 文库
+
+【教案工具】
+教案生成课件
+
+💡 输入"帮助"查看详细说明
+      `.trim()
+      return { ok: true, message: commandsList }
+    },
+    successMessage: '📋 已显示命令列表',
+    failureMessage: '',
+  }),
+]
+
 // ── 汇总导出 ──────────────────────────────────────
 
 /** @type {import('../types/local-commands').LocalCommandDef[]} */
@@ -1524,6 +1645,7 @@ export const LOCAL_COMMANDS = [
   ...viewCommands,
   ...fileCommands,
   ...windowCommands,
+  ...helpCommands,
 ]
 
 export const LOCAL_COMMAND_CATEGORIES = [
@@ -1537,6 +1659,7 @@ export const LOCAL_COMMAND_CATEGORIES = [
   { key: 'view', label: '视图操作' },
   { key: 'file', label: '文件操作' },
   { key: 'window', label: '窗口操作' },
+  { key: 'help', label: '帮助' },
 ]
 
 /**
@@ -1544,6 +1667,7 @@ export const LOCAL_COMMAND_CATEGORIES = [
  * 注意：这些字符串是"示例"，不是匹配规则；它们代表用户最可能输入的本地指令。
  */
 export const LOCAL_COMMAND_PLACEHOLDERS = [
+  '输入「帮助」查看所有可用命令',
   '输入「批量清洗」一键清理链接/邮箱/手机号/Markdown/图片',
   '输入「删除」删除选中文本',
   '输入「删除链接」/「删除邮箱」/「删除手机号」一键清洗',
