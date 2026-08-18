@@ -128,7 +128,7 @@ const socials = [
         </div>
 
         <!-- 四列链接（占 8 列） -->
-        <div class="grid grid-cols-2 gap-8 md:col-span-8 md:grid-cols-4">
+        <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 md:col-span-8 md:grid-cols-4">
           <div
             v-for="g in groups"
             :key="g.title"

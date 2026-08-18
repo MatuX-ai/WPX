@@ -82,7 +82,7 @@ function scrollToShowcase(e) {
   <!-- ============== HERO（首屏，eager） ============== -->
   <section
     id="hero"
-    class="relative isolate overflow-hidden pt-24 md:pt-32"
+    class="relative isolate overflow-hidden pt-24 md:pt-28 lg:pt-32"
     aria-labelledby="hero-title"
   >
     <!-- 背景装饰 -->
@@ -94,7 +94,7 @@ function scrollToShowcase(e) {
       <div class="absolute -bottom-32 right-0 h-[200px] w-[320px] rounded-full bg-accent-mint/20 blur-3xl sm:h-[280px] sm:w-[480px]" />
     </div>
 
-    <div class="wpx-container grid items-center gap-10 md:grid-cols-2 md:gap-12">
+    <div class="wpx-container grid items-center gap-10 md:grid-cols-2 md:gap-10 lg:gap-12">
       <div class="min-w-0">
         <span class="wpx-chip">
           <span
@@ -107,7 +107,7 @@ function scrollToShowcase(e) {
         <h1
           id="hero-title"
           ref="heroTitle"
-          class="mt-6 text-[1.65rem] font-extrabold leading-[1.15] tracking-tight sm:text-4xl sm:leading-[1.1] md:text-6xl"
+          class="mt-6 text-[1.65rem] font-extrabold leading-[1.15] tracking-tight sm:text-4xl sm:leading-[1.1] md:text-5xl md:leading-[1.1] lg:text-6xl lg:leading-[1.05]"
         >
           <span class="block">为认真写字的人，</span>
           <span class="block">
@@ -240,10 +240,10 @@ function scrollToShowcase(e) {
           </div>
         </div>
 
-        <!-- 浮动徽标 · 左下：64 条本地指令 -->
+        <!-- 浮动徽标 · 左下：64 条本地指令（仅 lg ≥ 1024px 显示，避免在 md 下拥接） -->
         <div
           aria-hidden="true"
-          class="absolute -left-6 -bottom-6 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx md:flex"
+          class="absolute -left-6 -bottom-6 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx lg:flex"
         >
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-yellow/30">
             🛠
@@ -257,10 +257,10 @@ function scrollToShowcase(e) {
             </div>
           </div>
         </div>
-        <!-- 浮动徽标 · 右上：多窗口独立 -->
+        <!-- 浮动徽标 · 右上：多窗口独立（仅 lg ≥ 1024px 显示，避免在 md 下拥接） -->
         <div
           aria-hidden="true"
-          class="absolute -right-4 -top-4 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx md:flex"
+          class="absolute -right-4 -top-4 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx lg:flex"
           style="animation-delay: -3s"
         >
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-mint/30">

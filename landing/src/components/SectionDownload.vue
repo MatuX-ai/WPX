@@ -147,15 +147,15 @@ async function copySha256() {
           </div>
         </div>
 
-        <!-- 补充链接：更新日志 -->
-        <div class="relative mt-6 flex items-center justify-center gap-4 text-xs">
+        <!-- 补充链接：更新日志（移动端垂直堆叠，避免链接糊在一起） -->
+        <div class="relative mt-6 flex flex-col items-center justify-center gap-2 text-xs sm:flex-row sm:gap-4">
           <router-link
             to="/changelog"
             class="text-white/80 underline-offset-4 hover:text-white hover:underline"
           >
             v0.1.18 更新日志 →
           </router-link>
-          <span class="text-white/40">·</span>
+          <span class="hidden text-white/40 sm:inline">·</span>
           <a
             href="https://github.com/MatuX-ai/WPX/releases"
             target="_blank"

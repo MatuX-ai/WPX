@@ -43,9 +43,20 @@ admin/public/**
 /scripts/smoke-prod-electron.mjs
 /scripts/smoke-prod-runner.cjs
 
-# === Electron 桌面端（与 Vercel 无关） ===
+# === Electron 桌面端（与 Vercel 无关）===
 electron/**
 wpx-app/**
+# === Electron 打包产物（与 Vercel 无关；release/ 已排除，2026-08-18 补充 release-new/）===
+release-new/**
+# === Python wheels（本地 Win-unpacked/Setup 构建依赖，与 Vercel 无关）===
+wheels/
+# === Hermes Agent 临时与组件目录（与 Vercel 无关）===
+hermes-tmp/
+hermes-tmp2/
+hermes-tmp3/
+hermes-tmp4/
+hermes-home/
+hermes-lib/
 
 # === Express 后端（仅作为代码仓库，不上传到 Vercel） ===
 # ⚠️ 关键：必须完全排除项目根 server/！

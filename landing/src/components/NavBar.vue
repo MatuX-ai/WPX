@@ -147,8 +147,9 @@ onBeforeUnmount(() => {
         </span>
       </router-link>
 
-      <!-- ========== 中间：导航链接（桌面） ========== -->
-      <nav class="hidden items-center gap-1 md:flex">
+      <!-- ========== 中间：导航链接（桌面，仅 ≥ lg 1024px 才显示） ==========
+           768~1023px 区间 nav 项太多容易拥接，直接交给汉堡菜单 -->
+      <nav class="hidden items-center gap-1 lg:flex">
         <template v-for="link in navLinks" :key="link.id">
           <router-link
             v-if="link.type === 'route'"
@@ -168,8 +169,8 @@ onBeforeUnmount(() => {
         </template>
       </nav>
 
-      <!-- ========== 右侧：脉冲 CTA ========== -->
-      <div class="hidden items-center md:flex">
+      <!-- ========== 右侧：脉冲 CTA（仅 ≥ lg 1024px） ========== -->
+      <div class="hidden items-center lg:flex">
         <a
           href="#download"
           class="wpx-btn-cta-pulse group !px-5 !py-2.5 text-sm"
@@ -194,9 +195,9 @@ onBeforeUnmount(() => {
         </a>
       </div>
 
-      <!-- ========== 移动端：汉堡按钮 ========== -->
+      <!-- ========== 移动端：汉堡按钮（< lg 1024px） ========== -->
       <button
-        class="md:hidden flex h-10 w-10 items-center justify-center rounded-lg border border-dark/10 bg-white/60 text-dark backdrop-blur"
+        class="lg:hidden flex h-10 w-10 items-center justify-center rounded-lg border border-dark/10 bg-white/60 text-dark backdrop-blur"
         :aria-label="mobileOpen ? '关闭菜单' : '打开菜单'"
         :aria-expanded="mobileOpen"
         @click="mobileOpen = !mobileOpen"
@@ -231,7 +232,7 @@ onBeforeUnmount(() => {
   <transition name="fullscreen">
     <div
       v-if="mobileOpen"
-      class="md:hidden fixed inset-0 z-[60] flex flex-col bg-white/95 backdrop-blur-lg"
+      class="lg:hidden fixed inset-0 z-[60] flex flex-col bg-white/95 backdrop-blur-lg"
       role="dialog"
       aria-modal="true"
       aria-label="主导航"
@@ -363,11 +364,20 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-/* ============== 菜单项逐项上浮 ============== */
+/* ============== 菜单项逐项上浮 ==============
+ * 默认 opacity: 1（确保 SSR / 静态预渲染时菜单项可见，
+ * 同时作为客户端 v-if=true 后 transition enter 的“终态”）。
+ * 入场时短暂 hide 在 overlay 出现后立即 transition 回 opacity:1。
+ */
 .fullscreen-item {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+/* enter 起点：从隐藏 + 8px 上浮过渡到可见 */
+.fullscreen-enter-from .fullscreen-item {
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 .fullscreen-enter-active .fullscreen-item {
   opacity: 1;
@@ -377,5 +387,15 @@ onBeforeUnmount(() => {
   /* 离开时不收回，保持简洁 */
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ============== 减少动效偏好：禁用菜单过渡动画 ============== */
+@media (prefers-reduced-motion: reduce) {
+  .fullscreen-enter-active,
+  .fullscreen-leave-active,
+  .fullscreen-item {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 </style>
