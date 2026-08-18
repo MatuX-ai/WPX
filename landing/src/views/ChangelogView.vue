@@ -91,7 +91,7 @@ const releases = [
     badge: '特性',
     badgeClass: 'bg-primary-from/10 text-primary-600',
     summary: 'AI Chat 显示 DeepSeek 思考过程 + 图片对齐修复。',
-    docLink: { label: '需求文档', href: '/docs#ai-panel' },
+    docLink: { label: '需求文档', href: '/docs#commands-panel' },
     changes: [
       { type: 'feature', text: 'AI Chat 支持显示 DeepSeek 等模型的 `reasoning_content` 思考链' },
       { type: 'feature', text: 'AI 错误提示增加「重试 / 切换模型 / 检查 Key」三选项' },

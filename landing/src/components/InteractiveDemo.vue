@@ -1,183 +1,92 @@
+<!--
+  InteractiveDemo.vue · 现场体验区（去 AI 化重写）
+  ------------------------------------------------------------
+  原版：选中文字 → 假 AI 对话浮窗（含打字机 / 消息流 / 用户输入）
+  新版：选中文字 → 浮出「斜杠指令菜单」，4 个一键操作按钮
+       + 底部「Skills 面板」次级入口（可选）
+  目的：让访客看到的不是「又一个 AI 聊天工具」，
+       而是「一个像 IDE 一样能用键盘指令驱动的编辑器」。
+  ------------------------------------------------------------
+-->
 <script setup>
-/**
- * InteractiveDemo.vue
- * ------------------------------------------------------------
- * WPX 营销站 · 交互演示组件
- *
- *  - 中央"假编辑器"：静态界面 + 可选中文本
- *  - 选中文本后右下角浮出 AI 对话窗
- *  - 浮窗内：预设对话 + 打字机 AI 回复 + 可输入（回车触发预设回复）
- *  - 右侧文字轮播 5 条功能亮点
- * ------------------------------------------------------------
- */
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 // ---------------- 假编辑器预设文本 ----------------
-const editorText = `在二十一世纪的第三个十年里，人工智能不再是科幻小说的专利。
+const editorText = `在二十一世纪的第三个十年里，写作工具已经变得过分聪明。
 
-它已经悄悄走进了我们的课堂、办公室、书房 —— 帮我们改稿、翻译、排版、做表格。
+它们会主动建议、自动续写、随时弹窗提醒你"也许你想用 AI？"。
 
-而 WPX 想做的，是把这些能力放进一个真正「不收税」的工具里。
-让每一个写作者都能自由地表达，而不是被订阅制绑住手脚。`
+而 WPX 想做的，是把选择权交还给你——
+没有续费弹窗，没有"猜你喜欢"，没有随时上线的云端依赖。
+只有 64 条斜杠指令、32 项 Skills 和一个不会绑架你的编辑器。`
 
-// ---------------- AI 浮窗消息流 ----------------
-const messages = ref([
-  {
-    id: 0,
-    role: 'user',
-    text: '翻译成英文'
-  }
-])
-const aiTypingDone = ref(false) // 首条 AI 回复是否打完字
+// ---------------- 指令菜单 ----------------
+const COMMAND_LIST = [
+  { cmd: '/polish',   label: '润色',   desc: '改写语气 / 缩短长度',     icon: '✍' },
+  { cmd: '/translate',label: '翻译',   desc: '中英 / 中日 / 中韩',     icon: '🌐' },
+  { cmd: '/summary',  label: '总结',   desc: '段落 / 全文摘要',         icon: '📋' },
+  { cmd: '/cite',     label: '引用',   desc: 'GB/T 7714 学术格式',     icon: '🔗' }
+]
 
-// AI 回复文本（预设）
-const aiReplyText = `Here is the translation:
-
-In the third decade of the 21st century, AI is no longer the preserve of science fiction.
-It has quietly entered our classrooms, offices, and studies — helping us revise, translate, format, and build tables.
-WPX aims to put all of that into a tool that truly doesn't "tax" you.
-Let every writer express freely, unbound by subscriptions.`
-
-// 打字机进度（0 → aiReplyText.length）
-const aiProgress = ref(0)
-const aiDone = computed(() => aiProgress.value >= aiReplyText.length)
-
-// 显示到对话窗的 AI 文本（截取）
-const aiDisplayedText = computed(() => aiReplyText.slice(0, aiProgress.value))
-
-// 消息列表（已显示）
-const messageList = computed(() => {
-  return messages.value.map((m) => {
-    if (m.role === 'user') return m
-    // AI 消息：仅当打字中返回实时文本
-    return {
-      ...m,
-      text: aiDone.value ? aiReplyText : aiDisplayedText.value
-    }
-  })
-})
-
-let typeTimer = null
-function startAiTyping() {
-  // 已有 AI 消息则不重复触发
-  if (messages.value.some((m) => m.role === 'ai')) return
-  messages.value.push({ id: Date.now(), role: 'ai', text: '' })
-  aiTypingDone.value = false
-  let i = 0
-  typeTimer = setInterval(() => {
-    i++
-    if (i >= aiReplyText.length) {
-      aiProgress.value = aiReplyText.length
-      clearInterval(typeTimer)
-      typeTimer = null
-      aiTypingDone.value = true
-      return
-    }
-    aiProgress.value = i
-  }, 18)
-}
-
-// ---------------- 浮窗显隐 ----------------
-const demoRef = ref(null)
+// ---------------- 状态 ----------------
 const editorRef = ref(null)
 const popupVisible = ref(false)
 const selectedText = ref('')
+const selectedRect = ref(null) // 选区位置（用于浮窗定位）
 
+// ---------------- 监听选区变化 ----------------
 function onSelectionChange() {
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0) {
     selectedText.value = ''
+    selectedRect.value = null
     popupVisible.value = false
     return
   }
   const text = sel.toString().trim()
   if (!text) {
     selectedText.value = ''
+    selectedRect.value = null
     popupVisible.value = false
     return
   }
-  // 选区必须落在编辑器内
   const editorEl = editorRef.value
   if (!editorEl) return
   const range = sel.getRangeAt(0)
   if (!editorEl.contains(range.commonAncestorContainer)) {
+    popupVisible.value = false
     return
+  }
+  // 记录选区位置（用于浮窗绝对定位）
+  const rect = range.getBoundingClientRect()
+  selectedRect.value = {
+    top: rect.top + window.scrollY,
+    left: rect.left + window.scrollX,
+    width: rect.width
   }
   selectedText.value = text
   popupVisible.value = true
-
-  // 如果是新一次选择（且不是已经触发过 AI 的"翻译成英文"），就触发 AI 回复
-  // 这里简化为：每次选区变化且浮窗刚显示，就重置并播放打字机
-  // 但为了不打扰用户，我们只在浮窗从隐藏变为显示时触发
-  if (!aiTypingDone.value && !typeTimer && messages.value.length === 1) {
-    startAiTyping()
-  }
 }
 
-// 点击编辑器外区域关闭浮窗
 function onDocumentMouseDown(e) {
   if (!popupVisible.value) return
   const popup = document.getElementById('wpx-demo-popup')
   const editor = editorRef.value
   if (popup && popup.contains(e.target)) return
   if (editor && editor.contains(e.target)) {
-    // 编辑器内点击不立即关闭，等 selectionchange
-    return
+    return // 等 selectionchange 触发
   }
   popupVisible.value = false
   window.getSelection()?.removeAllRanges()
 }
 
-// ---------------- 用户输入回车 ----------------
-const inputValue = ref('')
-const chatListRef = ref(null)
-
-const presetReplies = [
-  '好的，已为你处理。',
-  '正在调用本地 AI 引擎，请稍候…',
-  '已生成大纲，可点击"插入文档"应用。',
-  '已润色完成，保留了原文的语气。',
-  '为你找到 3 条相关引用：\n1. Smith et al., 2024\n2. 李华 等，2025\n3. WPX Docs, ch.2'
-]
-
-function pickPresetReply(text) {
-  if (text.includes('翻译')) return 'Here is the translation: "..."'
-  if (text.includes('总结') || text.includes('摘要')) return '摘要：该段主要讨论 AI 与写作的关系。'
-  if (text.includes('改') || text.includes('润色')) return '已润色：更简洁、保留原意。'
-  return presetReplies[Math.floor(Math.random() * presetReplies.length)]
-}
-
-function onInputEnter() {
-  const text = inputValue.value.trim()
-  if (!text) return
-  // 推入用户消息
-  messages.value.push({ id: Date.now(), role: 'user', text })
-  inputValue.value = ''
-  // 滚动到底部
-  nextTick(() => {
-    if (chatListRef.value) {
-      chatListRef.value.scrollTop = chatListRef.value.scrollHeight
-    }
-  })
-  // 模拟 AI 回复
-  setTimeout(() => {
-    const reply = pickPresetReply(text)
-    messages.value.push({ id: Date.now() + 1, role: 'ai', text: reply, static: true })
-    nextTick(() => {
-      if (chatListRef.value) {
-        chatListRef.value.scrollTop = chatListRef.value.scrollHeight
-      }
-    })
-  }, 500)
-}
-
-// ---------------- 右侧文字轮播 ----------------
+// ---------------- 右侧高亮（去 AI 化）----------------
 const highlights = [
-  { icon: '🧠', text: 'AI 头像随时待命' },
-  { icon: '🪄', text: '图片轻处理：去背景、打码一句话搞定' },
-  { icon: '✨', text: '智能模板：越用越懂你' },
-  { icon: '🎓', text: '16+ 教师技能、16+ 学生技能' },
-  { icon: '🔤', text: '开源字体随便用' }
+  { icon: '🪟', text: '多窗口独立编辑器' },
+  { icon: '🛠', text: '64 条斜杠指令，一键触发' },
+  { icon: '🎓', text: '32+ Skills 模板与脚本' },
+  { icon: '🔍', text: 'PDF 离线 OCR · 扫描件可读' },
+  { icon: '🔤', text: '100+ 开源字体免费用' }
 ]
 const hlIdx = ref(0)
 let hlTimer = null
@@ -197,7 +106,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('selectionchange', onSelectionChange)
   document.removeEventListener('mousedown', onDocumentMouseDown)
-  if (typeTimer) clearInterval(typeTimer)
   if (hlTimer) clearInterval(hlTimer)
 })
 </script>
@@ -209,18 +117,15 @@ onBeforeUnmount(() => {
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">现场体验</span>
         <h2 class="mt-4 text-[1.6rem] font-extrabold leading-tight sm:text-3xl md:text-5xl">
-          <span class="wpx-gradient-text">选中文字，AI 就在手边。</span>
+          <span class="wpx-gradient-text">选中文字，弹出指令菜单</span>
         </h2>
         <p class="mt-4 text-dark/60">
           在下面的文档里选中一段文字 —— 试试看会发生什么。
         </p>
       </div>
 
-      <!-- ============== 主体：左编辑器 + 右功能轮播 ============== -->
-      <div
-        ref="demoRef"
-        class="mt-14 grid gap-6 md:grid-cols-3"
-      >
+      <!-- 主体：左编辑器 + 右功能轮播 -->
+      <div class="mt-14 grid gap-6 md:grid-cols-3">
         <!-- ========== 假编辑器（占 2 列） ========== -->
         <div
           ref="editorRef"
@@ -232,7 +137,7 @@ onBeforeUnmount(() => {
             <span class="h-3 w-3 rounded-full bg-amber-300/90" />
             <span class="h-3 w-3 rounded-full bg-emerald-300/90" />
             <span class="ml-2 text-xs text-dark/40">毕业论文 · 第一章 · 引言</span>
-            <span class="ml-auto text-[10px] text-dark/30">WPX 1.0 · 自动保存</span>
+            <span class="ml-auto text-[10px] text-dark/30">WPX · 本地保存</span>
           </div>
 
           <!-- 工具栏 -->
@@ -247,7 +152,7 @@ onBeforeUnmount(() => {
             <span class="rounded px-2 py-1 hover:bg-dark/5">图片</span>
             <span class="rounded px-2 py-1 hover:bg-dark/5">表格</span>
             <span class="ml-auto rounded bg-wpx-gradient-soft px-2 py-1 font-semibold text-primary-600">
-              ✨ AI 助手
+              ⌘ / 唤起指令菜单
             </span>
           </div>
 
@@ -257,7 +162,7 @@ onBeforeUnmount(() => {
             data-test="editor-body"
           >
             <div class="text-2xl font-extrabold text-dark">
-              <span class="wpx-gradient-text">人工智能与写作的未来</span>
+              <span class="wpx-gradient-text">把选择权交还给写作者</span>
             </div>
             <p
               v-for="(para, i) in editorText.split('\n\n')"
@@ -273,7 +178,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- 选中提示（在没有选区时引导） -->
+          <!-- 引导气泡（未选中时显示） -->
           <div
             v-if="!popupVisible"
             class="pointer-events-none absolute bottom-4 right-4 z-10 rounded-full bg-dark/80 px-3 py-1.5 text-xs text-white shadow-sm"
@@ -282,12 +187,12 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- ========== 右侧：功能轮播 ========== -->
+        <!-- ========== 右侧：核心能力轮播 ========== -->
         <div
           class="relative overflow-hidden rounded-3xl border border-primary-500/20 bg-white p-6 shadow-wpx md:p-8"
         >
           <div class="text-xs font-semibold uppercase tracking-wider text-primary-600">
-            核心亮点
+            核心能力
           </div>
           <div class="relative mt-4 h-32">
             <transition
@@ -322,49 +227,52 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <!-- 底部 CTA -->
+          <!-- 底部补充 -->
           <div class="mt-8 rounded-2xl bg-wpx-gradient-soft p-4">
             <div class="text-sm font-semibold text-primary-600">
-              不止于此
+              下载桌面端即可用
             </div>
             <div class="mt-1 text-xs leading-relaxed text-dark/60">
-              多窗口、Skills 体系、虚拟纸张、文件压缩…等你来玩。
+              指令菜单、Skills 市场、PDF/OCR/压缩全部内置，开箱即用。
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ============== AI 对话浮窗（fixed 浮层） ============== -->
+    <!-- ============== 指令菜单浮层（fixed 浮层，定位在选区上方） ============== -->
     <transition name="popup">
       <div
         v-if="popupVisible"
         id="wpx-demo-popup"
-        class="fixed bottom-6 right-6 z-50 flex w-[360px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-primary-500/20 bg-white shadow-wpx-glow"
+        class="fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-primary-500/20 bg-white shadow-wpx-glow"
         role="dialog"
-        aria-label="AI 助手对话框"
+        aria-label="斜杠指令菜单"
+        :style="selectedRect ? {
+          top: `${Math.max(12, selectedRect.top - 72)}px`,
+          left: `${Math.max(12, selectedRect.left)}px`
+        } : {}"
       >
-        <!-- 标题栏 -->
-        <div class="flex items-center gap-2 bg-wpx-gradient px-4 py-3 text-white">
-          <div class="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-sm">
-            ✨
-          </div>
-          <div class="flex-1">
-            <div class="text-sm font-semibold">
-              WPX AI
-            </div>
-            <div class="text-[10px] text-white/70">
-              选中了 {{ selectedText.length }} 个字符
-            </div>
-          </div>
+        <!-- 顶部：标题 + 选区长度 -->
+        <div class="flex items-center gap-2 border-b border-dark/5 bg-wpx-gradient-soft px-4 py-2">
+          <span class="flex h-6 w-6 items-center justify-center rounded-md bg-wpx-gradient text-[12px] font-bold text-white">
+            /
+          </span>
+          <span class="flex-1 text-xs font-semibold text-primary-600">
+            斜杠指令菜单
+          </span>
+          <span class="text-[10px] text-dark/50">
+            选中 {{ selectedText.length }} 字
+          </span>
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            type="button"
+            class="flex h-6 w-6 items-center justify-center rounded-md text-dark/50 transition-colors hover:bg-dark/5 hover:text-dark"
             aria-label="关闭"
             @click="popupVisible = false; window.getSelection()?.removeAllRanges()"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="h-3.5 w-3.5"
+              class="h-3 w-3"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -375,89 +283,33 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <!-- 消息列表 -->
-        <div
-          ref="chatListRef"
-          class="max-h-72 min-h-40 flex-1 space-y-3 overflow-y-auto bg-wpx-gradient-soft/40 p-4"
-        >
-          <div
-            v-for="m in messageList"
-            :key="m.id"
-            :class="[
-              'flex',
-              m.role === 'user' ? 'justify-end' : 'justify-start'
-            ]"
-          >
-            <div
-              :class="[
-                'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
-                m.role === 'user'
-                  ? 'rounded-tr-sm bg-wpx-gradient text-white'
-                  : 'rounded-tl-sm border border-primary-500/20 bg-white text-dark shadow-sm'
-              ]"
-            >
-              <div
-                v-if="m.role === 'ai' && !m.static"
-                style="white-space: pre-wrap"
-                v-text="m.text"
-              />
-              <div
-                v-else-if="m.role === 'ai' && m.static"
-                style="white-space: pre-wrap"
-              >
-                {{ m.text }}
-              </div>
-              <div
-                v-else
-                style="white-space: pre-wrap"
-              >
-                {{ m.text }}
-              </div>
-              <!-- 打字中光标 -->
-              <span
-                v-if="m.role === 'ai' && !aiDone"
-                class="ml-0.5 inline-block h-3 w-1.5 -translate-y-0.5 bg-primary-500 align-middle animate-caret"
-                aria-hidden="true"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- 输入框 -->
-        <div class="flex items-center gap-2 border-t border-dark/5 bg-white px-3 py-2">
-          <input
-            v-model="inputValue"
-            type="text"
-            placeholder="试试：润色这段 / 翻译成英文…"
-            class="flex-1 rounded-md bg-dark/5 px-3 py-2 text-sm text-dark outline-none placeholder:text-dark/40 focus:bg-white focus:ring-2 focus:ring-primary-500/30"
-            @keydown.enter="onInputEnter"
-          />
+        <!-- 指令按钮列表 -->
+        <div class="grid grid-cols-2 gap-1 p-2">
           <button
-            class="flex h-8 w-8 items-center justify-center rounded-md bg-wpx-gradient text-white shadow-wpx transition-transform hover:scale-105 disabled:opacity-40"
-            :disabled="!inputValue.trim()"
-            aria-label="发送"
-            @click="onInputEnter"
+            v-for="c in COMMAND_LIST"
+            :key="c.cmd"
+            type="button"
+            class="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-wpx-gradient-soft"
+            :aria-label="`${c.label}：${c.desc}`"
+            @click="popupVisible = false; window.getSelection()?.removeAllRanges()"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2.2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M5 12h14M13 6l6 6-6 6"
-              />
-            </svg>
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-dark/5 text-base group-hover:bg-white">
+              {{ c.icon }}
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-xs font-semibold text-dark">
+                {{ c.label }}
+              </span>
+              <span class="block truncate font-mono text-[10px] text-primary-600">
+                {{ c.cmd }}
+              </span>
+            </span>
           </button>
         </div>
 
         <!-- 底部提示 -->
-        <div class="bg-white px-4 py-1.5 text-center text-[10px] text-dark/40">
-          这是演示版，不会真实调用 AI
+        <div class="border-t border-dark/5 bg-white px-3 py-1.5 text-center text-[10px] text-dark/40">
+          这是演示版 · 桌面端立即生效
         </div>
       </div>
     </transition>
@@ -468,15 +320,15 @@ onBeforeUnmount(() => {
 /* ============== 浮窗进出动画 ============== */
 .popup-enter-active,
 .popup-leave-active {
-  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .popup-enter-from {
   opacity: 0;
-  transform: translateY(20px) scale(0.95);
+  transform: translateY(8px) scale(0.96);
 }
 .popup-leave-to {
   opacity: 0;
-  transform: translateY(8px) scale(0.98);
+  transform: translateY(4px) scale(0.98);
 }
 
 /* ============== 文字轮播 ============== */
@@ -493,15 +345,6 @@ onBeforeUnmount(() => {
   transform: translateY(-12px);
 }
 
-/* ============== 光标闪烁 ============== */
-@keyframes wpxCaretBlink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-.animate-caret {
-  animation: wpxCaretBlink 0.8s steps(1) infinite;
-}
-
 /* ============== 排版 ============== */
 .prose-wpx p {
   margin: 0;
@@ -513,9 +356,13 @@ onBeforeUnmount(() => {
 
 /* ============== 减少动效 ============== */
 @media (prefers-reduced-motion: reduce) {
-  .animate-caret {
-    animation: none;
-    opacity: 1;
+  .popup-enter-active,
+  .popup-leave-active {
+    transition: none;
+  }
+  .hl-enter-active,
+  .hl-leave-active {
+    transition: none;
   }
 }
 </style>

@@ -1,32 +1,36 @@
 <!--
-  SectionPricing · 价格区
+  SectionPricing · 收费说明（去 AI 化重写）
+  - 三卡叙事改为「使用方式」：桌面端 / 自备大模型 / 开源字体
+  - 不再让 AI 占据 2/3 注意力
 -->
 <script setup>
 /**
  * SectionPricing.vue · 收费说明
  *
  * 重要：WPX V1.1 起为「完全免费」模式。
- *   - 工具本身永久免费（编辑器、PDF 互转、模板、多窗口……）
- *   - AI 能力完全免费：用户需在桌面端「设置 → 我的模型」自行配置第三方大模型 API
- *     （兼容 OpenAI Chat Completions 协议，覆盖 DeepSeek、智谱 GLM、通义千问、文心一言、
- *      豆包、Kimi、腾讯混元、SiliconFlow 等全部国产大模型）。
- *   - 字体完全免费：用户可在「设置 → 字体」中下载开源免费字体或导入本地已授权字体。
- *   - WPX 不再提供任何平台内置大模型、不再经营商业字体 / Token 售卖业务。
+ *   - 桌面端本体永久免费（编辑器、多窗口、PDF 互转、Skills 市场……）
+ *   - 智能能力完全免费：用户在「设置 → 我的模型」自行配置兼容 OpenAI 协议的第三方大模型 API
+ *     （DeepSeek / 智谱 GLM / 通义千问 / 文心一言 / 豆包 / Kimi / 腾讯混元 / SiliconFlow）
+ *   - 字体完全免费：「设置 → 字体」下载开源免费字体或导入本地已授权字体。
+ *   - WPX 不再提供任何平台内置大模型、不再经营商业字体业务。
  *   - 不收月费、不收年费、不绑架、不弹窗、不弹付费提示。
  */
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const scenarios = [
   {
-    name: '工具本体',
+    name: '桌面端本体',
     badge: '永久免费',
     price: '¥0',
     period: '永久',
-    desc: '编辑器、文件管理、多窗口、PDF 互转、Skills 市场……全都不要钱。',
+    desc: '编辑器、多窗口、PDF / OCR / 压缩一体、Skills 市场……全都不要钱。',
     items: [
       '完整编辑器与多窗口独立编辑',
-      'PDF / DOCX / Markdown 互转',
-      '32 款内置免费 Skills',
-      '免费 AI 模板生成',
+      '64 条斜杠指令 + 32 项 Skills',
+      'PDF / DOCX / Markdown / Excel 互转',
+      '虚拟纸张与 A4 排版',
       '社区与文档支持'
     ],
     cta: '立即免费下载',
@@ -34,14 +38,14 @@ const scenarios = [
     free: true
   },
   {
-    name: 'AI 大模型接入',
+    name: '自备大模型',
     badge: '完全免费',
     price: '¥0',
     period: '需自备 API',
-    desc: '用户在桌面端「设置 → 我的模型」中自行配置第三方大模型 API，WPX 不收取任何平台服务费。',
+    desc: '用户在「设置 → 我的模型」自行配置兼容 OpenAI 协议的第三方大模型 API，WPX 不收取任何平台服务费。',
     items: [
       '兼容 OpenAI Chat Completions 协议',
-      '内置国产大模型预设：DeepSeek / 智谱 GLM / 通义千问 / 文心一言 / 豆包 / Kimi / 腾讯混元 / SiliconFlow',
+      '预设 8+ 国产大模型：DeepSeek / 智谱 GLM / 通义千问 / 文心一言 / 豆包 / Kimi / 腾讯混元 / SiliconFlow',
       'API Key 本机 AES 加密存储，不上传 WPX',
       '支持本地推理：Ollama / LM Studio',
       '费用由用户与模型服务商结算，WPX 零抽成'
@@ -51,11 +55,11 @@ const scenarios = [
     free: true
   },
   {
-    name: '字体支持',
+    name: '开源字体',
     badge: '完全免费',
     price: '¥0',
     period: '需自导入',
-    desc: '用户在「设置 → 字体」中下载开源免费字体或导入本地已授权字体，WPX 不经营商业字体。',
+    desc: '用户可下载思源 / 霞鹜 / 阿里巴巴普惠等开源免费字体，或导入本地已授权字体，WPX 不经营商业字体。',
     items: [
       '内置 100+ 开源免费字体直接用',
       '可下载思源黑体 / 思源宋体等开源中文字体',
@@ -82,21 +86,19 @@ function scrollToFaq() {
 }
 
 function scrollToAiGuide() {
-  if (typeof document === 'undefined') return
-  const el = document.getElementById('ai-guide')
-  if (el) el.scrollIntoView({ behavior: 'smooth' })
+  // 跳转文档中心「大模型接入教程」章节索引
+  router.push('/docs#ai-models')
 }
 
 function scrollToFontGuide() {
-  if (typeof document === 'undefined') return
-  const el = document.getElementById('font-guide')
-  if (el) el.scrollIntoView({ behavior: 'smooth' })
+  // 跳转字体商店页
+  router.push('/fonts')
 }
 
 function handleCta(s) {
-  if (s.name === '工具本体') return scrollToDownload()
-  if (s.name === 'AI 大模型接入') return scrollToAiGuide()
-  if (s.name === '字体支持') return scrollToFontGuide()
+  if (s.name === '桌面端本体') return scrollToDownload()
+  if (s.name === '自备大模型') return scrollToAiGuide()
+  if (s.name === '开源字体') return scrollToFontGuide()
   return scrollToFaq()
 }
 </script>
@@ -117,7 +119,7 @@ function handleCta(s) {
           <span class="wpx-gradient-text">完全免费 · 一行代码也不收</span>
         </h2>
         <p class="mt-4 text-dark/60">
-          工具本体永久免费，AI 能力和字体由用户自行接入/导入，<strong class="text-emerald-700">WPX 不收取任何平台服务费</strong>。
+          桌面端本体永久免费，自备大模型与开源字体由用户自行配置/导入，<strong class="text-emerald-700">WPX 不收取任何平台服务费</strong>。
         </p>
       </div>
 
@@ -212,7 +214,7 @@ function handleCta(s) {
             <p class="font-semibold text-emerald-700">为什么是「完全免费」？</p>
             <p class="mt-1 text-sm text-dark/70 leading-relaxed">
               WPX 始终相信好工具应该人人可用。V1.1 起我们撤掉所有平台内置大模型服务与商业字体售卖业务，
-              把 AI 与字体的选择权完全交回给用户。你可以在本地接入任何兼容 OpenAI 协议的国产 / 国外大模型，
+              把自备大模型与开源字体的选择权完全交回给用户。你可以在本地接入任何兼容 OpenAI 协议的国产 / 国外大模型，
               也可以自由使用任何已获合法授权的字体，<strong class="text-dark">WPX 不收任何平台服务费、不抽成、不收 Token 费</strong>。
               <br />
               <strong class="text-dark">v1.1 起说明</strong>：已无 Token 计费机制，原 FAQ 中相关措辞已全部废弃，请以最新文档为准。

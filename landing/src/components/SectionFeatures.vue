@@ -1,106 +1,114 @@
 <!--
-  SectionFeatures · 核心特性区
-  - 已同步 v0.1.16：9 张卡片，删除原"账户与模型配额"（V1.1 不再有平台账户）
-  - 每张卡片支持"相关文档"链接，指向 /docs#anchor
+  SectionFeatures · 核心特性区（去 AI 化重写）
+  - 重组为 3×4 分组：编辑器 / 文件处理 / AI & Skills
+  - AI 相关卡片从原来的 5+ 张压缩到 2 张（仅作为能力之一）
+  - 强调差异化的「多窗口 / 本地指令 / 离线 / Skills」能力
 -->
 <script setup>
-const features = [
-  {
-    icon: '✨',
-    title: 'AI 一键改写',
-    desc: '选中段落，让 AI 帮你润色、续写、翻译、总结；语气与长度都可调，支持 DeepSeek 等国产大模型。',
-    color: 'from-primary-from/15 to-primary-to/15',
-    newFlag: false,
-    docAnchor: '#ai-panel'
-  },
+// ---------- 编辑器 ----------
+const editorGroup = [
   {
     icon: '🪟',
     title: '多窗口独立编辑器',
-    desc: '同时打开多个文档并排对照，AI 助手可贴边 dock 或浮窗来回切，跨窗口拖拽素材，研究写作两不误。',
+    desc: '同时打开多份文档并排对照，Skills 面板可贴边 dock 或浮窗，跨窗口拖拽素材。',
     color: 'from-accent-mint/15 to-primary-from/15',
-    newFlag: false,
     docAnchor: '#multi-window'
   },
   {
-    icon: '🧑‍🏫',
-    title: '演示文稿生成（PPT）',
-    desc: '从教案 / 大纲自动生成课件 PPT，章节、配图、要点一句话搞定。教师备课提速 10 倍。',
-    color: 'from-accent-yellow/30 to-accent-mint/15',
-    newFlag: true,
-    docAnchor: '#lesson-ppt'
-  },
-  {
-    icon: '🛠️',
-    title: '本地指令系统 · 64 条',
-    desc: '在编辑器内输入 `/focus`、`/export`、`/paper-a4` 等斜杠指令立即执行，无需打开菜单，键盘派写作者的福音。',
+    icon: '🛠',
+    title: '64 条本地斜杠指令',
+    desc: '在编辑器内输入 `/focus`、`/export`、`/paper-a4` 立即生效，无需打开菜单。',
     color: 'from-primary-from/15 to-accent-mint/20',
     newFlag: true,
     docAnchor: '#local-commands'
   },
   {
     icon: '📄',
-    title: 'HTML 源码分屏编辑',
-    desc: 'CodeMirror 6 与 Tiptap 富文本双向同步，拖拽宽度调整，导入 HTML 后支持源码可视化对照。',
+    title: '虚拟纸张与 A4 排版',
+    desc: '所见即所得 A4 纸张、页边距、页眉页脚，打印 / 导出与 Word 兼容。',
     color: 'from-primary-to/15 to-accent-yellow/15',
+    docAnchor: '#virtual-paper'
+  },
+  {
+    icon: '⌘',
+    title: 'HTML 源码分屏编辑',
+    desc: 'CodeMirror 6 与 Tiptap 富文本双向同步，拖拽宽度调整，导入 HTML 后可可视化对照。',
+    color: 'from-accent-yellow/20 to-accent-mint/15',
     newFlag: true,
     docAnchor: '#html-source'
+  }
+]
+
+// ---------- 文件处理 ----------
+const fileGroup = [
+  {
+    icon: '🔄',
+    title: 'Markdown / PDF / Word 互转',
+    desc: '本地集成 Pandoc 流式转换，PDF · DOCX · Markdown · HTML 全场景互换。',
+    color: 'from-primary-from/15 to-primary-to/15',
+    docAnchor: '#convert'
   },
   {
     icon: '🔍',
     title: 'PDF 离线 OCR',
-    desc: '扫描版 PDF 一键转可编辑文本，集成 pdfjs + tesseract.js，全程本地推理，0 上传 0 隐私泄露。',
+    desc: '扫描版 PDF 一键转可编辑文本，集成 pdfjs + tesseract.js，全程本地推理。',
     color: 'from-accent-yellow/15 to-primary-from/15',
     newFlag: true,
     docAnchor: '#pdf-ocr'
   },
   {
-    icon: '🗜️',
+    icon: '🗜',
     title: '7z 压缩 / 解压',
-    desc: '编辑器内直接打包与解压 7z / zip，资料整理再也不用切窗口，AES-256 加密保护敏感文档。',
+    desc: '编辑器内直接打包与解压 7z / zip，资料整理不用切窗口，AES-256 加密。',
     color: 'from-primary-from/15 to-accent-yellow/20',
-    newFlag: false,
     docAnchor: '#compress'
-  },
-  {
-    icon: '🔤',
-    title: '免费开源字体 100+',
-    desc: '思源、霞鹜、阿里巴巴普惠、HarmonyOS Sans 等 100+ 开源字体直接用，本地导入 .ttf/.otf 也支持。',
-    color: 'from-accent-mint/15 to-primary-to/15',
-    newFlag: false,
-    docAnchor: '#fonts'
-  },
-  {
-    icon: '🎓',
-    title: '学生 / 教师 Skills 32+',
-    desc: '论文排版、引用生成、备课模板、家长会发言稿……学生 16 + 教师 16，开箱即用并支持自定义。',
-    color: 'from-accent-yellow/20 to-accent-mint/20',
-    newFlag: false,
-    docAnchor: '#built-in-skills'
   },
   {
     icon: '📊',
     title: 'Excel / WPS 表格导入',
-    desc: '支持 .xls / .xlsx / Numbers 文档一键解析为可编辑表格块，数据整理从未如此高效。',
+    desc: '支持 .xls / .xlsx / Numbers 文档一键解析为可编辑表格块，保留格式与数据。',
     color: 'from-sky-400/20 to-primary-from/20',
     newFlag: true,
     docAnchor: '#excel'
-  },
-  {
-    icon: '📁',
-    title: '资料库自定义路径',
-    desc: '资料库保存路径可自由配置，桌面端支持文件夹选择器，打造属于你自己的知识管理体系。',
-    color: 'from-emerald-400/20 to-accent-mint/20',
-    newFlag: true,
-    docAnchor: '#library'
-  },
-  {
-    icon: '🪟',
-    title: '多窗口独立管理',
-    desc: '新建窗口、关闭窗口，快速打开多个独立编辑器，窗口列表菜单让窗口管理一目了然。',
-    color: 'from-violet-400/20 to-primary-to/20',
-    newFlag: true,
-    docAnchor: '#multi-window'
   }
+]
+
+// ---------- AI 与 Skills ----------
+const aiGroup = [
+  {
+    icon: '🎓',
+    title: '32+ Skills 模板',
+    desc: '论文排版 · 教案 · 备课 · 翻译 · 错题复盘 · 答辩 PPT ……开箱即用。',
+    color: 'from-accent-yellow/20 to-accent-mint/20',
+    docAnchor: '#built-in-skills'
+  },
+  {
+    icon: '✍',
+    title: '一键改写',
+    desc: '选中段落，调用 Skills 帮你润色 / 续写 / 翻译 / 总结；语气与长度都可调。',
+    color: 'from-primary-from/15 to-primary-to/15',
+    docAnchor: '#commands-panel'
+  },
+  {
+    icon: '🧠',
+    title: '自备大模型接入',
+    desc: 'DeepSeek / 智谱 / 通义 / 文心 / Ollama 任选，API Key 本地 AES 加密。',
+    color: 'from-accent-mint/15 to-primary-to/15',
+    docAnchor: '#ai-models'
+  },
+  {
+    icon: '🔤',
+    title: '100+ 开源字体',
+    desc: '思源 / 霞鹜 / 阿里巴巴普惠 / HarmonyOS Sans 直接用，支持本地导入 .ttf/.otf。',
+    color: 'from-accent-mint/15 to-accent-yellow/15',
+    docAnchor: '#fonts'
+  }
+]
+
+const groups = [
+  { key: 'editor', title: '编辑器', icon: '⌨', items: editorGroup },
+  { key: 'file',   title: '文件处理', icon: '📂', items: fileGroup },
+  { key: 'ai',     title: 'AI 与 Skills', icon: '✨', items: aiGroup }
 ]
 </script>
 
@@ -117,61 +125,82 @@ const features = [
           id="features-title"
           class="mt-4 text-2xl font-extrabold sm:text-3xl md:text-5xl"
         >
-          <span class="wpx-gradient-text">为写作者而生的工具集</span>
+          <span class="wpx-gradient-text">桌面写作所需，一次配齐</span>
         </h2>
         <p class="mt-4 text-dark/60">
-          不止是编辑器，更是你的写作工作台。12 大核心能力，把构思到定稿的所有环节一次打包。
+          12 项核心能力，三个维度的设计：编辑器本体、文件处理、以及作为加持的 AI 与 Skills。
         </p>
       </div>
 
-      <div class="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <article
-          v-for="f in features"
-          :id="f.docAnchor.replace('#', '')"
-          :key="f.title"
-          class="group relative overflow-hidden rounded-2xl border border-dark/5 bg-white p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-wpx"
+      <!-- 三组分组 -->
+      <div class="mt-14 space-y-14">
+        <div
+          v-for="g in groups"
+          :key="g.key"
         >
-          <div
-            aria-hidden="true"
-            :class="[
-              'absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br opacity-60 blur-2xl transition-opacity group-hover:opacity-100',
-              f.color
-            ]"
-          />
-
-          <!-- 新功能红角标 -->
-          <span
-            v-if="f.newFlag"
-            class="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm animate-[fadeIn_0.6s_ease-out]"
-            aria-label="新功能"
-          >
-            <span aria-hidden="true">✨</span>
-            NEW
-          </span>
-
-          <div
-            class="relative flex h-12 w-12 items-center justify-center rounded-xl bg-wpx-gradient-soft text-2xl"
-            role="img"
-            :aria-label="f.title + ' 图标'"
-          >
-            {{ f.icon }}
+          <!-- 组标题 -->
+          <div class="mb-6 flex items-center gap-3">
+            <span
+              class="flex h-10 w-10 items-center justify-center rounded-xl bg-wpx-gradient text-white shadow-wpx"
+              aria-hidden="true"
+            >{{ g.icon }}</span>
+            <h3 class="text-xl font-extrabold text-dark md:text-2xl">
+              {{ g.title }}
+            </h3>
+            <span class="ml-2 text-xs text-dark/40">{{ g.items.length }} 项</span>
           </div>
-          <h3 class="relative mt-4 text-lg font-bold">
-            {{ f.title }}
-          </h3>
-          <p class="relative mt-2 text-sm leading-relaxed text-dark/60">
-            {{ f.desc }}
-          </p>
-          <router-link
-            v-if="f.docAnchor"
-            :to="`/docs${f.docAnchor}`"
-            class="relative mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary-600 transition-all group-hover:gap-2"
-            :aria-label="`查看 ${f.title} 相关文档`"
-          >
-            查看文档
-            <span aria-hidden="true">→</span>
-          </router-link>
-        </article>
+
+          <!-- 该组的 4 张卡片 -->
+          <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            <article
+              v-for="f in g.items"
+              :id="f.docAnchor.replace('#', '')"
+              :key="f.title"
+              class="group relative overflow-hidden rounded-2xl border border-dark/5 bg-white p-5 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-wpx"
+            >
+              <div
+                aria-hidden="true"
+                :class="[
+                  'absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br opacity-60 blur-2xl transition-opacity group-hover:opacity-100',
+                  f.color
+                ]"
+              />
+
+              <!-- 新功能红角标 -->
+              <span
+                v-if="f.newFlag"
+                class="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm animate-[fadeIn_0.6s_ease-out]"
+                aria-label="新功能"
+              >
+                <span aria-hidden="true">★</span>
+                NEW
+              </span>
+
+              <div
+                class="relative flex h-11 w-11 items-center justify-center rounded-xl bg-wpx-gradient-soft text-xl"
+                role="img"
+                :aria-label="f.title + ' 图标'"
+              >
+                {{ f.icon }}
+              </div>
+              <h4 class="relative mt-3 text-base font-bold">
+                {{ f.title }}
+              </h4>
+              <p class="relative mt-1.5 text-sm leading-relaxed text-dark/60">
+                {{ f.desc }}
+              </p>
+              <router-link
+                v-if="f.docAnchor"
+                :to="`/docs${f.docAnchor}`"
+                class="relative mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary-600 transition-all group-hover:gap-2"
+                :aria-label="`查看 ${f.title} 相关文档`"
+              >
+                查看文档
+                <span aria-hidden="true">→</span>
+              </router-link>
+            </article>
+          </div>
+        </div>
       </div>
     </div>
   </section>

@@ -11,38 +11,33 @@ export const siteConfig = {
   // 基础站点信息
   name: 'WPX',
   shortName: 'WPX',
-  title: 'WPX - 免费多窗口 AI 文档编辑器 | 演示文稿/本地指令/v0.1.18',
+  // 战略定位（v1.0 · 2026-08）：WPX 的真正护城河是「本地 / 多窗口 / 永久免费 / 64 指令 / Skills 一体化」，AI 仅作为常驻助手出现，不作主标题
+  title: 'WPX - 永久免费的桌面写作工具 | 多窗口 / 64 条本地指令 / 完全离线',
   description:
-    '多窗口独立 AI 文档编辑器：Markdown、PDF、DOCX、Excel 互转，内置 32+ Skills 与 64 条本地指令、教师课件 PPT 一键生成、PDF 离线 OCR、HTML 源码分屏编辑、图片去背景，完全免费、开源本地优先。',
+    '永久免费的桌面写作工具：多窗口独立编辑、64 条本地斜杠指令、Markdown / PDF / Word / Excel 互转、内置 32+ Skills、100+ 开源字体、PDF 离线 OCR、HTML 源码编辑。本地优先，完全离线可用。',
   keywords: [
     'WPX',
-    'AI文档编辑器',
     '免费文档编辑器',
-    'Markdown',
-    'PDF',
-    'AI写作',
-    '图片处理',
-    'WPS替代',
-    '开源',
-    'Electron',
-    // ===== v0.1.16+ 新增关键词 (V1.1 完全免费模式) =====
+    '桌面写作工具',
     '多窗口编辑器',
     '多窗口独立编辑器',
+    '永久免费编辑器',
+    '本地离线编辑器',
+    'Markdown',
+    'PDF',
+    '开源',
+    'Electron',
+    // ===== v0.1.16+ 真实差异化能力 =====
+    '本地指令',
+    '斜杠指令',
+    'Skills市场',
+    '虚拟纸张',
+    'HTML源码编辑',
+    'PDF离线OCR',
+    'Markdown转PDF',
     '演示文稿生成器',
     'PPT生成',
     '教师课件',
-    '本地指令',
-    'HTML源码编辑',
-    'PDF离线OCR',
-    '完全免费编辑器',
-    '无Token文档编辑器',
-    'Skills市场',
-    'DeepSeek文档',
-    '智谱GLM文档',
-    'jcode高性能',
-    '虚拟纸张',
-    'Markdown转PDF',
-    // ===== v0.1.16 新增 =====
     'Excel导入',
     'WPS表格导入',
     'xls转表格',
@@ -52,7 +47,16 @@ export const siteConfig = {
     '自定义保存路径',
     '窗口独立管理',
     '新建窗口',
-    '关闭窗口'
+    '关闭窗口',
+    // ===== V1.1 完全免费模式 =====
+    '完全免费编辑器',
+    '无Token文档编辑器',
+    'WPS替代',
+    'jcode高性能',
+    '100+开源字体',
+    // ===== AI 仅作辅助关键词（最后位、不作主卖点）=====
+    'AI文档编辑器',
+    'AI写作'
   ],
   author: 'WPX Team',
   // 默认站点 URL：构建时会被 env.VITE_SITE_URL 覆盖
@@ -63,7 +67,7 @@ export const siteConfig = {
   ogImagePng: '/og-image.svg', // 兼容旧客户端
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  ogImageAlt: 'WPX - 多窗口 AI 文档编辑器，演示文稿 / 本地指令 · v0.1.18',
+  ogImageAlt: 'WPX - 永久免费的桌面写作工具，多窗口 / 64 条本地指令 · v0.1.18',
   twitterHandle: '@wpx_app',
   locale: 'zh_CN',
   themeColor: '#4F46E5',

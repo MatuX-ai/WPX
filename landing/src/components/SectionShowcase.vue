@@ -6,7 +6,7 @@
 const windowBlocks = [
   { title: '文档 A', tag: '毕业论文', color: 'bg-primary-from/15 text-primary-600' },
   { title: '文档 B', tag: '文献综述', color: 'bg-accent-mint/20 text-emerald-700' },
-  { title: 'AI 助手', tag: '贴边 dock', color: 'bg-accent-yellow/25 text-amber-700' }
+  { title: 'Skills 面板', tag: '贴边 dock', color: 'bg-accent-yellow/25 text-amber-700' }
 ]
 
 const commandList = [
@@ -35,7 +35,7 @@ const commandList = [
           在 WPX 里，<span class="wpx-gradient-text">一次看到三件事</span>
         </h2>
         <p class="mt-4 text-dark/70">
-          左边大纲、右边 AI、底下指令面板。多窗口 + HTML 源码 + 本地指令，让桌面端编辑器像 IDE 一样专业。
+          左边大纲、右边 Skills、底下指令面板。多窗口 + HTML 源码 + 本地指令，让桌面端编辑器像 IDE 一样专业。
         </p>
       </div>
 
@@ -50,7 +50,7 @@ const commandList = [
             <span class="rounded-full bg-wpx-gradient px-2.5 py-0.5 text-[11px] font-bold text-white">v0.1.13</span>
           </header>
           <p class="mt-2 text-sm text-dark/60">
-            同时打开多份文档，AI 助手可贴边 dock 成 IDE 风格右侧栏，跨窗口拖拽素材。
+            同时打开多份文档，Skills 面板可贴边 dock 成 IDE 风格右侧栏，跨窗口拖拽素材。
           </p>
 
           <!-- 模拟窗口栏 -->
@@ -59,7 +59,7 @@ const commandList = [
               <span class="h-2.5 w-2.5 rounded-full bg-red-400/70" />
               <span class="h-2.5 w-2.5 rounded-full bg-accent-yellow/80" />
               <span class="h-2.5 w-2.5 rounded-full bg-accent-mint/80" />
-              <span class="ml-2 text-[10px] text-dark/40">左：大纲 + 文档 A · 右：文档 B · 右 dock：AI</span>
+              <span class="ml-2 text-[10px] text-dark/40">左：大纲 + 文档 A · 右：文档 B · 右 dock：Skills</span>
             </div>
 
             <!-- 三栏窗口 -->
@@ -81,13 +81,13 @@ const commandList = [
                 <div class="h-1.5 w-10/12 rounded-full bg-dark/10" />
                 <div class="h-1.5 w-8/12 rounded-full bg-dark/10" />
               </div>
-              <!-- 右：文档 B + AI dock -->
+              <!-- 右：文档 B + Skills dock -->
               <div class="col-span-4 space-y-1.5">
                 <div class="rounded-md bg-accent-mint/20 p-1 text-[9px] font-semibold text-emerald-700">文档 B</div>
                 <div class="h-1.5 w-10/12 rounded-full bg-dark/10" />
                 <div class="h-1.5 w-9/12 rounded-full bg-dark/10" />
                 <div class="h-1.5 w-11/12 rounded-full bg-dark/10" />
-                <div class="mt-1 rounded-md bg-accent-yellow/20 p-1 text-[9px] font-semibold text-amber-700">AI: 已 dock</div>
+                <div class="mt-1 rounded-md bg-accent-yellow/20 p-1 text-[9px] font-semibold text-amber-700">Skills: 已 dock</div>
               </div>
             </div>
           </div>

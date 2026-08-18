@@ -13,24 +13,14 @@ const rows = [
     wpx: { text: '完全免费', good: true }
   },
   {
-    feature: 'AI 大模型',
-    wps: { text: '单独付费', bad: true },
-    wpx: { text: '完全免费', good: true, note: '自带 API Key 即可' }
-  },
-  {
     feature: '商业字体',
     wps: { text: '按字数收费', bad: true },
     wpx: { text: '完全免费', good: true, note: '自导入已授权字体' }
   },
   {
-    feature: 'Token 计费',
-    wps: { text: '已废止', bad: false },
-    wpx: { text: '已停用', good: true, note: 'V1.1 起不适用' }
-  },
-  {
     feature: '模板',
     wps: { text: '会员专属', bad: true },
-    wpx: { text: 'AI 免费生成', good: true }
+    wpx: { text: 'Skills 32 项', good: true }
   },
   {
     feature: '安装包',
@@ -51,9 +41,9 @@ const pledgeItems = [
     desc: '编辑器、文件管理、虚拟纸张、压缩解压、PDF 互转……全都不要钱。'
   },
   {
-    icon: '🤖',
-    title: 'AI 大模型完全免费',
-    desc: '用户自备 API Key（支持 DeepSeek、智谱、通义千问、文心一言、豆包、Kimi、腾讯混元等），平台零抽成。'
+    icon: '🛠',
+    title: '完全离线可用',
+    desc: '多窗口、Skills、PDF/OCR/压缩不依赖云端，断网也照常用，API Key 可选配。'
   },
   {
     icon: '🔤',
@@ -63,7 +53,7 @@ const pledgeItems = [
   {
     icon: '🚫',
     title: '零弹窗零绑架',
-    desc: '没有"猜你喜欢"、没有续费提醒、没有诱导分享、没有 Token 充值弹窗。'
+    desc: '没有“猜你喜欢”、没有续费提醒、没有诱导分享、没有付费提示弹窗。'
   }
 ]
 </script>
@@ -75,11 +65,11 @@ const pledgeItems = [
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">我们的承诺</span>
         <h2 class="mt-4 text-[1.6rem] font-extrabold leading-tight sm:text-3xl md:text-5xl">
-          <span class="wpx-gradient-text">完全免费 · 没有任何附加项</span>
+          <span class="wpx-gradient-text">永久免费 · 不收任何平台服务费</span>
         </h2>
         <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-dark/70">
-          工具<strong class="text-dark">永久免费</strong>，AI 与字体由用户自备 / 自导入。
-          WPX <strong class="text-emerald-700">不收任何平台服务费、不抽成、不收 Token 费</strong>。
+          工具<strong class="text-dark">永久免费</strong>，Skills 模板、字体与大模型由用户自备 / 自导入。
+          WPX <strong class="text-emerald-700">不收任何平台服务费、不抽成</strong>。
           <br class="hidden md:block" />
           其余一切不收费，不弹窗，不绑架。
         </p>
@@ -212,15 +202,15 @@ const pledgeItems = [
         <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-dark/60">
           <div class="flex items-center gap-1.5">
             <span class="h-2 w-2 rounded-full bg-rose-500" />
-            <span>WPS：年均付费 ¥89~299</span>
+            <span>WPS：年均付费，按功能收费</span>
           </div>
           <div class="flex items-center gap-1.5">
             <span class="h-2 w-2 rounded-full bg-emerald-500" />
-            <span>WPX：¥0 起，完全免费</span>
+            <span>WPX：¥0 起，永久免费</span>
           </div>
           <div class="flex items-center gap-1.5">
             <span class="h-2 w-2 rounded-full bg-emerald-500" />
-            <span>5 年累计可省 ¥1000+</span>
+            <span>平台零抽成，不收任何 Token 费</span>
           </div>
         </div>
         <a

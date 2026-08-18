@@ -109,9 +109,9 @@ function scrollToShowcase(e) {
           ref="heroTitle"
           class="mt-6 text-[1.65rem] font-extrabold leading-[1.15] tracking-tight sm:text-4xl sm:leading-[1.1] md:text-6xl"
         >
-          <span class="block">让写作更自由的</span>
+          <span class="block">为认真写字的人，</span>
           <span class="block">
-            <span class="wpx-gradient-text">AI 文档编辑器</span>
+            <span class="wpx-gradient-text">做一个不绑架的工具</span>
           </span>
         </h1>
 
@@ -119,9 +119,9 @@ function scrollToShowcase(e) {
           ref="heroSub"
           class="mt-6 max-w-xl text-lg leading-relaxed text-dark/70"
         >
-          编辑器 + AI 助手 + 本地指令 + 演示文稿生成，多窗口一处搞定。
-          论文、报告、随笔、研究资料、备课课件，从构思到定稿，一处完成。
-          支持 Excel / WPS 表格导入，资料库自定义路径管理。
+          永久免费、不弹窗、不上传文档的桌面写作工具。
+          多窗口独立 + 64 条斜杠指令 + 32 项 Skills，论文 / 报告 / 教案 / 随笔都顺手。
+          资料库、表格导入、字体管理，桌面写作所需一次配齐。
         </p>
 
         <div
@@ -151,42 +151,42 @@ function scrollToShowcase(e) {
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-accent-mint"
             />
-            多窗口独立
+            完全本地离线
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-accent-yellow"
             />
-            64 条本地指令
+            多窗口独立
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-primary-from"
             />
-            32+ Skills
+            64 条斜杠指令
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-primary-to"
             />
-            完全免费
+            永久免费
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-rose-400"
             />
-            Excel 表格导入
+            PDF / OCR / 压缩一体
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 rounded-full bg-sky-400"
             />
-            资料库自定义路径
+            100+ 开源字体
           </li>
         </ul>
       </div>
@@ -228,46 +228,50 @@ function scrollToShowcase(e) {
             <div class="h-2.5 w-9/12 rounded-full bg-dark/5" />
             <div class="mt-4 rounded-xl border border-primary-from/20 bg-wpx-gradient-soft p-3 text-sm">
               <div class="text-xs font-semibold text-primary-600">
-                <span aria-hidden="true">✨</span> AI 帮你续写
+                <span aria-hidden="true">⌘</span> 斜杠指令菜单
               </div>
-              <div class="mt-2 h-2 w-10/12 rounded-full bg-white/70" />
-              <div class="mt-1.5 h-2 w-8/12 rounded-full bg-white/70" />
+              <div class="mt-2 flex flex-wrap gap-1.5 text-[11px] text-dark/70">
+                <code class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-primary-600">/focus</code>
+                <code class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-primary-600">/export</code>
+                <code class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-primary-600">/paper-a4</code>
+                <code class="rounded bg-white/80 px-1.5 py-0.5 font-mono text-primary-600">/img-bg</code>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 浮动徽标 · 左下：教师 PPT 一键生成 -->
+        <!-- 浮动徽标 · 左下：64 条本地指令 -->
         <div
           aria-hidden="true"
           class="absolute -left-6 -bottom-6 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx md:flex"
         >
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-yellow/30">
-            🎓
+            🛠
           </div>
           <div>
             <div class="text-xs font-semibold">
-              教师课件 PPT 一键生成
+              /focus 一键专注
             </div>
             <div class="text-[10px] text-dark/50">
-              教案 → 大纲 → 课件
+              64 条本地指令 · 键盘派写作者
             </div>
           </div>
         </div>
-        <!-- 浮动徽标 · 右上：PDF 离线 OCR -->
+        <!-- 浮动徽标 · 右上：多窗口独立 -->
         <div
           aria-hidden="true"
           class="absolute -right-4 -top-4 hidden animate-float items-center gap-3 rounded-2xl bg-white p-3 shadow-wpx md:flex"
           style="animation-delay: -3s"
         >
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-mint/30">
-            🔍
+            🪟
           </div>
           <div>
             <div class="text-xs font-semibold">
-              PDF 离线 OCR
+              多窗口独立
             </div>
             <div class="text-[10px] text-dark/50">
-              本地推理 · 扫描件可读
+              一边大纲、一边 Skills
             </div>
           </div>
         </div>

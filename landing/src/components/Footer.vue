@@ -95,8 +95,7 @@ const socials = [
             </span>
           </router-link>
           <p class="mt-4 max-w-xs text-sm leading-relaxed text-dark/60">
-            AI 智能文档编辑器，让每一次写作都更自由。
-            论文、报告、随笔，一处搞定。
+            永久免费的桌面写作工具。多窗口、64 条斜杠指令、PDF / OCR / 压缩一体，离线可用。
           </p>
 
           <!-- 当前桌面端版本徽章 -->

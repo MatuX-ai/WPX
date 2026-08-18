@@ -26,7 +26,7 @@ const skills = [
   {
     icon: '❌',
     name: '错题复盘',
-    desc: '拍照 / 粘贴错题，AI 自动归因、归类、给出同类练习。',
+    desc: '拍照 / 粘贴错题，自动归因、归类、给出同类练习。',
     tag: '学生',
     color: 'from-rose-300/20 to-accent-yellow/20'
   },
@@ -275,7 +275,7 @@ function resetLab() {
       <div class="mx-auto max-w-3xl text-center">
         <span class="wpx-chip">Skills 技能</span>
         <h2 class="mt-4 text-[1.6rem] font-extrabold leading-tight sm:text-3xl md:text-5xl">
-          <span class="wpx-gradient-text">你的 AI，你说了算。</span>
+          <span class="wpx-gradient-text">你的 Skills，你说了算。</span>
         </h2>
         <p class="mt-4 text-lg text-dark/65">
           内置 <strong class="text-primary-600">32</strong> 款免费 Skills，
@@ -382,7 +382,7 @@ function resetLab() {
                 技能实验室
               </div>
               <div class="text-xs text-dark/50">
-                纯娱乐 · 不会真的调用 AI · 但会假装很懂
+                纯娱乐 · 桌面端立即生效 · 这是预演
               </div>
             </div>
           </div>
@@ -449,7 +449,7 @@ function resetLab() {
               <div class="mt-3 text-sm">
                 输入需求，点击"随机匹配"
                 <br />
-                AI 会为你挑选最合适的 Skill
+                Skills 会为你匹配最合适的模板
               </div>
             </div>
 

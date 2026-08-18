@@ -9,10 +9,10 @@ import { ref } from 'vue'
 const highlights = [
   { name: '论文排版', desc: '一键应用 GB/T 7714 引用与学术模板', emoji: '🎓' },
   { name: '教师教案 → 课件 PPT', desc: '教案 → 大纲 → PPT 一键生成（v0.1.15 全新）', emoji: '🧑‍🏫' },
-  { name: 'AI 改写', desc: '支持 12 种语气与 6 种长度档位', emoji: '✍️' },
+  { name: '一键改写', desc: '支持 12 种语气与 6 种长度档位', emoji: '✍️' },
   { name: '图片去背景', desc: '本地 rembg 离线推理，隐私无忧', emoji: '🪄' },
   { name: '本地指令 64 条', desc: '输入 `/focus`、`/export` 等立即生效', emoji: '🛠️' },
-  { name: '知识库', desc: '把资料喂给 AI，回答有据可循', emoji: '📚' }
+  { name: '知识库', desc: '把资料喂给 Skills，本地检索有据可循', emoji: '📚' }
 ]
 
 // 下段：折叠 - Skills 全景（32 项明细 = 学生 16 + 教师 16）
