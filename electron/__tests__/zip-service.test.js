@@ -185,6 +185,7 @@ describeWith7za('zip-service 集成测试', () => {
 
     expect(fs.existsSync(archivePath)).toBe(true)
     expect(progressValues.length).toBeGreaterThan(1)
+    // zip-service 在 7za 成功退出时保证补发终态 100%（run7za close 处理）
     expect(progressValues.at(-1)).toBe(100)
     expect(new Set(progressValues).size).toBeGreaterThan(1)
   })

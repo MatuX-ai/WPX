@@ -86,17 +86,6 @@ function assertSafeArchivePaths(entries) {
   }
 }
 
-function parseProgressChunk(text, onProgress) {
-  if (typeof onProgress !== 'function') return
-
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(PROGRESS_PATTERN)
-    if (match) {
-      onProgress(Number(match[1]))
-    }
-  }
-}
-
 function killChildProcess(child) {
   if (!child?.pid) return
 
@@ -140,6 +129,8 @@ function run7za(args, options = {}) {
   /** @type {import('node:child_process').ChildProcessWithoutNullStreams | null} */
   let child = null
   let cancelled = false
+  /** 已上报的最大进度（用于 close 成功时补发终态 100%） */
+  let lastPercent = 0
 
   const promise = new Promise((resolve, reject) => {
     child = spawn(binaryPath, args, {
@@ -151,16 +142,28 @@ function run7za(args, options = {}) {
     let stdout = ''
     let stderr = ''
 
-    child.stdout.on('data', (chunk) => {
+    function handleChunk(chunk, acc) {
       const text = chunk.toString()
-      stdout += text
-      parseProgressChunk(text, onProgress)
+      acc += text
+      if (typeof onProgress === 'function') {
+        for (const line of text.split(/\r?\n/)) {
+          const match = line.match(PROGRESS_PATTERN)
+          if (match) {
+            const percent = Number(match[1])
+            if (percent > lastPercent) lastPercent = percent
+            onProgress(percent)
+          }
+        }
+      }
+      return acc
+    }
+
+    child.stdout.on('data', (chunk) => {
+      stdout = handleChunk(chunk, stdout)
     })
 
     child.stderr.on('data', (chunk) => {
-      const text = chunk.toString()
-      stderr += text
-      parseProgressChunk(text, onProgress)
+      stderr = handleChunk(chunk, stderr)
     })
 
     child.on('error', (error) => {
@@ -179,6 +182,11 @@ function run7za(args, options = {}) {
       }
 
       if (code === 0) {
+        // 7za 的最终 "100%" 进度事件与进程退出存在竞态，
+        // 这里在成功退出时保证补发终态 100%，让调用方进度条必然收敛。
+        if (typeof onProgress === 'function' && lastPercent < 100) {
+          onProgress(100)
+        }
         resolve({ stdout, stderr })
         return
       }

@@ -32,6 +32,30 @@ const SIMPLE_PATTERNS = [
 
 const COMPLEX_LENGTH_THRESHOLD = 200
 
+// ── M3：Hermes 本地引擎路由（开放式自主任务） ──
+const HERMES_PATTERNS = [
+  /用 Hermes|hermes/i,
+  /自主|多步|调研.*全网|对比.*方案|开放式任务/,
+]
+
+/**
+ * 决策：本次任务是否走 Hermes 本地网关
+ * 优先级：force → 显式指令 → （默认关闭，需用户在设置中开启自动路由）
+ * @param {string} userMessage
+ * @param {{ forceHermes?: boolean, autoRouteEnabled?: boolean }} [options]
+ * @returns {boolean}
+ */
+export function shouldUseHermes(userMessage, options = {}) {
+  const text = String(userMessage || '').trim()
+  if (!text) return false
+  if (options.forceHermes) return true
+  for (const pattern of HERMES_PATTERNS) {
+    if (pattern.test(text)) return true
+  }
+  // 自动路由默认关闭（用户显式启用后才按模式命中）
+  return Boolean(options.autoRouteEnabled) && text.length > COMPLEX_LENGTH_THRESHOLD
+}
+
 /**
  * @param {string} userMessage
  * @param {{
@@ -88,6 +112,9 @@ function resolveLocalServerUrl() {
  * }} payload
  * @param {{
  *   forceJcode?: boolean,
+ *   forceHermes?: boolean,
+ *   engine?: 'jcode' | 'hermes',
+ *   autoHermesRoute?: boolean,
  *   localServerUrl?: string,
  *   fetchImpl?: typeof fetch,
  *   timeoutMs?: number,
@@ -97,11 +124,18 @@ function resolveLocalServerUrl() {
  */
 export async function routeTask(payload, options = {}) {
   const userMessage = String(payload?.params?.userMessage || payload?.userMessage || '')
-  const wantJcode = options.forceJcode === true
-    ? true
-    : (payload?.context?.forceJcode === true || shouldUseJcode(userMessage))
 
-  if (!wantJcode) {
+  // M3：显式指定 hermes 引擎 / 强制 hermes / 模式命中
+  const wantHermes = options.engine === 'hermes' ||
+    options.forceHermes === true ||
+    (payload?.context?.forceHermes === true) ||
+    shouldUseHermes(userMessage, { autoRouteEnabled: options.autoHermesRoute === true })
+
+  const wantJcode = !wantHermes && (options.forceJcode === true
+    ? true
+    : (payload?.context?.forceJcode === true || shouldUseJcode(userMessage)))
+
+  if (!wantJcode && !wantHermes) {
     return {
       ok: true,
       engine: 'cloud',
@@ -114,7 +148,7 @@ export async function routeTask(payload, options = {}) {
     return {
       ok: false,
       fallbackReason: 'local_server_unavailable',
-      message: 'jcode 适配层未启动(local-server 不可用),已切换至云端 AI',
+      message: '本地引擎适配层未启动(local-server 不可用),已切换至云端 AI',
     }
   }
 
@@ -132,8 +166,13 @@ export async function routeTask(payload, options = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   const signal = options.signal || controller.signal
 
+  // 引擎名与端点需在 try 之外计算（catch 分支也要引用）
+  const engineName = wantHermes ? 'hermes' : 'jcode'
+  // jcode 沿用既有 /api/jcode/swarm；hermes 走 M3 新增 /api/hermes/run
+  const endpoint = wantHermes ? '/api/hermes/run' : '/api/jcode/swarm'
+
   try {
-    const url = `${localServerUrl.replace(/\/$/, '')}/api/jcode/swarm`
+    const url = `${localServerUrl.replace(/\/$/, '')}${endpoint}`
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,38 +192,38 @@ export async function routeTask(payload, options = {}) {
       return {
         ok: false,
         fallbackReason: 'http_error',
-        message: `jcode 适配层返回 HTTP ${res.status}`,
+        message: `${engineName} 适配层返回 HTTP ${res.status}`,
         status: res.status,
         data: body,
       }
     }
 
     if (body && body.ok === false) {
-      // jcode 不可用(disabled / unavailable)— 透明降级
+      // 本地引擎不可用(disabled / unavailable)— 透明降级
       return {
         ok: false,
-        fallbackReason: body.fallbackReason || 'jcode_unavailable',
-        message: body.message || 'jcode 暂不可用,已切换至云端 AI',
+        fallbackReason: body.fallbackReason || `${engineName}_unavailable`,
+        message: body.message || `${engineName} 暂不可用,已切换至云端 AI`,
         data: body,
       }
     }
 
     return {
       ok: true,
-      engine: 'jcode',
+      engine: engineName,
       data: body,
     }
   } catch (err) {
     if (err?.name === 'AbortError') {
       return {
         ok: false,
-        fallbackReason: 'jcode_timeout',
-        message: 'jcode 调用超时,已切换至云端 AI',
+        fallbackReason: `${engineName}_timeout`,
+        message: `${engineName} 调用超时,已切换至云端 AI`,
       }
     }
     return {
       ok: false,
-      fallbackReason: 'jcode_error',
+      fallbackReason: `${engineName}_error`,
       message: err?.message || String(err),
     }
   } finally {
@@ -194,3 +233,4 @@ export async function routeTask(payload, options = {}) {
 
 export const COMPLEX_PATTERN_LIST = COMPLEX_PATTERNS
 export const SIMPLE_PATTERN_LIST = SIMPLE_PATTERNS
+export const HERMES_PATTERN_LIST = HERMES_PATTERNS

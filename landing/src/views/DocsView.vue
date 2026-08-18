@@ -133,7 +133,7 @@ const quickStarts = [
           <span class="wpx-gradient-text">从这里开始你的 WPX 之旅</span>
         </h1>
         <p class="mt-4 text-dark/60">
-          6 大类共 {{ totalTopics }} 主题 · 全随 v0.1.16 同步
+          6 大类共 {{ totalTopics }} 主题 · 全随 v0.1.18 同步
         </p>
 
         <!-- 关键词过滤 -->

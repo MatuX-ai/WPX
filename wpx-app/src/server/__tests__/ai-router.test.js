@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { shouldUseJcode, routeTask, COMPLEX_PATTERN_LIST, SIMPLE_PATTERN_LIST } from '@/server/ai-router'
+import {
+  shouldUseJcode,
+  shouldUseHermes,
+  routeTask,
+  COMPLEX_PATTERN_LIST,
+  SIMPLE_PATTERN_LIST,
+  HERMES_PATTERN_LIST,
+} from '@/server/ai-router'
 
 describe('ai-router — shouldUseJcode 路由决策', () => {
   it('空消息默认不走 jcode', () => {
@@ -289,5 +296,133 @@ describe('ai-router — routeTask 路由执行', () => {
 
     expect(result.ok).toBe(false)
     expect(result.fallbackReason).toBe('jcode_timeout')
+  })
+})
+
+// ═════════════════════════════════════════════════
+// M3：shouldUseHermes 路由决策
+// ═════════════════════════════════════════════════
+describe('ai-router — shouldUseHermes 路由决策', () => {
+  it('空消息不走 Hermes', () => {
+    expect(shouldUseHermes('')).toBe(false)
+    expect(shouldUseHermes(null)).toBe(false)
+  })
+
+  it('显式指令（用 Hermes / hermes）命中', () => {
+    expect(shouldUseHermes('用 Hermes 帮我调研')).toBe(true)
+    expect(shouldUseHermes('hermes 对比三个方案')).toBe(true)
+  })
+
+  it('开放式自主任务关键词命中', () => {
+    expect(shouldUseHermes('自主完成一次全网调研')).toBe(true)
+    expect(shouldUseHermes('对比这三个方案并给出建议')).toBe(true)
+  })
+
+  it('默认不按长度自动路由；开启 autoRouteEnabled 且超长才命中', () => {
+    const longText = 'x'.repeat(250)
+    expect(shouldUseHermes(longText)).toBe(false)
+    expect(shouldUseHermes(longText, { autoRouteEnabled: true })).toBe(true)
+    expect(shouldUseHermes('短文', { autoRouteEnabled: true })).toBe(false)
+  })
+
+  it('forceHermes 强制命中', () => {
+    expect(shouldUseHermes('随便说点什么', { forceHermes: true })).toBe(true)
+  })
+
+  it('HERMES_PATTERN_LIST 已导出', () => {
+    expect(Array.isArray(HERMES_PATTERN_LIST)).toBe(true)
+    expect(HERMES_PATTERN_LIST.length).toBeGreaterThan(0)
+  })
+})
+
+// ═════════════════════════════════════════════════
+// M3：routeTask engine:'hermes'
+// ═════════════════════════════════════════════════
+describe('ai-router — routeTask hermes 引擎', () => {
+  it('engine:"hermes" 时请求 /api/hermes/run 并返回 engine:"hermes"', async () => {
+    const fetchMock = vi.fn(async (url, init) => {
+      expect(url).toBe('http://127.0.0.1:8888/api/hermes/run')
+      expect(JSON.parse(init.body).task).toBe('调研')
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ ok: true, engine: 'hermes', data: { answer: '结论' } }),
+      }
+    })
+    const result = await routeTask(
+      { task: '调研', params: { userMessage: '调研三款产品' } },
+      { localServerUrl: 'http://127.0.0.1:8888', fetchImpl: fetchMock, engine: 'hermes' },
+    )
+    expect(result.ok).toBe(true)
+    expect(result.engine).toBe('hermes')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('forceHermes 上下文同样走 hermes 端点', async () => {
+    const fetchMock = vi.fn(async (url) => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true }),
+    }))
+    const result = await routeTask(
+      { task: 'x', context: { forceHermes: true } },
+      { localServerUrl: 'http://127.0.0.1:8888', fetchImpl: fetchMock },
+    )
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/hermes/run')
+    expect(result.engine).toBe('hermes')
+  })
+
+  it('hermes 适配层返回 ok:false 时透传降级原因', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: false, fallbackReason: 'hermes_unavailable', message: '网关未启动' }),
+    }))
+    const result = await routeTask(
+      { task: 'x' },
+      { localServerUrl: 'http://127.0.0.1:8888', fetchImpl: fetchMock, engine: 'hermes' },
+    )
+    expect(result.ok).toBe(false)
+    expect(result.fallbackReason).toBe('hermes_unavailable')
+    expect(result.message).toContain('网关未启动')
+  })
+
+  it('hermes 调用超时 → hermes_timeout（jcode 端点为 /api/jcode/swarm 不受影响）', async () => {
+    const fetchMock = vi.fn(async (_url, init) => {
+      return await new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          const e = new Error('aborted')
+          e.name = 'AbortError'
+          reject(e)
+        })
+      })
+    })
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 10)
+    const result = await routeTask(
+      { task: 'x' },
+      {
+        localServerUrl: 'http://127.0.0.1:8888',
+        fetchImpl: fetchMock,
+        engine: 'hermes',
+        signal: controller.signal,
+      },
+    )
+    expect(result.ok).toBe(false)
+    expect(result.fallbackReason).toBe('hermes_timeout')
+  })
+
+  it('默认 jcode 路由仍走 /api/jcode/swarm（不回归）', async () => {
+    const fetchMock = vi.fn(async (url) => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true }),
+    }))
+    const result = await routeTask(
+      { task: 'paper', params: { userMessage: '写论文' } },
+      { localServerUrl: 'http://127.0.0.1:8888', fetchImpl: fetchMock },
+    )
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/jcode/swarm')
+    expect(result.engine).toBe('jcode')
   })
 })

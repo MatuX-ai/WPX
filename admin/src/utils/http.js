@@ -29,9 +29,9 @@ const APP_INFO =
     ? __APP_INFO__
     : {
         // 自托管认证入口：默认同源（走 /api/* → /api/proxy 反代）
+        // 业务 API：默认同源，路径已自带 /api/ 前缀，不要再加前缀（避免 /api/api/...）
         accountBaseUrl: '/',
-        // 业务 API：默认同源（走 /api/* → /api/proxy 反代）
-        apiBaseUrl: '/api'
+        apiBaseUrl: '/'
       }
 
 export const ACCOUNT_BASE_URL = APP_INFO.accountBaseUrl

@@ -82,17 +82,33 @@ export const useSkillsStore = defineStore('skills', () => {
   // ── State ──
   const builtInSkills = ref([...LOCAL_BUILT_IN_SKILLS])
   const onlineSkills = ref([])
+  /** SKILL.md 技能市场导入的技能（Phase 1 / M1，来源如 Hermes 官方库） */
+  const marketSkills = ref([])
   const userDisabledSkills = ref([])
   const hydrated = ref(false)
 
   // ── Getters ──
 
-  /** 合并内置 + 在线 Skills，按 ID 去重（内置优先） */
+  /** 合并内置 + 在线 + 市场 Skills，按 ID 去重（内置优先，其次在线，最后市场） */
   const allSkills = computed(() => {
     const builtIn = builtInSkills.value
     const online = onlineSkills.value
+    const market = marketSkills.value
     const seen = new Set(builtIn.map((s) => s.id))
-    return [...builtIn, ...online.filter((s) => !seen.has(s.id))]
+    const merged = [...builtIn]
+    for (const skill of online) {
+      if (!seen.has(skill.id)) {
+        seen.add(skill.id)
+        merged.push(skill)
+      }
+    }
+    for (const skill of market) {
+      if (!seen.has(skill.id)) {
+        seen.add(skill.id)
+        merged.push(skill)
+      }
+    }
+    return merged
   })
 
   /** 已启用的 Skills（减去 userDisabledSkills） */
@@ -219,6 +235,23 @@ export const useSkillsStore = defineStore('skills', () => {
     }
   }
 
+  // ── SKILL.md 技能市场（Phase 1 / M1） ──
+
+  /**
+   * 合并 SKILL.md 技能市场导入的技能到 allSkills（按 ID 去重，已有 ID 不覆盖）
+   * @param {import('@/data/built-in-skills').TeacherSkillDefinition[]} skills
+   * @returns {number} 实际新增数量
+   */
+  function mergeExternalSkills (skills) {
+    if (!Array.isArray(skills)) return 0
+    const existing = new Set(allSkills.value.map((s) => s.id))
+    const fresh = skills.filter((s) => s && s.id && !existing.has(s.id))
+    if (fresh.length > 0) {
+      marketSkills.value = [...marketSkills.value, ...fresh]
+    }
+    return fresh.length
+  }
+
   // ── 初始化 ──
 
   /** 应用启动时自动加载内置和在线 Skills */
@@ -231,6 +264,7 @@ export const useSkillsStore = defineStore('skills', () => {
     // State
     builtInSkills,
     onlineSkills,
+    marketSkills,
     userDisabledSkills,
     hydrated,
 
@@ -249,6 +283,7 @@ export const useSkillsStore = defineStore('skills', () => {
     applyEnabledMap,
     persistDisabledState,
     loadOnlineSkills,
+    mergeExternalSkills,
     init,
   }
 })

@@ -121,6 +121,7 @@ function scrollToShowcase(e) {
         >
           编辑器 + AI 助手 + 本地指令 + 演示文稿生成，多窗口一处搞定。
           论文、报告、随笔、研究资料、备课课件，从构思到定稿，一处完成。
+          支持 Excel / WPS 表格导入，资料库自定义路径管理。
         </p>
 
         <div
@@ -172,6 +173,20 @@ function scrollToShowcase(e) {
               class="h-1.5 w-1.5 rounded-full bg-primary-to"
             />
             完全免费
+          </li>
+          <li class="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              class="h-1.5 w-1.5 rounded-full bg-rose-400"
+            />
+            Excel 表格导入
+          </li>
+          <li class="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              class="h-1.5 w-1.5 rounded-full bg-sky-400"
+            />
+            资料库自定义路径
           </li>
         </ul>
       </div>

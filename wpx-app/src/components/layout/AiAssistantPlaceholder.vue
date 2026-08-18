@@ -1194,6 +1194,27 @@ function handleInsertSlideDeck(payload) {
   })
 }
 
+/**
+ * M3-C：Hermes 任务结果插入文档（复用选区替换链路）
+ * 有 pendingReplace 时替换选区；否则在光标处插入。
+ * @param {string} text
+ */
+function handleInsertText(text) {
+  if (typeof text !== 'string' || !text.trim()) return
+  const content = String(text).trim()
+  if (editorStore.pendingReplace) {
+    editorStore.requestReplace(content, editorStore.pendingReplace)
+    editorStore.clearPendingReplace()
+    return
+  }
+  const pos = editorStore.activeSelection.from ?? null
+  if (pos != null) {
+    editorStore.setPendingReplace({ from: pos, to: pos })
+    editorStore.requestReplace(content, { from: pos, to: pos })
+    editorStore.clearPendingReplace()
+  }
+}
+
 function handleClose() {
   aiChat.close()
   editorStore.setChatInputActive(false)
@@ -1359,6 +1380,7 @@ watch(
       @onboarding-complete="handleOnboardingComplete"
       @regenerate="retrySkillCall"
       @insert-slide-deck="handleInsertSlideDeck"
+      @insert-text="handleInsertText"
       @local-command-select="handleLocalCommandSelect"
       @batch-clean="handleBatchClean"
       @batch-clean-abort="abortBatchClean"
@@ -1387,6 +1409,7 @@ watch(
     @onboarding-complete="handleOnboardingComplete"
     @regenerate="retrySkillCall"
     @insert-slide-deck="handleInsertSlideDeck"
+    @insert-text="handleInsertText"
     @local-command-select="handleLocalCommandSelect"
     @batch-clean="handleBatchClean"
     @batch-clean-abort="abortBatchClean"

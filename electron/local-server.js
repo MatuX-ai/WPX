@@ -5,6 +5,8 @@ const { registerRemoveBgRoutes } = require('./services/remove-bg-routes')
 const { registerTokenRoutes } = require('./services/token-routes')
 const { registerCommercialFontRoutes } = require('./services/commercial-font-routes')
 const { registerJcodeRoutes } = require('./services/jcode-routes')
+const { registerHermesRoutes } = require('./services/hermes-routes')
+const hermesLauncher = require('./services/hermes-launcher')
 const { initTokenStore } = require('./services/token-store')
 const { initCommercialFontStore } = require('./services/commercial-font-store')
 
@@ -60,6 +62,11 @@ async function startLocalServer() {
   registerTokenRoutes(expressApp)
   registerCommercialFontRoutes(expressApp)
   registerJcodeRoutes(expressApp)
+  // M3：Hermes Gateway 适配层（网关不可用时透明降级，不影响其他服务）
+  // gatewayKey 动态取 launcher 当前生成的 API_SERVER_KEY
+  registerHermesRoutes(expressApp, {
+    gatewayKey: () => hermesLauncher.getStatus().apiKey || '',
+  })
 
   expressApp.use((_req, res) => {
     res.status(404).json({ error: '接口不存在' })

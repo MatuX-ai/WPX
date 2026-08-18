@@ -12,7 +12,10 @@ import {
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useModelSettingsStore } from '@/stores/modelSettings'
-import { isElectron } from '@/utils/electron'
+import { isElectron, getElectronAPI } from '@/utils/electron'
+import { buildChatEpisode, isEpisodeRecordingEnabled } from '@/utils/memoryEpisode'
+import { shouldAutoRouteHermes, buildHermesAssistantMessage } from '@/utils/hermesRouter'
+import { runHermesTask } from '@/composables/useHermesTask'
 import { routeTask, shouldUseJcode } from '@/server/ai-router'
 import {
   checkFreeQuota,
@@ -72,6 +75,8 @@ function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {
         })
         void callbacks.onPlatformTokensUsed(tokens)
       }
+      // M2.1：对话成功 → 记录情景记忆（桌面端，受 recordEpisodes 开关控制）
+      callbacks.onFinish?.(event)
     },
   })
 
@@ -198,10 +203,53 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     await recreateChat()
   }
 
+  // ── M2.1：对话成功 → 情景记忆（桌面端） ──
+  const lastUserText = ref('')
+
+  /** 学习设置缓存（30s），避免每条消息都拉一次 IPC */
+  let memorySettingsCache = null
+  let memorySettingsFetchedAt = 0
+
+  async function shouldRecordChatEpisode() {
+    if (!isElectron()) return false
+    const api = getElectronAPI()
+    if (!api?.memory?.getLearnSettings) return false
+
+    const now = Date.now()
+    if (memorySettingsCache && now - memorySettingsFetchedAt < 30_000) {
+      return isEpisodeRecordingEnabled(memorySettingsCache)
+    }
+    try {
+      const settings = await api.memory.getLearnSettings()
+      memorySettingsCache = settings || {}
+      memorySettingsFetchedAt = now
+      return isEpisodeRecordingEnabled(memorySettingsCache)
+    } catch (error) {
+      // 读取失败时默认记录，不让隐私配置影响主流程
+      console.warn('[useAiChat] 读取记忆设置失败:', error?.message || error)
+      return true
+    }
+  }
+
+  async function recordChatEpisode(event) {
+    const payload = buildChatEpisode(event, lastUserText.value)
+    if (!payload) return
+    if (!(await shouldRecordChatEpisode())) return
+    try {
+      await getElectronAPI()?.memory?.recordEpisode(payload)
+    } catch (error) {
+      // 记忆记录失败不影响对话
+      console.warn('[useAiChat] 记录情景记忆失败:', error?.message || error)
+    }
+  }
+
   function buildChatCallbacks(aiConfig) {
     return {
       onError: handleCustomModelError,
       onPlatformTokensUsed: aiConfig.source === 'platform' ? handlePlatformTokensUsed : undefined,
+      onFinish: (event) => {
+        void recordChatEpisode(event)
+      },
     }
   }
 
@@ -336,7 +384,61 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     })()
   }
 
+  // ── M3-C+：Hermes 自动路由 ──
+  /** Hermes 路由上下文缓存（30s） */
+  let hermesRoutingCache = null
+  let hermesRoutingFetchedAt = 0
+
+  async function loadHermesRoutingContext() {
+    if (!isElectron()) return null
+    const api = getElectronAPI()
+    if (!api?.hermes?.getSettings || !api.hermes?.getStatus) return null
+
+    const now = Date.now()
+    if (hermesRoutingCache && now - hermesRoutingFetchedAt < 30_000) {
+      return hermesRoutingCache
+    }
+    try {
+      const [settingsRes, status] = await Promise.all([
+        api.hermes.getSettings(),
+        api.hermes.getStatus(),
+      ])
+      hermesRoutingCache = {
+        enabled: settingsRes?.settings?.enabled === true,
+        autoRoute: settingsRes?.settings?.autoRoute === true,
+        gatewayReady: status?.state === 'RUNNING',
+      }
+    } catch {
+      hermesRoutingCache = { enabled: false, autoRoute: false, gatewayReady: false }
+    }
+    hermesRoutingFetchedAt = now
+    return hermesRoutingCache
+  }
+
+  /**
+   * Hermes 自动路由：命中则执行并把结果作为助手消息追加进对话。
+   * 任何失败都返回 null（调用方继续走云端，透明降级）。
+   * @param {string} text 用户原始消息
+   * @returns {Promise<object | null>} 追加的消息；未命中/失败返回 null
+   */
+  async function tryHermesAutoRoute(text) {
+    const ctx = await loadHermesRoutingContext()
+    if (!ctx || !shouldAutoRouteHermes(text, ctx)) return null
+
+    const result = await runHermesTask(text)
+    if (!result.ok || !result.result) {
+      console.warn('[useAiChat] Hermes 自动路由未产生结果，回退云端:', result.error)
+      return null
+    }
+    const message = buildHermesAssistantMessage(text, result.result)
+    chat.messages = [...chat.messages, message]
+    syncTick.value += 1
+    return message
+  }
+
   async function sendMessage({ text, context }) {
+    // M2.1：记录本次用户输入，供对话成功后的情景记忆使用（原始文本，不含上下文注入）
+    lastUserText.value = text || ''
     const aiConfig = await resolveAiConfig()
 
     if (aiConfig.source === 'custom') {
@@ -435,6 +537,12 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
         }
         // Skill 被禁用 —— 静默回退为普通对话
       }
+    }
+
+    // ── Step 2: Hermes 自动路由（M3-C+；命中即执行并追加结果，失败静默回退云端） ──
+    const hermesMessage = await tryHermesAutoRoute(text)
+    if (hermesMessage) {
+      return { ok: true, engine: 'hermes' }
     }
 
     const payload = buildContextPrompt(text, context)

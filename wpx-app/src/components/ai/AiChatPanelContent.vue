@@ -17,6 +17,8 @@ import {
   downloadSlidesAsPptx,
   downloadSlidesAsPdf,
 } from '@/utils/slideExport'
+import { useHermesTask } from '@/composables/useHermesTask'
+import HermesTaskCard from '@/components/ai/HermesTaskCard.vue'
 
 // 思考过程展开状态：key 是消息 id，value 是是否展开。默认收起，避免长思考占据主屏。
 const reasoningOpenMap = ref({})
@@ -83,6 +85,7 @@ const emit = defineEmits([
   'onboarding-complete',
   'regenerate',
   'insert-slide-deck',
+  'insert-text',
   'local-command-select',
   'local-command-dismiss',
   'batch-clean',
@@ -155,6 +158,27 @@ const typeLabels = {
 const inputValue = ref('')
 const messageListRef = ref(null)
 const textareaRef = ref(null)
+
+/* ── M3-C：Hermes 任务型执行 ── */
+const hermesTask = useHermesTask()
+const hermesTaskVisible = ref(false)
+
+function handleHermesRun() {
+  const text = inputValue.value.trim()
+  if (!text || hermesTask.isRunning.value) return
+  hermesTaskVisible.value = true
+  void hermesTask.run(text).then(() => {
+    // 启动成功即清空输入（结果在卡片中展示）
+    if (inputValue.value.trim() === text) {
+      inputValue.value = ''
+    }
+  })
+}
+
+function handleHermesDismiss() {
+  hermesTask.reset()
+  hermesTaskVisible.value = false
+}
 
 /* ── 本地指令示例轮转 ── */
 const placeholderIndex = ref(0)
@@ -1195,6 +1219,28 @@ watch(
       </div>
 
       <div class="ai-chat-panel__input-wrap">
+        <HermesTaskCard
+          v-if="hermesTaskVisible"
+          :task="hermesTask.task"
+          :status="hermesTask.status"
+          :steps="hermesTask.steps"
+          :result="hermesTask.result"
+          :error="hermesTask.error"
+          class="ai-chat-panel__hermes-task"
+          @insert="(text) => emit('insert-text', text)"
+          @dismiss="handleHermesDismiss"
+        />
+
+        <button
+          v-if="!hermesTaskVisible && inputValue.trim()"
+          type="button"
+          class="ai-chat-panel__hermes-trigger"
+          :disabled="hermesTask.isRunning"
+          @click="handleHermesRun"
+        >
+          ⚡ 用 Hermes 执行
+        </button>
+
         <div
           v-if="referencedItems.length"
           class="ai-chat-panel__refs"
@@ -1743,6 +1789,33 @@ watch(
 /* ── Input area ── */
 .ai-chat-panel__input-wrap {
   position: relative;
+}
+
+/* ── M3-C：Hermes 任务卡片与触发按钮 ── */
+.ai-chat-panel__hermes-task {
+  margin-bottom: 10px;
+}
+
+.ai-chat-panel__hermes-trigger {
+  width: 100%;
+  margin-bottom: 8px;
+  border: 1px dashed var(--theme-accent);
+  border-radius: var(--theme-radius-sm, 8px);
+  background: var(--theme-accent-muted, rgba(59, 130, 246, 0.08));
+  color: var(--theme-accent);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.ai-chat-panel__hermes-trigger:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.ai-chat-panel__hermes-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ai-chat-panel__refs {

@@ -49,6 +49,7 @@ WPX 不是一个单纯的 Markdown 编辑器，而是一个「**AI 原生文档�
 - **PDF / DOCX / Markdown 互转**：基于 Pandoc 的本地导出引擎，开箱即用。
 - **7za 内置压缩 / 解压**：开箱即用 7z / zip / tar / gzip，跨平台一致体验。
 - **jcode 高性能 AI 引擎**（可选外挂）：复杂任务本地推理，因需唤醒、空闲休眠、自动降级。
+- **Hermes Agent 本地引擎**（可选外挂）：基于 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)（Apache-2.0）的官方 OpenAI 兼容 API Server，支持 SKILL.md 技能标准、四层记忆、开放式自主任务；对话中「用 Hermes 执行」或自动路由，失败透明回退云端（[设计文档](docs/Hermes%20Agent%20技术集成设计文档.md) · [Gateway 预研报告](docs/Hermes%20Agent%20Gateway%20预研报告.md)）。
 - **8 款免费开源字体内置**：思源黑体 / 思源宋体 / 霞鹜文楷 / 阿里巴巴普惠体 / HarmonyOS Sans / JetBrains Mono / Noto Color Emoji 等，永久免费可商用。
 - **资料库 RAG**：上传 PDF / Word / 网页链接，写作时 @ 引用作为上下文。
 - **记忆与智能模板**：学习用户习惯，自动生成专属模板（如「标准周报」「期末评语」）。
@@ -96,10 +97,13 @@ WPX 不把所有操作都丢给大模型，而是**先本地、后云端**：
 │  - 自由对话、Skills 调用、复杂创作              │
 │  - 简单任务 → 用户配置的云端 API（DeepSeek 等） │
 │  - 复杂任务 → 可选 jcode 本地引擎（PPT/教案等）│
+│  - 开放任务 → 可选 Hermes Agent 本地网关        │
+│    （SKILL.md 技能 / 四层记忆 / 自主多步推理）   │
+│  - 任一本地引擎不可用 → 透明回退云端            │
 └───────────────────────────────────────────────┘
 ```
 
-这套架构的理论基础：确定性操作**不需要**语言模型推理能力，用正则匹配 + 上下文判断既快又省；只有真正需要"理解 + 推理"的指令才进 LLM。
+这套架构的理论基础：确定性操作**不需要**语言模型推理能力，用正则匹配 + 上下文判断既快又省；只有真正需要"理解 + 推理"的指令才进 LLM；而开放式自主任务（多步调研、跨工具编排）可交给 Hermes 本地网关，失败永远有云端兜底。
 
 ### 4. 多窗口独立 + 全局共享
 
@@ -135,6 +139,7 @@ V1.1 起，WPX 调整业务模式：
 | **7za 压缩 / 解压** | 7z / zip / tar / gzip / bzip2 / xz / wim | ✅ | [压缩解压](docs/WPX%20文件压缩解压缩功能需求文档.md) |
 | **字体库** | 8 内置 + 9 在线免费字体 + 本地导入 | ✅ | [字体库](docs/WPX%20字体库需求文档.md) |
 | **jcode 可选 AI 引擎** | 因需唤醒 / 空闲休眠 / 自动降级 | ✅ | [jcode 集成](docs/WPX%20集成%20jcode%20高性能%20AI%20引擎需求文档.md) |
+| **Hermes Agent 本地引擎** | SKILL.md 技能标准 / 四层记忆 / 开放式自主任务 / 自动路由 + 透明回退 | ✅ | [集成设计](docs/Hermes%20Agent%20技术集成设计文档.md) · [Gateway 预研](docs/Hermes%20Agent%20Gateway%20预研报告.md) |
 | **用户中心 / 设置** | 模型配置 / 偏好 / Skills / 主题 | ✅ | [用户中心](docs/WPX%20用户中心（设置）需求文档.md) |
 | **教师专用 Skills（16）** | 教案 / 出题 / 批改 / 评语 / 家长会 | ✅ | [教师 Skills](docs/WPX%20内置教师专用%20Skills%20需求文档.md) |
 | **大学生专用 Skills（16）** | 论文大纲 / 错题 / 复习卡片 / 演讲稿 | ✅ | [大学生 Skills](docs/WPX%20内置大学生专用%20Skills%20需求文档.md) |
@@ -253,7 +258,7 @@ npm --prefix server run dev
                               │  │  - WindowManager (多窗口池)  │   │
                               │  │  - user-data / preferences   │   │
                               │  │  - knowledge / memory        │   │
-                              │  │  - model / jcode IPC         │   │
+                              │  │  - model / jcode / hermes IPC │   │
                               │  │  - zip / font / export IPC   │   │
                               │  │  - 7za 内置二进制            │   │
                               │  └────────────┬────────────────┘   │
@@ -263,6 +268,7 @@ npm --prefix server run dev
                               │  │  - export-service (Pandoc)   │   │
                               │  │  - copilotkit-runtime        │   │
                               │  │  - ai-proxy-service          │   │
+                              │  │  - /api/hermes 适配层        │   │
                               │  │  - remove-bg / knowledge    │   │
                               │  └─────────────────────────────┘   │
                               └──────────┬───────────────────────┘
@@ -270,10 +276,10 @@ npm --prefix server run dev
                 ┌────────────────────────┼────────────────────────┐
                 │                        │                        │
         ┌───────▼────────┐      ┌────────▼────────┐      ┌───────▼────────┐
-        │  用户配置的 LLM │      │   jcode (可选)   │      │  prowpx.com    │
-        │ (DeepSeek/GLM/ │      │  本地高性能引擎  │      │  自托管账户    │
-        │  Qwen/Claude/  │      │  (Rust + Swarm) │      │  + 认证 + 同步 │
-        │  Ollama/...)   │      │  因需唤醒/休眠   │      │                │
+        │  用户配置的 LLM │      │   jcode (可选)   │      │  Hermes (可选)  │
+        │ (DeepSeek/GLM/ │      │  本地高性能引擎  │      │  Python 网关     │
+        │  Qwen/Claude/  │      │  (Rust + Swarm) │      │  (hermes-agent,  │
+        │  Ollama/...)   │      │  因需唤醒/休眠   │      │  :8642 API 服务) │
         └────────────────┘      └─────────────────┘      └────────────────┘
 
         ┌──────────────────────────────────────────────────────────────┐
@@ -495,6 +501,7 @@ WPX/
 | **AI SDK** | Vercel AI SDK (`@ai-sdk/vue` + `@ai-sdk/openai-compatible`) | 流式对话 |
 | **AI 引擎** | CopilotKit Runtime 1.61.1 (multi-route) | Agent / A2UI / Skills 调度 |
 | **可选 AI** | jcode (Rust, 本地 Swarm 多智能体) | 复杂任务本地推理 |
+| **可选 AI** | Hermes Agent 0.19 (Python, 官方 OpenAI 兼容 API Server, Apache-2.0) | SKILL.md 技能 / 四层记忆 / 开放式自主任务（:8642，需 Python ≥3.11） |
 | **样式** | Tailwind CSS 4 + CSS 变量 + shadcn-style 组件 | UI |
 | **UI 图标** | Lucide Vue | 图标库 |
 | **图表** | ECharts 5 | PPT 图表 / 后台统计 |
@@ -610,6 +617,26 @@ WPX/
 | LM Studio | `http://localhost:1234/v1` | 任意本地模型 |
 
 > 完整接入教程：[`docs/WPX AI 助手帮助文档（国产大模型接入教程）.md`](docs/WPX%20AI%20助手帮助文档（国产大模型接入教程）.md)
+
+### Hermes Agent 本地引擎（可选外挂）
+
+> 基于 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)（Apache-2.0，PyPI `hermes-agent`，实测 0.19.0）的官方 OpenAI 兼容 API Server。**不进默认安装包**：仅当用户机器有 Python ≥3.11 且显式启用时作为本地可选引擎，失败透明回退云端。详细设计见 [《Hermes Agent 技术集成设计文档》](docs/Hermes%20Agent%20技术集成设计文档.md) 与 [《Gateway 预研报告》](docs/Hermes%20Agent%20Gateway%20预研报告.md)。
+
+| 能力 | 说明 |
+|:---|:---|
+| **SKILL.md 技能标准** | WPX 内置/外部技能可双向导出/导入 SKILL.md，一键订阅 Hermes 官方技能库（技能市场） |
+| **四层记忆 + 学习循环** | 对话情景（episodes）/ 偏好事实（facts）/ 格式模板，学习只分析结构不读正文 |
+| **开放式自主任务** | 对话输入「用 Hermes …」一键执行，或开启自动路由（复杂任务自动走本地网关） |
+| **流式任务卡片** | 任务型消息卡片实时展示步骤/渐进结果，可复制 / 插入文档 |
+
+**启用步骤（桌面端）**：
+
+1. 安装依赖：`pip install hermes-agent`（需 Python ≥3.11）。
+2. 「设置 → Hermes Agent」→ 开启「启用 Hermes Agent」→「注入模型 Key」（复用「我的模型」的 Key，写入本地 `HERMES_HOME/.env`）→「启动网关」。
+3. 在对话窗输入任务，点「⚡ 用 Hermes 执行」；或开启「自动路由复杂任务」让复杂任务自动走本地网关（失败自动回退云端）。
+4. 也可在「我的模型」把 `http://127.0.0.1:8642` 作为普通 OpenAI 兼容端点直连（方式 A）。
+
+> 首次启动需联网安装 Python 包；网关数据（`HERMES_HOME`）保存在 WPX `userData` 目录，不随账户上传。
 
 ---
 

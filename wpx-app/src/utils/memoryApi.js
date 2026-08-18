@@ -53,6 +53,74 @@ export async function clearMemoryData() {
   return { success: true }
 }
 
+// ── M2 / M2.1：四层记忆 IPC 封装 ─────────────────
+
+/**
+ * 记录一条情景记忆（仅桌面端生效）
+ * @param {{ task: string, summary?: string, outcome?: 'success'|'failure', feedback?: 'positive'|'negative'|null, documentType?: string, format?: object }} payload
+ */
+export async function recordEpisode(payload) {
+  const api = getMemoryApi()
+  if (!api?.recordEpisode) return null
+  return api.recordEpisode(payload)
+}
+
+/** @returns {Promise<Array<object>>} */
+export async function listEpisodes(options = {}) {
+  const api = getMemoryApi()
+  if (!api?.listEpisodes) return []
+  return api.listEpisodes(options)
+}
+
+/** @returns {Promise<{ success: boolean, key: string } | null>} */
+export async function setFact(payload) {
+  const api = getMemoryApi()
+  if (!api?.setFact) return null
+  return api.setFact(payload)
+}
+
+/** @returns {Promise<object | null>} */
+export async function getFact(key) {
+  const api = getMemoryApi()
+  if (!api?.getFact) return null
+  return api.getFact(key)
+}
+
+/** @returns {Promise<Array<object>>} */
+export async function listFacts() {
+  const api = getMemoryApi()
+  if (!api?.listFacts) return []
+  return api.listFacts()
+}
+
+/** @returns {Promise<object | null>} 学习循环结果 */
+export async function runLearning(options = {}) {
+  const api = getMemoryApi()
+  if (!api?.runLearning) return null
+  return api.runLearning(options)
+}
+
+/** @returns {Promise<object | null>} 学习设置（含 recordEpisodes / enabled 等） */
+export async function getLearnSettings() {
+  const api = getMemoryApi()
+  if (!api?.getLearnSettings) return null
+  return api.getLearnSettings()
+}
+
+/** @returns {Promise<object | null>} */
+export async function setLearnSettings(partial) {
+  const api = getMemoryApi()
+  if (!api?.setLearnSettings) return null
+  return api.setLearnSettings(partial)
+}
+
+/** @returns {Promise<object | null>} 记忆状态（episodeCount / factCount / eligible 等） */
+export async function getLearnStatus() {
+  const api = getMemoryApi()
+  if (!api?.getLearnStatus) return null
+  return api.getLearnStatus()
+}
+
 /**
  * @param {(payload?: { templates?: SmartTemplate[] }) => void} callback
  */

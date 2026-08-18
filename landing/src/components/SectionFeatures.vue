@@ -76,6 +76,30 @@ const features = [
     color: 'from-accent-yellow/20 to-accent-mint/20',
     newFlag: false,
     docAnchor: '#built-in-skills'
+  },
+  {
+    icon: '📊',
+    title: 'Excel / WPS 表格导入',
+    desc: '支持 .xls / .xlsx / Numbers 文档一键解析为可编辑表格块，数据整理从未如此高效。',
+    color: 'from-sky-400/20 to-primary-from/20',
+    newFlag: true,
+    docAnchor: '#excel'
+  },
+  {
+    icon: '📁',
+    title: '资料库自定义路径',
+    desc: '资料库保存路径可自由配置，桌面端支持文件夹选择器，打造属于你自己的知识管理体系。',
+    color: 'from-emerald-400/20 to-accent-mint/20',
+    newFlag: true,
+    docAnchor: '#library'
+  },
+  {
+    icon: '🪟',
+    title: '多窗口独立管理',
+    desc: '新建窗口、关闭窗口，快速打开多个独立编辑器，窗口列表菜单让窗口管理一目了然。',
+    color: 'from-violet-400/20 to-primary-to/20',
+    newFlag: true,
+    docAnchor: '#multi-window'
   }
 ]
 </script>
@@ -96,7 +120,7 @@ const features = [
           <span class="wpx-gradient-text">为写作者而生的工具集</span>
         </h2>
         <p class="mt-4 text-dark/60">
-          不止是编辑器，更是你的写作工作台。9 大核心能力，把构思到定稿的所有环节一次打包。
+          不止是编辑器，更是你的写作工作台。12 大核心能力，把构思到定稿的所有环节一次打包。
         </p>
       </div>
 

@@ -7,7 +7,7 @@
  */
 import { ref, computed } from 'vue'
 
-// ---------------- 技能卡片（展示 6 款，循环渲染更多） ----------------
+// ---------------- 技能卡片（展示 8 款，循环渲染更多） ----------------
 const skills = [
   {
     icon: '📚',
@@ -50,6 +50,20 @@ const skills = [
     desc: '距考试 N 天？自动排定每日复习节奏与重点突破清单。',
     tag: '学生',
     color: 'from-accent-mint/20 to-primary-to/20'
+  },
+  {
+    icon: '📊',
+    name: '数据洞察',
+    desc: '对选中的表格数据进行分析和总结，生成可视化洞察报告。',
+    tag: '通用',
+    color: 'from-sky-300/20 to-primary-from/20'
+  },
+  {
+    icon: '🖼️',
+    name: '图片去背景',
+    desc: '本地 rembg 离线推理，隐私无忧，一键移除背景。',
+    tag: '通用',
+    color: 'from-violet-300/20 to-accent-mint/20'
   }
 ]
 
@@ -311,7 +325,7 @@ function resetLab() {
           <!-- 底部按钮 -->
           <div class="relative mt-4 flex items-center justify-between text-xs">
             <span class="text-dark/40">
-              #{{ String(idx + 1).padStart(2, '0') }} / 32
+              #{{ String(idx + 1).padStart(2, '0') }} / 32+
             </span>
             <span
               class="font-semibold text-primary-600 transition-transform group-hover:translate-x-1"

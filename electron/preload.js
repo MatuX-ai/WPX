@@ -112,6 +112,16 @@ const electronAPI = {
     regenerateTemplates: () => ipcRenderer.invoke('memory:templates:regenerate'),
     clear: () => ipcRenderer.invoke('memory:clear'),
     onTemplatesUpdated: (callback) => onChannel('data:templates:updated', callback),
+    // ── M2 四层记忆（Phase 2） ──
+    recordEpisode: (payload) => ipcRenderer.invoke('memory:episode:record', payload),
+    listEpisodes: (options) => ipcRenderer.invoke('memory:episode:list', options),
+    setFact: (payload) => ipcRenderer.invoke('memory:fact:set', payload),
+    getFact: (key) => ipcRenderer.invoke('memory:fact:get', key),
+    listFacts: () => ipcRenderer.invoke('memory:fact:list'),
+    runLearning: (options) => ipcRenderer.invoke('memory:learn:run', options),
+    getLearnSettings: () => ipcRenderer.invoke('memory:learn:settings'),
+    setLearnSettings: (partial) => ipcRenderer.invoke('memory:learn:settings', partial),
+    getLearnStatus: () => ipcRenderer.invoke('memory:learn:status'),
   },
   about: {
     getAppInfo: () => ipcRenderer.invoke('about:get-app-info'),
@@ -185,6 +195,26 @@ const electronAPI = {
       if (typeof callback !== 'function') return
       ipcRenderer.removeListener('jcode:settings-changed', callback)
     },
+  },
+  skillhub: {
+    // SKILL.md 技能市场（Phase 1 / M1.5）：导出到磁盘 / 打开对话框导入本地文件
+    exportSkillFiles: (payload) => ipcRenderer.invoke('skillhub:export', payload),
+    importSkillFile: () => ipcRenderer.invoke('skillhub:import-file'),
+  },
+  hermes: {
+    // Hermes Agent 本地网关（Phase 3 / M3）
+    detect: () => ipcRenderer.invoke('hermes:detect'),
+    getStatus: () => ipcRenderer.invoke('hermes:get-status'),
+    start: () => ipcRenderer.invoke('hermes:start'),
+    stop: () => ipcRenderer.invoke('hermes:stop'),
+    getSettings: () => ipcRenderer.invoke('hermes:get-settings'),
+    setSettings: (partial) => ipcRenderer.invoke('hermes:set-settings', partial),
+    callRun: (payload) => ipcRenderer.invoke('hermes:call-run', payload),
+    // M3-C：写入 HERMES_HOME/.env（OPENAI_API_KEY / OPENAI_BASE_URL）
+    prepareEnv: (payload) => ipcRenderer.invoke('hermes:prepare-env', payload),
+    markInstallHintShown: () => ipcRenderer.invoke('hermes:mark-install-hint-shown'),
+    onStatusChanged: (callback) => onChannel('hermes:status-changed', callback),
+    onSettingsChanged: (callback) => onChannel('hermes:settings-changed', callback),
   },
   shell: {
     // 用于在桌面端用系统默认浏览器打开外部链接

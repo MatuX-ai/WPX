@@ -90,17 +90,71 @@ function optionalAuth(req, res, next) {
 }
 
 /**
- * 角色守卫工厂
- * @param  {...string} allowed 允许的角色列表
+ * 角色等级表（设计动机 2026-07-01）：
+ * - 此前 requireRole 对传参角色逐字面比较，导致拥有 super_admin 的超级管理员
+ *   被 admin 等路由拒绝（403）。补救代码上需要 requireRole('admin', 'super_admin')
+ *   同写两边，容易漏。
+ * - 现在 requireRole 走"角色等级阈限"语义：传入角色的 ROLE_LEVEL 作为最低门槛，
+ *   只要求调用者拥有任一 LEVEL ≥ 门槛的角色即放行。
+ *   requireRole('admin') => 门槛=100，accept super_admin/admin/拒绝 operation_admin
+ *   requireRole('operation_admin') => 门槛=50，accept 超集＋自身
+ * 角色等级有序关系：
+ *   super_admin (100)   ← 最高
+ *   admin (100)
+ *   operation_admin (50)
+ *   content_editor (10) ← 最低
+ *   其他/未知字符串             → LEVEL=0（默认拒绝进入任何 requireRole）
+ */
+const ROLE_LEVEL = Object.freeze({
+  super_admin: 100,
+  admin: 100,
+  operation_admin: 50,
+  content_editor: 10
+})
+
+function levelOf(role) {
+  if (typeof role !== 'string') return 0
+  const lv = ROLE_LEVEL[role]
+  return typeof lv === 'number' ? lv : 0
+}
+
+/**
+ * 角色守卫工厂（等级继承版）
+ *
+ * 调用方传参形式：
+ *   requireRole('admin')                    -> 等级 ≥ admin(100) 放过
+ *   requireRole('operation_admin')          -> 等级 ≥ operation_admin(50) 放过
+ *   requireRole('admin', 'super_admin')     -> 以两者中最低等级作为门槛
+ *
+ * 未知角色视为 LEVEL 0。作为警告，会在服务端 logger 记录一次未知角色。
+ *
+ * 向后兼容：传 'admin' 仍然能进去（super_admin 等超集也能进入）。
  */
 function requireRole(...allowed) {
-  const set = new Set(allowed);
+  if (!allowed || allowed.length === 0) {
+    // 兑底：传空等价于仅 requireAuth
+    return function (req, res, next) {
+      if (!req.user) return next(new UnauthorizedError('未认证'))
+      return next()
+    }
+  }
+  const levels = allowed.map(levelOf)
+  const minLevel = Math.min(...levels)
+  const unknownRoles = allowed.filter(
+    (r) => !Object.prototype.hasOwnProperty.call(ROLE_LEVEL, r)
+  )
+  if (unknownRoles.length) {
+    try {
+      logger.warn('requireRole 收到未知角色字符串，已按等级0处理', { allowed, unknownRoles })
+    } catch (_) { /* noop */ }
+  }
   return function (req, res, next) {
-    if (!req.user) return next(new UnauthorizedError('未认证'));
-    const hit = (req.user.roles || []).some((r) => set.has(r));
-    if (!hit) return next(new ForbiddenError('无权限访问该资源'));
-    return next();
-  };
+    if (!req.user) return next(new UnauthorizedError('未认证'))
+    const userRoles = Array.isArray(req.user.roles) ? req.user.roles : []
+    const userLevelMax = Math.max(0, ...userRoles.map(levelOf))
+    if (userLevelMax >= minLevel) return next()
+    return next(new ForbiddenError('无权限访问该资源'))
+  }
 }
 
 module.exports = {

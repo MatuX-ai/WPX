@@ -75,6 +75,8 @@ const { getAppInfo, checkForUpdates } = require('./about-update')
 const { initZipService, isArchiveFile } = require('./zip-ipc')
 const { registerFontIpcHandlers } = require('./font-ipc')
 const { initJcodeIpc, shutdownJcodeIpc } = require('./jcode-ipc')
+const { registerSkillhubIpcHandlers } = require('./skillhub-ipc')
+const { initHermesIpc } = require('./hermes-ipc')
 
 const devConfig = loadDevConfig({ isPackaged: app.isPackaged })
 initDevLogger(devConfig)
@@ -1154,6 +1156,7 @@ app.whenReady().then(async () => {
 
   registerIpcHandlers()
   registerFontIpcHandlers()
+  registerSkillhubIpcHandlers({ ipcMain, dialog })
   initZipService()
   await initUserDataService()
   await initModelIpc()
@@ -1163,6 +1166,7 @@ app.whenReady().then(async () => {
   await initKnowledgeService()
   await initMemoryService()
   await initJcodeIpc()
+  await initHermesIpc()
 
   const initialWindows = devConfig.enabled ? devConfig.initialWindows : 1
   for (let index = 0; index < initialWindows; index += 1) {

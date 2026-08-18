@@ -151,6 +151,12 @@ const router = createRouter({
               meta: { title: 'AI 引擎' },
             },
             {
+              path: 'hermes',
+              name: 'settings-hermes',
+              component: () => import('@/views/settings/HermesSettings.vue'),
+              meta: { title: 'Hermes Agent' },
+            },
+            {
               path: 'fonts',
               name: 'settings-fonts',
               component: () => import('@/views/settings/FontsSettings.vue'),

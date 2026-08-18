@@ -73,10 +73,11 @@ export default defineConfig(({ mode }) => {
       __APP_INFO__: JSON.stringify({
         title: env.VITE_APP_TITLE || 'WPX 管理后台',
         shortName: env.VITE_APP_SHORT_NAME || 'WPX Admin',
-        // 自托管邮箱认证入口：默认同源（避免 apex→www 308 preflight 阻断）
+        // 自托管认证入口：默认同源（避免 apex→www 308 preflight 阻断）
         accountBaseUrl: env.VITE_ACCOUNT_BASE_URL || '/',
-        // 后端 API：默认同源（走 /api/* → /api/proxy 反代）
-        apiBaseUrl: env.VITE_API_BASE_URL || '/api',
+        // 后端 API：默认同源。所有 httpApi.get/post 的 url 参数已自带 /api/ 前缀，
+        // baseURL 用 '/' 而非 '/api'，避免 /api/api/... 双前缀 404。
+        apiBaseUrl: env.VITE_API_BASE_URL || '/',
         themeColor: env.VITE_THEME_COLOR || '#4F46E5'
       })
     }

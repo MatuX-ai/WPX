@@ -13,7 +13,7 @@ export const siteConfig = {
   shortName: 'WPX',
   title: 'WPX - 免费多窗口 AI 文档编辑器 | 演示文稿/本地指令/v0.1.18',
   description:
-    '多窗口独立 AI 文档编辑器：Markdown、PDF、DOCX 互转，内置 32+ Skills 与 64 条本地指令、教师课件 PPT 一键生成、PDF 离线 OCR、HTML 源码分屏编辑，完全免费、开源本地优先。',
+    '多窗口独立 AI 文档编辑器：Markdown、PDF、DOCX、Excel 互转，内置 32+ Skills 与 64 条本地指令、教师课件 PPT 一键生成、PDF 离线 OCR、HTML 源码分屏编辑、图片去背景，完全免费、开源本地优先。',
   keywords: [
     'WPX',
     'AI文档编辑器',
@@ -25,7 +25,7 @@ export const siteConfig = {
     'WPS替代',
     '开源',
     'Electron',
-    // ===== v0.1.16 新增关键词 (V1.1 完全免费模式) =====
+    // ===== v0.1.16+ 新增关键词 (V1.1 完全免费模式) =====
     '多窗口编辑器',
     '多窗口独立编辑器',
     '演示文稿生成器',
@@ -41,7 +41,18 @@ export const siteConfig = {
     '智谱GLM文档',
     'jcode高性能',
     '虚拟纸张',
-    'Markdown转PDF'
+    'Markdown转PDF',
+    // ===== v0.1.16 新增 =====
+    'Excel导入',
+    'WPS表格导入',
+    'xls转表格',
+    'xlsx转表格',
+    // ===== v0.1.17/18 新增 =====
+    '资料库管理',
+    '自定义保存路径',
+    '窗口独立管理',
+    '新建窗口',
+    '关闭窗口'
   ],
   author: 'WPX Team',
   // 默认站点 URL：构建时会被 env.VITE_SITE_URL 覆盖

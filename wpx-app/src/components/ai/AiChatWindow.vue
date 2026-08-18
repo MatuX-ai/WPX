@@ -75,6 +75,7 @@ const emit = defineEmits([
   'onboarding-complete',
   'regenerate',
   'insert-slide-deck',
+  'insert-text',
   'local-command-select',
   'local-command-dismiss',
   'batch-clean',
@@ -322,6 +323,7 @@ function handleHostMouseDown(event) {
               @onboarding-complete="emit('onboarding-complete')"
               @regenerate="(payload) => emit('regenerate', payload)"
               @insert-slide-deck="(payload) => emit('insert-slide-deck', payload)"
+              @insert-text="(text) => emit('insert-text', text)"
               @local-command-select="(payload) => emit('local-command-select', payload)"
               @local-command-dismiss="(payload) => emit('local-command-dismiss', payload)"
               @batch-clean="emit('batch-clean')"
@@ -361,6 +363,7 @@ function handleHostMouseDown(event) {
           @onboarding-complete="emit('onboarding-complete')"
           @regenerate="(payload) => emit('regenerate', payload)"
           @insert-slide-deck="(payload) => emit('insert-slide-deck', payload)"
+          @insert-text="(text) => emit('insert-text', text)"
           @local-command-select="(payload) => emit('local-command-select', payload)"
           @local-command-dismiss="(payload) => emit('local-command-dismiss', payload)"
           @batch-clean="emit('batch-clean')"

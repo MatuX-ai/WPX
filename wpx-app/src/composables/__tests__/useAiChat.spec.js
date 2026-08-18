@@ -57,17 +57,20 @@ vi.mock('@/utils/freeQuota', () => ({
 // ── jcode 路由检查相关 mock（默认桌面端 + 复杂任务） ──
 const mockRouteTask = vi.fn()
 const mockShouldUseJcode = vi.fn()
+const mockShouldUseHermes = vi.fn(() => false)
 
 vi.mock('@/server/ai-router', () => ({
   routeTask: (...args) => mockRouteTask(...args),
   shouldUseJcode: (...args) => mockShouldUseJcode(...args),
+  shouldUseHermes: (...args) => mockShouldUseHermes(...args),
 }))
 
 const mockIsElectron = vi.fn(() => true)
+const mockGetElectronAPI = vi.fn(() => null)
 
 vi.mock('@/utils/electron', () => ({
   isElectron: () => mockIsElectron(),
-  getElectronAPI: () => null,
+  getElectronAPI: () => mockGetElectronAPI(),
   hasTraySupport: () => false,
 }))
 
@@ -390,5 +393,113 @@ describe('useAiChat — reasoning 提取', () => {
     expect(hasMessageReasoning({ parts: [{ type: 'text', text: 'hi' }] })).toBe(false)
     expect(hasMessageReasoning({ parts: [{ type: 'reasoning', text: '' }] })).toBe(false)
     expect(hasMessageReasoning({ parts: [{ type: 'reasoning', text: '我先想' }] })).toBe(true)
+  })
+})
+
+// ═════════════════════════════════════════════════
+// Hermes 自动路由（M3-C+）
+// ═════════════════════════════════════════════════
+describe('useAiChat — Hermes 自动路由', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    localStorage.clear()
+    mockCheckFreeQuota.mockResolvedValue({ ok: true, remaining: 99_999_980, unit: 'token' })
+    mockConsumeFreeQuotaTokens.mockResolvedValue({ ok: true, consumed: 20 })
+    mockShouldUseHermes.mockReturnValue(false)
+    // mockChatInstance 是模块级共享实例 → 每测重置消息数组，避免跨测泄漏
+    mockChatInstance.messages = []
+
+    const { useModelSettingsStore } = await import('@/stores/modelSettings')
+    const store = useModelSettingsStore()
+    // 用 custom + 显式 apiKey，避开 fresh pinia 下 isGuest=true 的 guest 分支
+    store.data.text.source = 'custom'
+    store.data.text.custom.endpoint = 'http://127.0.0.1:3000/v1'
+    store.data.text.custom.modelName = 'hermes-agent'
+    store.data.text.custom.apiKey = 'sk-test-123'
+    // resolveTextApiKey 在 Web 测试环境走 IPC 会返回空 → 覆写为返回明文 Key
+    store.resolveTextApiKey = vi.fn(async () => 'sk-test-123')
+
+    mockGetElectronAPI.mockReturnValue({
+      hermes: {
+        getSettings: async () => ({ settings: { enabled: true, autoRoute: true } }),
+        getStatus: async () => ({ state: 'RUNNING' }),
+      },
+      localServer: { getBaseUrl: async () => 'http://127.0.0.1:3000' },
+    })
+  })
+
+  it('命中自动路由：执行 Hermes 并把结果追加为助手消息，不走云端', async () => {
+    mockShouldUseHermes.mockReturnValue(true)
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async (url) => {
+      expect(url).toBe('http://127.0.0.1:3000/api/hermes/run')
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, data: { choices: [{ message: { content: '调研结论文本' } }] } }),
+      }
+    })
+    try {
+      const { useAiChat } = await import('@/composables/useAiChat')
+      const chat = useAiChat('系统提示')
+      const result = await chat.sendMessage({ text: '用 Hermes 调研三款产品' })
+
+      expect(result.ok).toBe(true)
+      expect(result.engine).toBe('hermes')
+      expect(mockSendMessage).not.toHaveBeenCalled()
+      const appended = chat.messages.value.find((m) => m.hermesTask)
+      expect(appended).toBeTruthy()
+      expect(appended.task).toBe('用 Hermes 调研三款产品')
+      expect(appended.parts[0].text).toBe('调研结论文本')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('Hermes 执行失败时透明回退云端', async () => {
+    mockShouldUseHermes.mockReturnValue(true)
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, message: 'Hermes 网关暂不可用' }),
+    }))
+    try {
+      const { useAiChat } = await import('@/composables/useAiChat')
+      const chat = useAiChat('系统提示')
+      const result = await chat.sendMessage({ text: '用 Hermes 调研三款产品' })
+
+      expect(result.ok).toBe(true)
+      expect(result.engine).not.toBe('hermes')
+      expect(mockSendMessage).toHaveBeenCalledTimes(1)
+      expect(chat.messages.value.some((m) => m.hermesTask)).toBe(false)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('Hermes 未启用时不路由（走云端）', async () => {
+    mockGetElectronAPI.mockReturnValue({
+      hermes: {
+        getSettings: async () => ({ settings: { enabled: false, autoRoute: true } }),
+        getStatus: async () => ({ state: 'STOPPED' }),
+      },
+      localServer: { getBaseUrl: async () => 'http://127.0.0.1:3000' },
+    })
+    mockShouldUseHermes.mockReturnValue(true)
+    const { useAiChat } = await import('@/composables/useAiChat')
+    const chat = useAiChat('系统提示')
+    const result = await chat.sendMessage({ text: '用 Hermes 调研三款产品' })
+    expect(result.engine).not.toBe('hermes')
+    expect(mockSendMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('非 Hermes 任务（shouldUseHermes=false）不路由', async () => {
+    const { useAiChat } = await import('@/composables/useAiChat')
+    const chat = useAiChat('系统提示')
+    const result = await chat.sendMessage({ text: '帮我翻译这段话' })
+    expect(result.engine).not.toBe('hermes')
+    expect(mockSendMessage).toHaveBeenCalledTimes(1)
   })
 })

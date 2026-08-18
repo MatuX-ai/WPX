@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@/composables/useToast'
@@ -7,6 +7,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useUserHabitsStore } from '@/stores/userHabits'
 import { clearKnowledgeIndex } from '@/utils/knowledgeApi'
 import { clearMemoryData } from '@/utils/memoryApi'
+import {
+  getLearnSettings,
+  setLearnSettings,
+  getLearnStatus,
+  runLearning,
+} from '@/utils/memoryApi'
+import { isElectron } from '@/utils/electron'
 import { resetGuestDeviceId } from '@/utils/freeQuota'
 import { exportSettingsToFile, importSettingsFromFile } from '@/utils/settingsBackup'
 
@@ -16,6 +23,69 @@ const route = useRoute()
 const authStore = useAuthStore()
 const { isGuest } = storeToRefs(authStore)
 const habitsStore = useUserHabitsStore()
+
+// ── AI 记忆（M2.1：四层记忆开关，仅桌面端） ──
+const memoryAvailable = isElectron()
+const memoryLoading = ref(false)
+const memoryLearning = ref(false)
+const recordEpisodes = ref(true)
+const learningEnabled = ref(true)
+const learnStatus = ref(null)
+
+async function loadMemorySettings() {
+  if (!memoryAvailable) return
+  memoryLoading.value = true
+  try {
+    const settings = await getLearnSettings()
+    if (settings) {
+      recordEpisodes.value = settings.recordEpisodes !== false
+      learningEnabled.value = settings.enabled !== false
+    }
+    learnStatus.value = await getLearnStatus()
+  } catch {
+    // 记忆服务不可用时静默
+  } finally {
+    memoryLoading.value = false
+  }
+}
+
+async function handleToggleRecordEpisodes(event) {
+  const next = Boolean(event.target.checked)
+  recordEpisodes.value = next
+  const settings = await setLearnSettings({ recordEpisodes: next })
+  if (settings) recordEpisodes.value = settings.recordEpisodes !== false
+  toast.success(next ? '已开启自动记录情景记忆' : '已关闭自动记录情景记忆')
+}
+
+async function handleToggleLearning(event) {
+  const next = Boolean(event.target.checked)
+  learningEnabled.value = next
+  const settings = await setLearnSettings({ enabled: next })
+  if (settings) learningEnabled.value = settings.enabled !== false
+  toast.success(next ? '已开启记忆学习' : '已关闭记忆学习')
+}
+
+async function handleRunLearningNow() {
+  if (!memoryAvailable || memoryLearning.value) return
+  memoryLearning.value = true
+  try {
+    const result = await runLearning({ force: true })
+    if (result?.ok) {
+      toast.success(`学习完成：提炼 ${result.facts?.length || 0} 条偏好，生成 ${result.generated || 0} 个模板`)
+    } else if (result?.reason === 'learning_disabled') {
+      toast.info('记忆学习已关闭，请先开启')
+    } else {
+      toast.info('暂无可学习的记忆（需先积累成功对话）')
+    }
+    learnStatus.value = await getLearnStatus()
+  } catch (error) {
+    toast.error(error?.message || '学习失败，请重试')
+  } finally {
+    memoryLearning.value = false
+  }
+}
+
+onMounted(loadMemorySettings)
 
 const confirmDialog = ref(null)
 const memoryClearing = ref(false)
@@ -189,6 +259,49 @@ function goToModelSettings() {
     </header>
 
     <ul class="privacy-list">
+      <!-- AI 记忆（M2.1 · 仅桌面端） -->
+      <li v-if="memoryAvailable">
+        <strong>AI 记忆</strong>
+        <span>四层本地记忆：对话情景（L2）、偏好事实（L3）与技能（L4）。仅存本地、不上传；学习只分析格式与结构，不读取文档正文。</span>
+        <div class="privacy-toggle-row">
+          <label class="privacy-toggle">
+            <input
+              type="checkbox"
+              :checked="recordEpisodes"
+              :disabled="memoryLoading"
+              @change="handleToggleRecordEpisodes"
+            />
+            <span>记录情景记忆（AI 对话后自动记录）</span>
+          </label>
+          <label class="privacy-toggle">
+            <input
+              type="checkbox"
+              :checked="learningEnabled"
+              :disabled="memoryLoading"
+              @change="handleToggleLearning"
+            />
+            <span>记忆学习（自动生成专属模板）</span>
+          </label>
+        </div>
+        <div class="privacy-item__actions">
+          <button
+            type="button"
+            class="settings-btn-secondary"
+            :disabled="memoryLearning"
+            @click="handleRunLearningNow"
+          >
+            {{ memoryLearning ? '学习中…' : '立即学习' }}
+          </button>
+          <span v-if="learnStatus" class="privacy-memory-status">
+            情景记忆 {{ learnStatus.episodeCount }} 条
+            <template v-if="learnStatus.factCount"> · 偏好事实 {{ learnStatus.factCount }} 条</template>
+            <template v-if="learnStatus.learnedTemplates?.length">
+              · 已学习模板 {{ learnStatus.learnedTemplates.length }} 个
+            </template>
+          </span>
+        </div>
+      </li>
+
       <li>
         <strong>清除记忆数据</strong>
         <span>删除用户习惯记录与智能模板推荐，不影响文档与全局设置。</span>
@@ -341,6 +454,35 @@ function goToModelSettings() {
 
 .privacy-item__actions {
   margin-top: 10px;
+}
+
+.privacy-toggle-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.privacy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--theme-fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.privacy-toggle input {
+  accent-color: var(--theme-accent);
+  width: 15px;
+  height: 15px;
+}
+
+.privacy-memory-status {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--theme-fg-muted);
 }
 
 .privacy-import-input {

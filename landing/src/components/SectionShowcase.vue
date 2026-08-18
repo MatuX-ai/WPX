@@ -199,6 +199,43 @@ const commandList = [
           </div>
         </div>
       </div>
+
+      <!-- Excel 表格导入展示 -->
+      <div class="mt-12 rounded-3xl border border-dark/5 bg-white p-6 shadow-sm sm:p-8">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold">
+            <span class="wpx-gradient-text">Excel / WPS 表格导入（v0.1.16+）</span>
+          </h3>
+          <router-link
+            to="/docs#excel"
+            class="text-xs font-semibold text-primary-600 hover:underline"
+          >
+            查看文档 →
+          </router-link>
+        </div>
+        <div class="mt-5 flex flex-wrap gap-4">
+          <div class="flex flex-col items-center gap-2">
+            <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-100 text-2xl">📊</div>
+            <span class="text-xs font-medium text-dark/70">.xls</span>
+          </div>
+          <div class="flex flex-col items-center gap-2">
+            <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-100 text-2xl">📗</div>
+            <span class="text-xs font-medium text-dark/70">.xlsx</span>
+          </div>
+          <div class="flex flex-col items-center gap-2">
+            <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-100 text-2xl">📒</div>
+            <span class="text-xs font-medium text-dark/70">Numbers</span>
+          </div>
+          <div class="flex items-center text-2xl text-dark/30">→</div>
+          <div class="flex flex-col items-center gap-2">
+            <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-wpx-gradient text-white text-2xl">📝</div>
+            <span class="text-xs font-medium text-dark/70">WPX 表格块</span>
+          </div>
+        </div>
+        <p class="mt-4 text-sm text-dark/60">
+          一键将 Excel / WPS 表格 / Numbers 文档解析为可编辑的 WPX 表格块，保留格式与数据。
+        </p>
+      </div>
     </div>
   </section>
 </template>
