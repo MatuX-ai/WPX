@@ -1,4 +1,4 @@
-name: Electron Build &amp; Release
+name: Electron Build & Release
 
 on:
   push:
@@ -18,7 +18,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
         include:
           - os: windows-latest
             platform: win
@@ -40,24 +39,8 @@ jobs:
           node-version: '22'
 
       - name: Install Linux system dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libnss3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libdrm2 \
-            libxkbcommon0 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxrandr2 \
-            libgbm1 \
-            libpango-1.0-0 \
-            libcairo2 \
-            libasound2 \
-            libxshmfence1
+        if: matrix.platform == 'linux'
+        run: bash scripts/ci-linux-deps.sh
 
       - name: Install root dependencies
         run: npm install --legacy-peer-deps
@@ -70,14 +53,21 @@ jobs:
         run: mkdir -p resources/fonts
         shell: bash
 
-      - name: Build Electron app (${{ matrix.platform }})
+      - name: Generate app icons
+        run: node scripts/generate-icons.mjs
+
+      - name: Build frontend (Electron)
+        env:
+          WPX_PRERENDER: '0'
+        run: npm --prefix wpx-app run build
+        shell: bash
+
+      - name: Package Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_FOR_PULL_REQUEST: false
-        run: |
-          npm --prefix wpx-app run build
-          npx electron-builder --${{ matrix.platform }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --${{ matrix.platform }} -p never
+        shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

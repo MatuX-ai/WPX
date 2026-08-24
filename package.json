@@ -228,7 +228,10 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "wpx-app/public/icon.icns"
+      "icon": "wpx-app/public/icon.png",
+      "identity": null,
+      "gatekeeperAssess": false,
+      "hardenedRuntime": false
     },
     "linux": {
       "target": "AppImage",
