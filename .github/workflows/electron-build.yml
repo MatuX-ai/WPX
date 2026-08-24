@@ -49,6 +49,9 @@ jobs:
         run: npm install --legacy-peer-deps --include=optional
         working-directory: wpx-app
 
+      - name: Install platform native bindings
+        run: bash scripts/ci-install-native-bindings.sh
+
       - name: Prepare build resources
         run: mkdir -p resources/fonts
         shell: bash
