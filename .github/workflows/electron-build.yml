@@ -43,14 +43,13 @@ jobs:
         run: bash scripts/ci-linux-deps.sh
 
       - name: Install root dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Install wpx-app dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
         working-directory: wpx-app
 
       - name: Install platform native bindings
-        if: matrix.platform != 'win'
         run: bash scripts/ci-install-native-bindings.sh
 
       - name: Prepare build resources
@@ -58,28 +57,27 @@ jobs:
         shell: bash
 
       - name: Verify native bindings
-        if: matrix.platform != 'win'
         working-directory: wpx-app
         run: node scripts/ci-verify-native-bindings.mjs
 
-      - name: Build frontend (win)
+      - name: Build Electron app (win)
         if: matrix.platform == 'win'
-        env:
-          WPX_PRERENDER: '0'
-        run: npm --prefix wpx-app run build
-
-      - name: Build frontend (unix)
-        if: matrix.platform != 'win'
-        working-directory: wpx-app
-        env:
-          WPX_PRERENDER: '0'
-        run: npm run build
-
-      - name: Package Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --${{ matrix.platform }} -p never
+        run: |
+          npm --prefix wpx-app run build
+          npx electron-builder --win -p never
+
+      - name: Build Electron app (unix)
+        if: matrix.platform != 'win'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        shell: bash
+        run: |
+          (cd wpx-app && npm run build)
+          npx electron-builder --${{ matrix.platform }} -p never
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
