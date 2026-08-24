@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '22.12.0'
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'linux'
@@ -80,6 +80,14 @@ jobs:
           bash scripts/ci-unix-build.sh
           npx electron-builder --${{ matrix.platform }} -p never
         shell: bash
+
+      - name: Upload vite build log (unix)
+        if: failure() && matrix.platform != 'win'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-build-log-${{ matrix.platform }}
+          path: vite-build.log
+          if-no-files-found: ignore
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
