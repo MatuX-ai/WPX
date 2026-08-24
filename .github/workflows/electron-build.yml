@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22.12.0'
+          node-version: '22'
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'linux'
@@ -62,16 +62,18 @@ jobs:
         working-directory: wpx-app
         run: node scripts/ci-verify-native-bindings.mjs
 
-      - name: Build frontend (${{ matrix.platform }})
+      - name: Build frontend (win)
+        if: matrix.platform == 'win'
         env:
           WPX_PRERENDER: '0'
-        run: |
-          if [ "${{ matrix.platform }}" = "win" ]; then
-            npm --prefix wpx-app run build
-          else
-            node wpx-app/scripts/ci-vite-build.mjs
-          fi
-        shell: bash
+        run: npm --prefix wpx-app run build
+
+      - name: Build frontend (unix)
+        if: matrix.platform != 'win'
+        working-directory: wpx-app
+        env:
+          WPX_PRERENDER: '0'
+        run: npm run build
 
       - name: Package Electron app (${{ matrix.platform }})
         env:
