@@ -33,18 +33,31 @@ esac
 
 pkgs="$rolldown_pkg $oxide_pkg"
 echo "Installing native bindings: $pkgs"
-
-# 顶层 hoisted（供 require.resolve 预检）
 npm install --no-save --legacy-peer-deps $pkgs
 
-# rolldown / oxide 运行时从各自 package 目录解析 optional binding
+copy_binding() {
+  local pkg="$1"
+  local nested_root="$2"
+  local rel="${pkg%@*}"
+  local hoisted="node_modules/${rel}"
+  if [ ! -d "$hoisted" ]; then
+    echo "Missing hoisted binding: $hoisted"
+    return 1
+  fi
+  local dest="$nested_root/node_modules/${rel}"
+  if [ -e "$dest" ]; then
+    echo "Already present: $dest"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -R "$hoisted" "$dest"
+  echo "Copied $hoisted -> $dest"
+}
+
 rolldown_dir="$(node -e "console.log(require('path').dirname(require.resolve('rolldown/package.json')))")"
 oxide_dir="$(node -e "console.log(require('path').dirname(require.resolve('@tailwindcss/oxide/package.json')))")"
 
-echo "Installing rolldown binding into $rolldown_dir"
-npm install --no-save --legacy-peer-deps --prefix "$rolldown_dir" "$rolldown_pkg"
+copy_binding "$rolldown_pkg" "$rolldown_dir"
+copy_binding "$oxide_pkg" "$oxide_dir"
 
-echo "Installing oxide binding into $oxide_dir"
-npm install --no-save --legacy-peer-deps --prefix "$oxide_dir" "$oxide_pkg"
-
-echo "Native bindings installed (hoisted + nested)"
+echo "Native bindings installed (hoisted + nested copy)"
