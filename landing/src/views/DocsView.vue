@@ -5,7 +5,7 @@
  * WPX 营销站 · 文档中心
  *
  *  - 三块快速入门卡片
- *  - 文档章节索引（6 大类 28 主题，按 v0.1.16 重构）
+ *  - 文档章节索引（6 大类，按 v0.1.26 同步）
  *  - 主题卡片含"为什么推荐"钩子文案
  *  - 顶部关键词过滤（自动滚动到对应 anchor）
  *  - 底部 CTA：跳转 GitHub Wiki
@@ -164,6 +164,31 @@ const sectionDetails = {
     ],
     tips: ['输入 /help 查看完整指令列表']
   },
+  'hermes-agent': {
+    bullets: [
+      '可选 Python sidecar：自行安装 Hermes / Python 后，WPX 可检测并启停',
+      '设置页可开关；复杂任务自动路由到 Hermes，简单请求仍走原有助手链路',
+      '任务进度以 SSE 任务卡展示，过程可观察',
+      '未安装或未启用不强制：透明降级，不影响日常写字'
+    ],
+    tips: ['Hermes 是加分项，不是门槛——不装也能用完 WPX 全部本地能力']
+  },
+  'skill-md': {
+    bullets: [
+      '遵循 SKILL.md 技能标准，便于与社区 / 其他工具互通',
+      '支持从文件导入技能包，也支持导出当前技能为 SKILL.md',
+      '与内置 Skills、自定义 Skill 同一套能力面，减少重复造轮子'
+    ]
+  },
+  'ai-memory': {
+    bullets: [
+      '四层本地 AI 记忆：会话 / 项目 / 用户偏好 / 长期摘要分层存放',
+      '记忆仅存本机，不上传 WPX 服务器',
+      '隐私开关可随时关闭或清空，关掉就不记',
+      '与 Hermes / 自备大模型共用，写得越久越懂你的口吻'
+    ],
+    tips: ['介意痕迹就关隐私开关——本地优先不是口号']
+  },
   // ===== 导出与压缩 =====
   pdf: {
     bullets: [
@@ -306,7 +331,10 @@ const sections = [
       { id: 'built-in-skills', name: '内置 Skills 清单', desc: '学生 16 + 教师 16 + 通用 8 + 自定义', anchor: '#built-in-skills' },
       { id: 'custom-skill', name: '自定义 Skill', desc: '写自己的模板与脚本，让 Skills 按你的流程改稿', anchor: '#custom-skill' },
       { id: 'ai-models', name: '大模型接入教程（DeepSeek / 智谱 / 通义 等，v0.1.10+ 新增）', desc: '兼容 OpenAI Chat Completions，覆盖 8+ 国产大模型预设', anchor: '#ai-models' },
-      { id: 'local-commands', name: '本地指令系统 64 条（v0.1.13 新增）', desc: '输入 `/focus` `/export` `/paper-a4` 等立即生效', anchor: '#local-commands' }
+      { id: 'local-commands', name: '本地指令系统 64 条（v0.1.13 新增）', desc: '输入 `/focus` `/export` `/paper-a4` 等立即生效', anchor: '#local-commands' },
+      { id: 'hermes-agent', name: 'Hermes Agent 可选智能体（v0.1.26 新增）', desc: '本地 sidecar · 复杂任务自动路由 · 未安装透明降级', anchor: '#hermes-agent' },
+      { id: 'skill-md', name: 'SKILL.md 技能标准（v0.1.26 新增）', desc: '导入 / 导出技能包，与社区生态互通', anchor: '#skill-md' },
+      { id: 'ai-memory', name: '四层本地 AI 记忆（v0.1.26 新增）', desc: '会话 / 项目 / 偏好 / 长期摘要 · 隐私开关', anchor: '#ai-memory' }
     ]
   },
   {
@@ -391,7 +419,7 @@ const quickStarts = [
           <span class="wpx-gradient-text">从这里开始你的 WPX 之旅</span>
         </h1>
         <p class="mt-4 text-dark/60">
-          6 大类共 {{ totalTopics }} 主题 · 全随 v0.1.18 同步
+          6 大类共 {{ totalTopics }} 主题 · 全随 v0.1.26 同步
         </p>
 
         <!-- 关键词过滤 -->
@@ -497,7 +525,7 @@ const quickStarts = [
       <div id="chapter-details" class="mt-20">
         <h2 class="text-2xl font-extrabold md:text-3xl">章节详情</h2>
         <p class="mt-2 max-w-2xl text-dark/60">
-          以下是上方 28 个索引项的完整要点速览。点击上方分类卡片 / 全站锄点链接 / 本页内 <code class="font-mono">#项名称</code> 都会滚动到对应位置。
+          以下是上方索引项的完整要点速览。点击上方分类卡片 / 全站锚点链接 / 本页内 <code class="font-mono">#项名称</code> 都会滚动到对应位置。
         </p>
 
         <div class="mt-10 space-y-14">

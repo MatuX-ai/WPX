@@ -1,19 +1,19 @@
 # WPX 技术架构总览 V2.0
 
-**版本**：V2.0  
+**版本**：V2.1  
 **状态**：正式版  
-**最后更新**：2026-06-28  
-**关联文档**：PRD、各模块需求文档、多窗口架构验收报告
+**最后更新**：2026-08-24  
+**关联文档**：PRD、各模块需求文档、多窗口架构验收报告、[Hermes Agent 技术集成设计文档](./Hermes%20Agent%20技术集成设计文档.md)
 
 ---
 
 ## 1. 项目概要
 
-WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Markdown 为核心编辑格式，AI 对话为主要交互方式，集成轻量表格、图片处理、PPT 生成、知识库 RAG、多窗口管理、压缩解压等能力，形成从创作、编辑到知识管理的完整闭环。
+WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Markdown 为核心编辑格式，AI 对话为主要交互方式，集成轻量表格、图片处理、PPT 生成、知识库 RAG、多窗口管理、压缩解压、可选 Hermes Agent / jcode 本地引擎等能力，形成从创作、编辑到知识管理的完整闭环。
 
-**商业模式**：工具本体永久免费，大模型与字体服务由用户自行接入第三方。
+**商业模式**：工具本体永久免费，大模型与字体服务由用户自行接入第三方；平台不提供公共模型 Token 配额。
 
-**产品版本**：V0.1.10（package.json）
+**产品版本**：V0.1.26（package.json）
 
 ---
 
@@ -63,16 +63,17 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 │  ┌──────────────────────────────────────────────────────────┐    │
 │  │ model-ipc + model-secrets-store  用户大模型 API Key 管理   │    │
 │  │ knowledge-service               资料库 RAG（lowdb）        │    │
-│  │ memory-service                  记忆与智能模板（lowdb）     │    │
+│  │ memory-service                  四层 AI 记忆 + 智能模板     │    │
 │  │ font-ipc + font-service         字体管理/子集化/推荐       │    │
 │  │ export-service + export-routes  导出服务（Pandoc/AI排版）   │    │
 │  │ zip-ipc + zip-service           7za 压缩解压               │    │
 │  │ jcode-ipc + jcode-launcher      jcode 高性能AI引擎         │    │
+│  │ hermes-ipc + hermes-*           Hermes Agent 可选 sidecar  │    │
+│  │ library-routes                  文库 Node 内嵌路由           │    │
+│  │ dialog-ipc                      原生另存为 / 导出对话框     │    │
 │  │ auth-store                       自托管JWT认证             │    │
 │  │ user-data-service               electron-store 偏好存储    │    │
-│  │ free-quota-ipc                   Token配额（已废弃V1.1）    │    │
 │  │ local-server.js                  本地服务编排               │    │
-│  │ token-* / commercial-font-*      商业字体Token（已废弃）    │    │
 │  └──────────────────────────────────────────────────────────┘    │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │ Node.js API
@@ -80,7 +81,7 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 │               Layer 1: Electron 主进程 (electron/)                 │
 │  main.js          应用生命周期 · 窗口管理 · IPC注册 · CSP · 菜单    │
 │  window-manager.js 多窗口池(≤8个) · focus · close-guard · 广播     │
-│  preload.js        contextBridge 暴露 ~40 个安全 IPC 通道          │
+│  preload.js        contextBridge 暴露安全 IPC（含 hermes.*）       │
 │  file-open.js      文件关联打开 · 拖拽导入                          │
 │  auth-protocol.js  wpx:// 协议回调（已简化为应用内AuthModal）       │
 │  about-update.js   版本检查 · 应用信息                              │
@@ -89,6 +90,8 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 │  resources/fonts/  内置8款免费字体（子集化）                         │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+> **已删除（2026-08）**：`free-quota-ipc.js` / `free-quota-store.js` 及渲染层配额工具已从代码库移除，不再保留兼容桩。
 
 ---
 
@@ -100,7 +103,7 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 |:---|:---|:---:|
 | `electron/main.js` (1053行) | 应用启动、生命周期、IPC handler 注册、CSP 配置、菜单构建、系统托盘、全局快捷键、退出流程 | ✅ |
 | `electron/window-manager.js` (251行) | 多窗口池 Map、createWindow、focusWindow、closeWindow、窗口列表管理、8窗口上限 | ✅ |
-| `electron/preload.js` (183行) | contextBridge 暴露 electronAPI / wpx.window，涵盖 tray/app/window/files/preferences/auth/models/knowledge/memory/zip/fonts/jcode/shell 共 ~40 个安全通道 | ✅ |
+| `electron/preload.js` | contextBridge 暴露 electronAPI / wpx.window，涵盖 tray/app/window/files/preferences/auth/models/knowledge/memory/zip/fonts/jcode/hermes/shell 等安全通道 | ✅ |
 | `electron/file-open.js` | 文件关联打开（.md/.txt/.wpx/.7z/.zip）、拖拽导入、关联文件 payload 读取 | ✅ |
 | `electron/file-associations.js` | 文件关联注册/取消 | ✅ |
 | `electron/auth-protocol.js` | wpx:// 协议回调处理（已简化为 AuthModal 内嵌登录） | ✅ |
@@ -116,9 +119,12 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 | 导出服务 | `export-service.js` + `export-routes.js` (509行) | Pandoc 调用、AI 排版建议、docx/PDF/HTML 导出、虚拟纸张参数传递 | ✅ |
 | 压缩解压 | `zip-ipc.js` + `zip-service.js` | 7za 调用、compress/extract/list/cancel、进度推送、密码支持 | ✅ |
 | jcode 引擎 | `jcode-ipc.js` + `jcode-launcher.js` + `jcode-detector.js` | 安装检测、启动/停止/状态、Swarm 调用、流式进度、设置管理 | ✅ |
+| Hermes Agent | `hermes-ipc.js` + `services/hermes-{detector,launcher,store,env,routes}.js` | 可选 Python sidecar：检测/启停/设置/SSE 任务流/透明降级 | ✅ |
+| 文库路由 | `services/library-routes.js` | 桌面端 `/api/library/*`（analyze/save/tree/search），不强制依赖独立 Python 文库进程 | ✅ |
+| 对话框 IPC | `dialog-ipc.js` | 原生另存为 / SKILL.md 导出等系统对话框 | ✅ |
 | 用户认证 | `auth-store.js` | JWT token/refresh_token 加密存储、读取、清除 | ✅ |
 | 用户偏好 | `user-data-service.js` | electron-store 偏好读写、跨窗口广播 preferences-changed | ✅ |
-| 免费配额 | `free-quota-ipc.js` + `free-quota-store.js` | Token 配额管理（V1.1 已废弃，保留兼容） | ⚠️ |
+| ~~免费配额~~ | ~~`free-quota-ipc.js` + `free-quota-store.js`~~ | **已删除**（V1.1 废弃后于 2026-08 从代码库移除） | ❌ |
 | 商业字体 | `commercial-font-routes.js` + `commercial-font-store.js` + `token-routes.js` + `token-store.js` | 商业字体 Token 管理（V1.1 已废弃） | ❌ |
 | 本地服务 | `local-server.js` | 启动/停止 Express 子服务集群，统一端口管理 | ✅ |
 
@@ -212,7 +218,8 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 | Export Service | `node src/server/export-service.js` | Pandoc 调用，MD↔DOCX/PDF/HTML 转换 | ✅ |
 | Remove-BG Service | `python src/server/remove-bg-service.py` | rembg U²-Net AI 去背景 | ✅ |
 | Knowledge Service | `python src/server/knowledge-service.py` | 文档解析/切片/向量化 | ⚠️ 部分 |
-| Library Service | `python src/server/library-service.py` | 智能文库管理 | ⚠️ 部分 |
+| Library Service | Node `library-routes.js`（主） / 可选 Python | 智能文库；桌面端优先走 Electron 内嵌路由 | ✅ |
+| Hermes Gateway | 可选外挂 `hermes` CLI（用户自装） | OpenAI 兼容 HTTP + SSE 任务流，经 `/api/hermes` | ✅ |
 | AI Proxy Service | `node src/server/ai-proxy-service.js` | AI API 代理转发 | ✅ |
 | CopilotKit Runtime | `node src/server/copilotkit-runtime.js` | Agent 编排、A2UI 组件映射 | ✅ |
 
@@ -277,7 +284,11 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 | `jcode:call-swarm/stream` | jcode 推理调用 | jcode-ipc |
 | `jcode:get-settings/set-settings` | jcode 偏好设置 | jcode-ipc |
 | `jcode:clear-memory` | 清除 jcode 记忆 | jcode-ipc |
-| `free-quota:*` | 免费配额管理（V1.1 已废弃） | free-quota-ipc |
+| `hermes:detect/get-status/start/stop` | Hermes 生命周期 | hermes-ipc |
+| `hermes:get-settings/set-settings` | Hermes 偏好设置 | hermes-ipc |
+| `hermes:call-run/prepare-env` | Hermes 任务执行 / 环境注入 | hermes-ipc |
+| `dialog:show-save-dialog` | 原生另存为对话框 | dialog-ipc |
+| ~~`free-quota:*`~~ | ~~免费配额~~（**已删除**） | — |
 
 ### 4.2 主进程 → 渲染进程 (send/广播)
 
@@ -298,6 +309,8 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 | `jcode:status-changed` | jcode 状态变更广播 |
 | `jcode:stream-event` | jcode 流式结果推送 |
 | `jcode:settings-changed` | jcode 设置变更广播 |
+| `hermes:status-changed` | Hermes 网关状态广播 |
+| `hermes:settings-changed` | Hermes 设置变更广播 |
 
 ---
 
@@ -424,6 +437,8 @@ WPX 是一款基于 Electron + Vue3 的 AI 原生桌面文档编辑器。以 Mar
 | 桌面框架 | Electron（非 Tauri） | 生态成熟，Vue3/Vite 集成简单，社区资源丰富 |
 | 编辑器 | Tiptap（非 Slate/Quill） | 插件生态全，JSON 驱动适配 AI，社区活跃 |
 | AI 模型 | 用户自配（非平台提供） | 完全免费模式，降低运营成本与法律风险 |
+| 复杂任务引擎 | jcode（确定性长工作流）∥ Hermes（开放式多步自主，可选） | 双本地引擎并列，未安装时透明降级到云端对话 |
+| SKILL.md | 与 Hermes 生态互通的技能标准 | 设置内导入/导出，复用 useSkillExecutor |
 | 多窗口 | 独立渲染进程（非 tab 页） | 每个文档独立状态，崩溃隔离，复用同一前端代码 |
 | 本地数据库 | lowdb + electron-store（非 SQLite） | MVP 阶段轻量够用，后续可迁移 |
 | 压缩引擎 | 内置 7za（非调用系统 7-Zip） | 开箱即用，不依赖用户安装第三方软件 |

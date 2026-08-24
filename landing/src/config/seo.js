@@ -14,7 +14,7 @@ export const siteConfig = {
   // 战略定位（v1.0 · 2026-08）：WPX 的真正护城河是「本地 / 多窗口 / 永久免费 / 64 指令 / Skills 一体化」，AI 仅作为常驻助手出现，不作主标题
   title: 'WPX - 永久免费的桌面写作工具 | 多窗口 / 64 条本地指令 / 完全离线',
   description:
-    '永久免费的桌面写作工具：多窗口独立编辑、64 条本地斜杠指令、Markdown / PDF / Word / Excel 互转、内置 32+ Skills、100+ 开源字体、PDF 离线 OCR、HTML 源码编辑。本地优先，完全离线可用。',
+    '永久免费的桌面写作工具：多窗口独立编辑、64 条本地斜杠指令、Markdown / PDF / Word / Excel 互转、内置 32+ Skills、可选 Hermes Agent 本地智能体、SKILL.md 技能互通、四层本地 AI 记忆、100+ 开源字体、PDF 离线 OCR。本地优先，完全离线可用。',
   keywords: [
     'WPX',
     '免费文档编辑器',
@@ -48,6 +48,11 @@ export const siteConfig = {
     '窗口独立管理',
     '新建窗口',
     '关闭窗口',
+    // ===== v0.1.26 Hermes / 记忆 =====
+    'Hermes Agent',
+    'SKILL.md',
+    '本地AI记忆',
+    '可选智能体',
     // ===== V1.1 完全免费模式 =====
     '完全免费编辑器',
     '无Token文档编辑器',
@@ -67,7 +72,7 @@ export const siteConfig = {
   ogImagePng: '/og-image.svg', // 兼容旧客户端
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  ogImageAlt: 'WPX - 永久免费的桌面写作工具，多窗口 / 64 条本地指令 · v0.1.18',
+  ogImageAlt: 'WPX - 永久免费的桌面写作工具，多窗口 / 64 条本地指令 · v0.1.26',
   twitterHandle: '@wpx_app',
   locale: 'zh_CN',
   themeColor: '#4F46E5',

@@ -83,11 +83,12 @@ const aiGroup = [
     docAnchor: '#built-in-skills'
   },
   {
-    icon: '✍',
-    title: '一键改写',
-    desc: '选中段落，调用 Skills 帮你润色 / 续写 / 翻译 / 总结；语气与长度都可调。',
+    icon: '🤖',
+    title: 'Hermes Agent',
+    desc: '可选本地智能体：复杂任务自动路由，未安装时透明降级，不挡你写字。',
     color: 'from-primary-from/15 to-primary-to/15',
-    docAnchor: '#commands-panel'
+    newFlag: true,
+    docAnchor: '#hermes-agent'
   },
   {
     icon: '🧠',

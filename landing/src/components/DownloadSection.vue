@@ -54,13 +54,13 @@ const platforms = [
 // ---------------- GitHub Releases API ----------------
 const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
-// 静态 fallback
+// 静态 fallback（产品版本；下载走 Releases latest，体积 / 校验以页面为准）
 const fallbackVersion = {
-  version: 'v0.1.18',
-  date: '2026-07-27',
-  size: '156 MB',
-  url: 'https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-Setup-0.1.18.exe',
-  sha256: '6b42e7724b03fc1b52cf706d0e0d49fac168227372fd63c30d91e334c8e77d27'
+  version: 'v0.1.26',
+  date: '2026-08-24',
+  size: '以 Releases 为准',
+  url: 'https://github.com/MatuX-ai/WPX/releases/latest',
+  sha256: null
 }
 
 const release = ref({ ...fallbackVersion, loading: true, source: 'static' })
@@ -78,7 +78,7 @@ async function fetchLatestRelease() {
       date: data.published_at
         ? data.published_at.slice(0, 10)
         : fallbackVersion.date,
-      size: '15 MB',
+      size: '以 Releases 为准',
       url: data.html_url || fallbackVersion.url,
       loading: false,
       source: 'github'
@@ -125,10 +125,11 @@ async function startDownload() {
   // 1.5s 召唤动画
   await new Promise((r) => setTimeout(r, 1500))
 
+  const latestUrl = 'https://github.com/MatuX-ai/WPX/releases/latest'
   const platformUrls = {
-    windows: release.value.url || `https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-Setup-0.1.18.exe`,
-    macos: `https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-${release.value.version.replace('v', '')}.dmg`,
-    linux: `https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-${release.value.version.replace('v', '')}.AppImage`
+    windows: release.value.url || latestUrl,
+    macos: latestUrl,
+    linux: latestUrl
   }
 
   const url = platformUrls[activePlatform.value] || platformUrls.windows

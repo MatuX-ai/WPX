@@ -24,13 +24,28 @@ const chipLabels = {
   breaking: '不兼容'
 }
 
-// 倒序：v0.1.18 → v0.1.17 → v0.1.16 → v0.1.15 → v1.0.0 → v0.9.x ……
+// 倒序：v0.1.26 → v0.1.18 → v0.1.17 → … → v1.0.0 → v0.9.x ……
 const releases = [
+  {
+    version: 'v0.1.26',
+    date: '2026-08-24',
+    badge: '最新',
+    badgeClass: 'bg-wpx-gradient text-white',
+    summary: 'Hermes Agent 可选本地智能体上线 + SKILL.md 技能互通 + 四层本地 AI 记忆 + 文库 Node 内嵌路由；彻底移除平台 free-quota / Token 配额代码。',
+    docLink: { label: '相关文档', href: '/docs#hermes-agent' },
+    changes: [
+      { type: 'feature', text: 'Hermes Agent 可选本地智能体：检测 / 启停 / 设置页 / 复杂任务自动路由 / SSE 任务卡' },
+      { type: 'feature', text: 'SKILL.md 技能标准互通：支持导入与导出，与社区技能生态对齐' },
+      { type: 'feature', text: '四层本地 AI 记忆 + 隐私开关，记忆只留在本机' },
+      { type: 'feature', text: '文库桌面端 Node 内嵌路由，不强制依赖 Python 文库进程' },
+      { type: 'breaking', text: '彻底移除平台 free-quota / Token 配额相关代码（平台零配额、零抽成）' }
+    ]
+  },
   {
     version: 'v0.1.18',
     date: '2026-07-27',
-    badge: '最新',
-    badgeClass: 'bg-wpx-gradient text-white',
+    badge: '特性',
+    badgeClass: 'bg-primary-from/10 text-primary-600',
     summary: '新增窗口关闭/新建按钮 + Excel 格式导出默认值 + AI 助手本地指令帮助 + 多处 UI 布局优化。',
     docLink: null,
     changes: [
@@ -207,7 +222,7 @@ const showAll = () => {
           <span class="wpx-gradient-text">WPX 的每一次小步快跑</span>
         </h1>
         <p class="mt-4 text-dark/60">
-          桌面端 v0.1.10 → v0.1.18 一口气迭代 8 个版本，所有 feature / fix / breaking 都有迹可循。
+          桌面端 v0.1.10 → v0.1.26 持续小步快跑，所有 feature / fix / breaking 都有迹可循。
         </p>
         <!-- 订阅 CTA -->
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">

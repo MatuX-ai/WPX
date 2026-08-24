@@ -101,7 +101,7 @@ function scrollToShowcase(e) {
             aria-hidden="true"
             class="h-1.5 w-1.5 rounded-full bg-primary-from"
           />
-          v0.1.18 · 已迭代 8 个版本
+          v0.1.26 · Hermes Agent 已接入
         </span>
 
         <h1
@@ -121,6 +121,7 @@ function scrollToShowcase(e) {
         >
           永久免费、不弹窗、不上传文档的桌面写作工具。
           多窗口独立 + 64 条斜杠指令 + 32 项 Skills，论文 / 报告 / 教案 / 随笔都顺手。
+          可选接入 Hermes Agent 本地智能体，复杂任务自动路由；SKILL.md 技能标准互通。
           资料库、表格导入、字体管理，桌面写作所需一次配齐。
         </p>
 
@@ -187,6 +188,20 @@ function scrollToShowcase(e) {
               class="h-1.5 w-1.5 rounded-full bg-sky-400"
             />
             100+ 开源字体
+          </li>
+          <li class="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              class="h-1.5 w-1.5 rounded-full bg-violet-400"
+            />
+            Hermes Agent 可选
+          </li>
+          <li class="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              class="h-1.5 w-1.5 rounded-full bg-amber-500"
+            />
+            SKILL.md 互通
           </li>
         </ul>
       </div>

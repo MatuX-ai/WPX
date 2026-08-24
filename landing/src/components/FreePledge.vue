@@ -221,9 +221,9 @@ const pledgeItems = [
           立即免费下载
           <span aria-hidden="true">→</span>
         </a>
-        <!-- 同步说明：本文已随 v0.1.16 同步生效，旧版 Token 计费措辞已废 -->
+        <!-- 同步说明：本文已随 v0.1.26 同步生效，旧版 Token 计费措辞已废 -->
         <p class="mt-2 max-w-2xl text-xs leading-relaxed text-dark/40">
-          本文最后随 v0.1.16 同步生效；之前版本若仍提 Token 计费，已作废。
+          本文最后随 v0.1.26 同步生效；之前版本若仍提 Token 计费，已作废。
         </p>
       </div>
     </div>

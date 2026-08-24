@@ -1,6 +1,8 @@
 # WPX 全项目测试用例设计文档
 
-> 版本：v0.1.18 | 更新日期：2026-08-18 | 维护者：WPX Team
+> 版本：v0.1.26 | 更新日期：2026-08-24 | 维护者：WPX Team
+>
+> **2026-08 变更**：Hermes Agent M1–M4 补测已写入；`free-quota-ipc.js` / `free-quota-store.js` 及渲染层配额工具**已从代码库删除**，下文若仍出现仅作历史缺口记录，不再作为待测项。
 
 ---
 
@@ -141,7 +143,7 @@ WPX 是一款基于 **Electron + Vue 3 + Tiptap** 的 AI 智能文档编辑器�
 | `model-ipc.js` | 模型配置 IPC |
 | `jcode-ipc.js` | jcode IPC |
 | `font-ipc.js` | 字体 IPC |
-| `free-quota-ipc.js` | 配额 IPC |
+| ~~`free-quota-ipc.js`~~ | ~~配额 IPC~~（**已删除，不再测试**） |
 
 **HTTP 路由层（零覆盖）**：
 | 文件 | 职责 |
@@ -158,7 +160,7 @@ WPX 是一款基于 **Electron + Vue 3 + Tiptap** 的 AI 智能文档编辑器�
 | `hermes-store.js` | Hermes 设置持久化 |
 | `jcode-store.js` | jcode 设置持久化 |
 | `font-preferences-store.js` | 字体偏好 |
-| `free-quota-store.js` | 免费额度 |
+| ~~`free-quota-store.js`~~ | ~~免费额度~~（**已删除**） |
 | `commercial-font-store.js` | 商用字体数据库 |
 | `model-secrets-store.js` | API Key 加密存储 |
 | `auth-store.js` | 认证状态 |
@@ -361,9 +363,9 @@ Playwright E2E：
 | 9 | `wpx-app/src/components/knowledge/` | P1 | 组件无测试 |
 | 10 | `wpx-app/src/views/settings/` | P2 | 设置页视图无测试 |
 | 11 | `wpx-app/src/server/` | P2 | 服务端路由无测试 |
-| 12 | `electron/free-quota-ipc.js` | P2 | 配额 IPC 无测试 |
-| 13 | `wpx-app/src/utils/freeQuota.js` | P2 | 配额工具无测试 |
-| 14 | `wpx-app/src/utils/freeModelQuota.js` | P2 | 模型配额无测试 |
+| 12 | ~~`electron/free-quota-ipc.js`~~ | — | **已删除**，移出补测清单 |
+| 13 | ~~`wpx-app/src/utils/freeQuota.js`~~ | — | **已删除** |
+| 14 | ~~`wpx-app/src/utils/freeModelQuota.js`~~ | — | **已删除** |
 | 15 | `electron/commercial-font-routes.js` | P2 | 商业字体路由无测试 |
 
 ---

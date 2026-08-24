@@ -1,53 +1,12 @@
 <!--
   SectionDownload · 下载 CTA 区
-  - v0.1.18：点击下载指向 GitHub Releases 具体版本资产 + SHA256 一键复制
+  - v0.1.26：产品版本徽章；下载指向 GitHub Releases latest（安装包发布可能略滞后）
 -->
 <script setup>
-import { ref } from 'vue'
-
-// v0.1.18 真实 GitHub Releases 资产链接
-const WINDOWS_EXE_URL =
-  'https://github.com/MatuX-ai/WPX/releases/download/v0.1.18/WPX-Setup-0.1.18.exe'
-const WINDOWS_EXE_SHA256 =
-  '6b42e7724b03fc1b52cf706d0e0d49fac168227372fd63c30d91e334c8e77d27'
+// 产品版本（与桌面 package.json 对齐）；安装包以 Releases latest 为准
+const PRODUCT_VERSION = 'v0.1.26'
+const GITHUB_LATEST_URL = 'https://github.com/MatuX-ai/WPX/releases/latest'
 const GITHUB_RELEASES_URL = 'https://github.com/MatuX-ai/WPX/releases'
-
-const shaCopied = ref(false)
-
-function goDownload(platform) {
-  if (typeof window === 'undefined') return
-  const releases = {
-    windows: WINDOWS_EXE_URL,
-    macos: GITHUB_RELEASES_URL,
-    linux: GITHUB_RELEASES_URL,
-  }
-  window.open(releases[platform] || releases.windows, '_blank', 'noopener')
-}
-
-async function copySha256() {
-  if (typeof navigator === 'undefined' || !navigator.clipboard) {
-    try {
-      const el = document.getElementById('wpx-sha256-text')
-      if (el) {
-        const range = document.createRange()
-        range.selectNodeContents(el)
-        const sel = window.getSelection()
-        sel.removeAllRanges()
-        sel.addRange(range)
-      }
-    } catch {}
-    return
-  }
-  try {
-    await navigator.clipboard.writeText(WINDOWS_EXE_SHA256)
-    shaCopied.value = true
-    setTimeout(() => {
-      shaCopied.value = false
-    }, 1800)
-  } catch (error) {
-    console.warn('[SectionDownload] copy sha256 failed:', error)
-  }
-}
 </script>
 
 <template>
@@ -74,7 +33,7 @@ async function copySha256() {
             aria-hidden="true"
             class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400"
           />
-          当前桌面端：v0.1.18
+          当前桌面端：{{ PRODUCT_VERSION }}
         </div>
 
         <h2
@@ -84,16 +43,18 @@ async function copySha256() {
           开始你的下一篇佳作
         </h2>
         <p class="relative mx-auto mt-4 max-w-xl px-2 text-sm text-white/85 sm:text-base">
-          免费下载 WPX 桌面端（v0.1.18 · Windows · 156MB），立即拥有 AI 加持的写作工作台。
+          免费下载 WPX 桌面端（{{ PRODUCT_VERSION }} · Windows），立即拥有 AI 加持的写作工作台。
+          安装包以 GitHub Releases 最新页为准，发布通道可能略滞后于产品版本。
         </p>
 
         <div class="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
           <a
-            :href="WINDOWS_EXE_URL"
+            :href="GITHUB_LATEST_URL"
             class="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-6 py-3 font-semibold text-primary-600 transition-transform hover:-translate-y-0.5 sm:w-auto"
             rel="noopener noreferrer"
+            target="_blank"
           >
-            <span aria-hidden="true">⬇</span> Windows 10/11 · 下载 .exe
+            <span aria-hidden="true">⬇</span> Windows 10/11 · 下载最新版
           </a>
           <button
             type="button"
@@ -113,33 +74,12 @@ async function copySha256() {
           </button>
         </div>
 
-        <!-- 安装包信息 + SHA256 一键复制 -->
+        <!-- 安装包信息（校验值以 Releases 页面为准） -->
         <div class="relative mt-6 flex flex-col items-center justify-center gap-3 text-xs text-white/75 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
           <div class="flex items-center gap-1.5">
             <span aria-hidden="true">📦</span>
-            <span>约 156 MB（v0.1.18，相比 WPS 轻量 10 倍）</span>
+            <span>安装包体积 / SHA256 以 Releases 页面为准</span>
           </div>
-
-          <!-- 可点击复制的 SHA256 chip -->
-          <button
-            type="button"
-            class="group inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-2.5 py-1 font-mono text-[11px] text-white/85 backdrop-blur-md transition-all hover:bg-white/20 hover:text-white"
-            :title="WINDOWS_EXE_SHA256"
-            aria-label="复制安装包 SHA256 校验值"
-            @click="copySha256"
-          >
-            <span aria-hidden="true">🔐</span>
-            <span class="opacity-80">SHA256 ·</span>
-            <span
-              id="wpx-sha256-text"
-              class="font-semibold tracking-tight"
-            >6b42e772…8e77d27</span>
-            <span
-              aria-hidden="true"
-              class="ml-0.5 inline-flex h-4 min-w-[1.5rem] items-center justify-center rounded-full bg-white/20 px-1.5 text-[10px] font-semibold text-white transition-colors group-hover:bg-white/30"
-              :class="shaCopied ? '!bg-emerald-400/80 !text-emerald-900 group-hover:!bg-emerald-400/80' : ''"
-            >{{ shaCopied ? '✓' : '复制' }}</span>
-          </button>
 
           <div class="flex items-center gap-1.5">
             <span aria-hidden="true">🆓</span>
@@ -153,11 +93,11 @@ async function copySha256() {
             to="/changelog"
             class="text-white/80 underline-offset-4 hover:text-white hover:underline"
           >
-            v0.1.18 更新日志 →
+            {{ PRODUCT_VERSION }} 更新日志 →
           </router-link>
           <span class="hidden text-white/40 sm:inline">·</span>
           <a
-            href="https://github.com/MatuX-ai/WPX/releases"
+            :href="GITHUB_RELEASES_URL"
             target="_blank"
             rel="noopener noreferrer"
             class="text-white/80 underline-offset-4 hover:text-white hover:underline"
