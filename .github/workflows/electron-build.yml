@@ -37,18 +37,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            wpx-app/package-lock.json
 
       - name: Install root dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install wpx-app dependencies
-        run: npm ci
-        working-directory: wpx-app
-
-      - name: Build frontend (electron target)
-        run: npm run build:electron
+        run: npm install
         working-directory: wpx-app
 
       - name: Build Electron app (${{ matrix.platform }})
