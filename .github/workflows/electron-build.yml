@@ -21,12 +21,15 @@ jobs:
         include:
           - os: windows-latest
             platform: win
+            shell: pwsh
             artifact_name: WPX-Setup-*.exe
           - os: macos-latest
             platform: mac
+            shell: bash
             artifact_name: WPX-*.dmg
           - os: ubuntu-latest
             platform: linux
+            shell: bash
             artifact_name: WPX-*.AppImage
 
     steps:
@@ -43,10 +46,10 @@ jobs:
         run: bash scripts/ci-linux-deps.sh
 
       - name: Install root dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --include=optional
 
       - name: Install wpx-app dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --include=optional
         working-directory: wpx-app
 
       - name: Prepare build resources
@@ -56,18 +59,23 @@ jobs:
       - name: Generate app icons
         run: node scripts/generate-icons.mjs
 
+      - name: Verify native bindings
+        run: node scripts/ci-verify-native-bindings.mjs
+        working-directory: wpx-app
+
       - name: Build frontend (Electron)
         env:
           WPX_PRERENDER: '0'
-        run: npm --prefix wpx-app run build
-        shell: bash
+        run: npm run build
+        working-directory: wpx-app
+        shell: ${{ matrix.shell }}
 
       - name: Package Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder --${{ matrix.platform }} -p never
-        shell: bash
+        shell: ${{ matrix.shell }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
