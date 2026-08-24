@@ -3,15 +3,18 @@ import { setupE2eMocks } from './helpers/mocks.js'
 import {
   openEditor,
   openAiChat,
+  seedConfiguredTextApiKey,
   seedE2eSettings,
   selectAllEditorText,
   sendAiInstruction,
   typeInEditor,
+  aiChatInput,
 } from './helpers/editor.js'
 
 test.describe('AI 选区改写流程', () => {
   test.beforeEach(async ({ page }) => {
     await seedE2eSettings(page)
+    await seedConfiguredTextApiKey(page)
     await setupE2eMocks(page, { aiReply: '润色后的精彩文字' })
     await openEditor(page)
   })
@@ -25,15 +28,12 @@ test.describe('AI 选区改写流程', () => {
 
     await openAiChat(page)
 
-    const chatInput = page.locator('.ai-chat-window__input')
-    await chatInput.click()
-    await expect(page.locator('.ai-chat-window__context-text')).toContainText(originalText)
+    const chatInput = aiChatInput(page)
+    await chatInput.focus()
+    await expect(page.locator('.ai-chat-panel__context-text')).toContainText(originalText)
 
     await sendAiInstruction(page, '请润色这段话')
 
-    await expect(page.locator('button.ai-avatar-btn')).toHaveAttribute('aria-busy', 'false', {
-      timeout: 30_000,
-    })
     await expect(page.locator('.ProseMirror')).toContainText('润色后的精彩文字', {
       timeout: 30_000,
     })

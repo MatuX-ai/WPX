@@ -26,7 +26,6 @@
 import { z } from 'zod'
 import { useSlidesStore } from '@/stores/slides'
 import { useModelSettingsStore } from '@/stores/modelSettings'
-import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { usePPTWorkflow } from '@/composables/usePPTWorkflow'
 import { outlineToSlides } from '@/composables/useSlideGenerator'
@@ -170,32 +169,14 @@ async function callChatCompletion({ baseUrl, apiKey, model, systemPrompt, userPr
  */
 async function resolveLlmConfig() {
   const modelSettingsStore = useModelSettingsStore()
-  const authStore = useAuthStore()
   const cfg = modelSettingsStore.effectiveTextConfig
-
-  if (cfg.source === 'custom' && !modelSettingsStore.textPlatformFallback) {
-    const apiKey = await modelSettingsStore.resolveTextApiKey()
-    return {
-      source: 'custom',
-      baseUrl: cfg.baseUrl || PLATFORM_DEEPSEEK_BASE,
-      apiKey: apiKey || '',
-      model: cfg.model || PLATFORM_DEEPSEEK_MODEL,
-      isGuest: false,
-    }
-  }
-  if (authStore.isGuest) {
-    return {
-      source: 'unavailable',
-      baseUrl: cfg.baseUrl || PLATFORM_DEEPSEEK_BASE,
-      apiKey: '',
-      model: cfg.model || PLATFORM_DEEPSEEK_MODEL,
-      isGuest: true,
-    }
-  }
+  // V1.1 起仅使用用户在「我的模型」中自定义的大模型；未配置 Key 时返回空，
+  // 由调用方判定能力不可用。
+  const apiKey = await modelSettingsStore.resolveTextApiKey()
   return {
-    source: 'platform',
+    source: 'custom',
     baseUrl: cfg.baseUrl || PLATFORM_DEEPSEEK_BASE,
-    apiKey: cfg.apiKey || '',
+    apiKey: apiKey || '',
     model: cfg.model || PLATFORM_DEEPSEEK_MODEL,
     isGuest: false,
   }

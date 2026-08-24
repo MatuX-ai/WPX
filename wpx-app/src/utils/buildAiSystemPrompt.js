@@ -90,6 +90,56 @@ ${skillLines.join('\n')}`
 
 /**
 
+ * @param {{ documentType?: string, recommendedSkills?: SkillDefinition[] }} [documentContext]
+
+ */
+
+export function buildDocumentContextSystemPromptSection(documentContext) {
+
+  if (!documentContext?.documentType) return ''
+
+
+
+  const { documentType, recommendedSkills = [] } = documentContext
+
+  const lines = [
+
+    '【当前文档上下文】',
+
+    `- 文档类型：${documentType}`,
+
+  ]
+
+
+
+  if (recommendedSkills.length) {
+
+    lines.push('- 针对此类文档，优先考虑以下能力：')
+
+    for (const skill of recommendedSkills) {
+
+      lines.push(`  - ${skill.name}（${skill.id}）：${skill.description}`)
+
+    }
+
+    lines.push('在续写、改写、排版、生成结构等场景中，请结合文档骨架优先运用上述能力。')
+
+  } else {
+
+    lines.push('- 请结合当前文档骨架与标题结构，提供贴合该类型的写作建议。')
+
+  }
+
+
+
+  return lines.join('\n')
+
+}
+
+
+
+/**
+
  * @param {{
 
  *   enabledSkills?: SkillDefinition[],
@@ -98,13 +148,15 @@ ${skillLines.join('\n')}`
 
  *   agentSettings?: ReturnType<typeof import('@/constants/agentPreferences').createDefaultAgentSettings>,
 
+ *   documentContext?: { documentType?: string, recommendedSkills?: SkillDefinition[] },
+
  * }} [options]
 
  */
 
 export function buildEditorAiSystemPrompt(options = {}) {
 
-  const { enabledSkills = [], disabledSkills = [], agentSettings } = options
+  const { enabledSkills = [], disabledSkills = [], agentSettings, documentContext } = options
 
   const sections = [BASE_EDITOR_AI_RULES]
 
@@ -113,6 +165,16 @@ export function buildEditorAiSystemPrompt(options = {}) {
   if (agentSettings) {
 
     sections.push(buildAgentSystemPromptSection(agentSettings))
+
+  }
+
+
+
+  const documentSection = buildDocumentContextSystemPromptSection(documentContext)
+
+  if (documentSection) {
+
+    sections.push(documentSection)
 
   }
 

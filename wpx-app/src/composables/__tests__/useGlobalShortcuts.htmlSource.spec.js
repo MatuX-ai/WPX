@@ -96,10 +96,15 @@ describe('useGlobalShortcuts - toggleHtmlSourcePanel 快捷键', () => {
 
     dispatchKey({ key: 's', ctrl: true })
     dispatchKey({ key: 'w', ctrl: true, shift: true })
-    dispatchKey({ key: 'i', ctrl: true, shift: true })
+    dispatchKey({ key: 'e', ctrl: true, shift: true })
 
     expect(handler).not.toHaveBeenCalled()
     wrapper.unmount()
+  })
+
+  it('GLOBAL_SHORTCUTS.openImageEditor 改为 Ctrl+Shift+E（避开 DevTools 冲突）', () => {
+    expect(GLOBAL_SHORTCUTS.openImageEditor.win).toBe('Ctrl+Shift+E')
+    expect(GLOBAL_SHORTCUTS.openImageEditor.mac).toBe('⌘⇧E')
   })
 
   it('GLOBAL_SHORTCUTS 注册了 toggleHtmlSourcePanel', () => {

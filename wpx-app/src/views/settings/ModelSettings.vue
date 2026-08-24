@@ -7,7 +7,7 @@ import { useModelSettingsStore } from '@/stores/modelSettings'
 import { testModelConnection } from '@/utils/modelApi'
 
 const toast = useToast()
-// V1 完全免费模式：模型设置页不再提供「注册/登录」入口，
+// V1 免注册模式：模型设置页不再提供「注册/登录」入口，
 // 仅保留 useAuthStore 以便保留与未来鉴权体系的兼容点。
 const authStore = useAuthStore()
 const { isGuest } = storeToRefs(authStore)
@@ -23,7 +23,7 @@ const textTestStatus = ref(null)
 const visionTestStatus = ref(null)
 
 const form = reactive({
-  // V1 完全免费模式：平台不再提供公共模型，默认强制使用用户自己的 API。
+  // V1 免注册模式：平台不再提供公共模型，默认强制使用用户自己的 API。
   textSource: 'custom',
   textEndpoint: '',
   textApiKey: '',
@@ -202,7 +202,7 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
     <header class="settings-panel__header">
       <h2 class="settings-panel__title">我的模型</h2>
       <p class="settings-panel__desc">
-        V1 完全免费模式：在本地配置你自己的大模型 API（支持 DeepSeek / 智谱 GLM / 通义千问 / 文心一言 / 豆包 / Kimi / 腾讯混元 等国产大模型）。
+        V1 免注册模式：在本地配置你自己的大模型 API（支持 DeepSeek / 智谱 GLM / 通义千问 / 文心一言 / 豆包 / Kimi / 腾讯混元 等国产大模型）。
       </p>
     </header>
 
@@ -215,7 +215,7 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         <h3 class="settings-card__title">文本模型</h3>
         <p class="settings-card__desc">用于 AI 对话、续写、改写等文本生成能力。</p>
 
-        <!-- V1 完全免费模式：不再提供「WPX 公共大模型」单选，平台不提供免费 Token。
+        <!-- V1 免注册模式：不再提供「WPX 公共大模型」单选，平台不提供免费 Token。
              用户必须自行接入自定义模型 API。 -->
         <div v-if="form.textSource === 'custom'" class="model-settings__custom-fields">
           <div class="settings-field">
@@ -291,7 +291,7 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
         <h3 class="settings-card__title">图片识别模型</h3>
         <p class="settings-card__desc">用于识别图片内容、图表与截图中的文字信息。</p>
 
-        <!-- V1 完全免费模式：同上，去掉「WPX 公共大模型」单选 -->
+        <!-- V1 免注册模式：同上，去掉「WPX 公共大模型」单选 -->
         <div v-if="form.visionSource === 'custom'" class="model-settings__custom-fields">
           <div class="settings-field">
             <label class="settings-label" for="vision-endpoint">API 地址（Endpoint）</label>

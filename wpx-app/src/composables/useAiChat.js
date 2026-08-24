@@ -1,13 +1,10 @@
 import { Chat } from '@ai-sdk/vue'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { DirectChatTransport, ToolLoopAgent } from 'ai'
-import { computed, ref, toValue, watch } from 'vue'
+import { computed, ref, shallowRef, toValue, watch } from 'vue'
 import {
-  GUEST_MISSING_CUSTOM_API_MESSAGE,
-  LOGGED_IN_MISSING_CUSTOM_API_MESSAGE,
-  LOGGED_IN_QUOTA_EXHAUSTED_CONFIGURE_MESSAGE,
-  LOGGED_IN_QUOTA_EXHAUSTED_RECHARGE_MESSAGE,
   MISSING_CUSTOM_API,
+  MISSING_CUSTOM_API_MESSAGE,
 } from '@/constants/aiModelMessages'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
@@ -17,13 +14,6 @@ import { buildChatEpisode, isEpisodeRecordingEnabled } from '@/utils/memoryEpiso
 import { shouldAutoRouteHermes, buildHermesAssistantMessage } from '@/utils/hermesRouter'
 import { runHermesTask } from '@/composables/useHermesTask'
 import { routeTask, shouldUseJcode } from '@/server/ai-router'
-import {
-  checkFreeQuota,
-  consumeFreeQuotaTokens,
-  FREE_QUOTA_EXHAUSTED,
-  FreeQuotaExhaustedError,
-  resolveUsageTokens,
-} from '@/utils/freeQuota'
 
 const DEFAULT_BASE_URL = 'https://api.deepseek.com'
 const DEFAULT_MODEL = 'deepseek-chat'
@@ -46,11 +36,134 @@ export function buildContextPrompt(text, context = []) {
   return `${blocks}\n\n【用户问题】\n${text}`
 }
 
+/**
+ * 把底层模型错误映射为面向用户的友好提示。
+ *
+ * 命中「未配置 / 配置错误」类错误（API Key 无效、模型名错误、接口地址不通）时，
+ * 返回带 needsModelConfig 标记的文案，面板会渲染「设置 / 自己写」按钮引导用户。
+ * 其余错误保留原始信息，避免误导用户。
+ *
+ * @param {unknown} error
+ * @param {{ apiKey?: string }} [options]
+ * @returns {{ content: string, needsModelConfig?: boolean, suggestConfigure?: boolean, suggestWriteSelf?: boolean }}
+ */
+export function normalizeModelErrorForDisplay(error, options = {}) {
+  const raw = String(error?.message || error || '未知错误')
+  const lower = raw.toLowerCase()
+
+  // 开发环境提醒：调用方未传 apiKey 时给出警告，
+  // 避免新增调用点忘记传参导致兜底逻辑失效。
+  // 仅在真实浏览器开发环境输出，避免污染单元测试输出。
+  if (
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    !import.meta.env.VITEST &&
+    !Object.prototype.hasOwnProperty.call(options, 'apiKey')
+  ) {
+    console.warn(
+      '[normalizeModelErrorForDisplay] 调用方未传入 apiKey，' +
+        '兜底分类可能不准确。请传入 { apiKey: resolvedApiKey.value } 以启用完整错误分类。',
+    )
+  }
+
+  // 兜底：若调用方已知 apiKey 为空，直接返回未配置大模型的友好引导，
+  // 避免底层 SDK 抛出 "An error occurred" 这类无意义错误被原样展示。
+  // 注意：只有 options.apiKey 被显式传入（包括空字符串）时才启用此兜底，
+  // 不传 options 或不传 apiKey 时保持原有错误匹配逻辑，避免影响单元测试。
+  if (Object.prototype.hasOwnProperty.call(options, 'apiKey') && !options.apiKey) {
+    console.info(
+      '[normalizeModelErrorForDisplay] 命中「未配置大模型」兜底分支：' +
+        'apiKey 为空，原始错误 =',
+      raw,
+    )
+    return {
+      content: MISSING_CUSTOM_API_MESSAGE,
+      needsModelConfig: true,
+      suggestConfigure: true,
+      suggestWriteSelf: true,
+    }
+  }
+
+  if (
+    /(api.?key|authentication|unauthorized|invalid_api_key|401|403|auth.?fail|密钥|认证失败)/i.test(
+      lower,
+    )
+  ) {
+    console.info(
+      '[normalizeModelErrorForDisplay] 命中「API Key 无效」分支：原始错误 =',
+      raw,
+    )
+    return {
+      content:
+        'AI 调用失败：API Key 无效或未正确配置。请前往「我的模型」检查并重新保存 API Key。',
+      needsModelConfig: true,
+      suggestConfigure: true,
+    }
+  }
+
+  if (
+    /(model not exist|model not found|invalid model|unknown model|model.?not.?support|404|模型不存在|模型名)/i.test(
+      lower,
+    )
+  ) {
+    console.info(
+      '[normalizeModelErrorForDisplay] 命中「模型名称不正确」分支：原始错误 =',
+      raw,
+    )
+    return {
+      content:
+        'AI 调用失败：模型名称不正确。请前往「我的模型」核对模型名称（如 deepseek-chat）。',
+      needsModelConfig: true,
+      suggestConfigure: true,
+    }
+  }
+
+  if (
+    /(fetch failed|failed to fetch|network|econnrefused|enotfound|getaddrinfo|econnreset|timeout|econntimeout|certificate|网络|连接)/i.test(
+      lower,
+    )
+  ) {
+    console.info(
+      '[normalizeModelErrorForDisplay] 命中「网络/连接失败」分支：原始错误 =',
+      raw,
+    )
+    return {
+      content:
+        'AI 调用失败：无法连接到模型服务。请检查网络连接，或核对「我的模型」中的接口地址。',
+      needsModelConfig: true,
+      suggestConfigure: true,
+    }
+  }
+
+  // 兜底：SDK 可能把底层网络错误（如 Failed to fetch、DNS 解析失败）
+  // 包装成通用的 "An error occurred."，导致正则无法匹配。
+  // 这类通用错误几乎总是网络/连接层面的问题（模型服务不可达、DNS 解析失败等），
+  // 直接归类为「无法连接模型服务」，避免用户看到无意义的原始报错。
+  if (/an error occurred/i.test(lower)) {
+    console.info(
+      '[normalizeModelErrorForDisplay] 命中「SDK 包装的通用错误 → 网络/连接失败」兜底分支：原始错误 =',
+      raw,
+    )
+    return {
+      content:
+        'AI 调用失败：无法连接到模型服务。请检查网络连接，或核对「我的模型」中的接口地址。',
+      needsModelConfig: true,
+      suggestConfigure: true,
+    }
+  }
+
+  console.info(
+    '[normalizeModelErrorForDisplay] 未命中任何已知分类，走兜底透传：原始错误 =',
+    raw,
+  )
+  return { content: `AI 调用失败：${raw}` }
+}
+
 function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {}) {
-  const apiKey = aiConfig.apiKey || import.meta.env.VITE_DEEPSEEK_API_KEY
+  // V1.1 起仅使用用户在「我的模型」中自行配置的 API Key，平台不提供任何密钥。
+  const apiKey = aiConfig.apiKey || ''
   const baseURL = aiConfig.baseUrl || DEFAULT_BASE_URL
   const model = aiConfig.model || DEFAULT_MODEL
-  const isPlatform = aiConfig.source === 'platform'
 
   if (aiConfig.source === 'custom' && !apiKey && import.meta.env.DEV) {
     console.debug('[useAiChat] 自定义模型 API Key 未配置，发送消息前请在设置页填写。')
@@ -69,12 +182,6 @@ function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {
     topP: aiConfig.topP,
     maxOutputTokens: aiConfig.maxOutputTokens,
     onFinish: (event) => {
-      if (isPlatform && callbacks.onPlatformTokensUsed) {
-        const tokens = resolveUsageTokens(event.totalUsage, {
-          fallbackText: event.text || '',
-        })
-        void callbacks.onPlatformTokensUsed(tokens)
-      }
       // M2.1：对话成功 → 记录情景记忆（桌面端，受 recordEpisodes 开关控制）
       callbacks.onFinish?.(event)
     },
@@ -87,19 +194,21 @@ function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {
     },
     onFinish: () => {
       syncTick.value += 1
+      callbacks.onChatFinish?.()
     },
     onError: (error) => {
       syncTick.value += 1
+      callbacks.onChatError?.(error)
       // 重要：让用户立刻看到错误原因，而不是仅仅在 chat 面板中静默失败。
       // syncLatestAssistantMessage 依赖 isLoading 触发，但 toast 能让用户第一时间感知到问题。
-      const errMsg = error?.message || String(error) || '未知错误'
       // eslint-disable-next-line no-console
       console.error('[useAiChat] chat error:', error)
       // 避免重复提示：syncLatestAssistantMessage 也已经会推入错误消息
       if (!callbacks.onError) {
         try {
           const t = useToast()
-          t?.error?.(`AI 调用失败：${errMsg}`)
+          const normalized = normalizeModelErrorForDisplay(error, { apiKey })
+          t?.error?.(normalized.content)
         } catch {
           /* toast 不可用时静默 */
         }
@@ -114,7 +223,7 @@ function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {
  * Vue composable wrapping @ai-sdk/vue Chat (AI SDK v3 useChat equivalent).
  *
  * @param {string | import('vue').MaybeRef<string>} systemPrompt
- * @param {{ skillExecutor?: import('@/composables/useSkillExecutor').useSkillExecutor, skillsStore?: import('pinia').StoreGeneric, onSkillExecuting?: (info: { skillId: string, skillName: string, params: Record<string, any> }) => void }} [skillOptions]
+ * @param {{ skillExecutor?: import('@/composables/useSkillExecutor').useSkillExecutor, skillsStore?: import('pinia').StoreGeneric, getDocumentContext?: () => { recommendedSkillIds?: string[] }, onSkillExecuting?: (info: { skillId: string, skillName: string, params: Record<string, any> }) => void, onChatFinish?: () => void, onChatError?: (error: unknown) => void }} [skillOptions]
  */
 export function useAiChat(systemPrompt = '', skillOptions = {}) {
   const modelSettingsStore = useModelSettingsStore()
@@ -123,48 +232,31 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
   const syncTick = ref(0)
   const input = ref('')
   const resolvedApiKey = ref('')
-  const lastQuotaError = ref(null)
 
   // ── Skill 集成 ──
-  const { skillExecutor, skillsStore, onSkillExecuting } = skillOptions
+  const { skillExecutor, skillsStore, getDocumentContext, onSkillExecuting, onChatFinish, onChatError } = skillOptions
   const pendingSkill = ref(null)
   const lastSkillInvocation = ref(null)
 
+  // V1.1 起仅使用用户自定义模型：始终返回 custom 配置，
+  // apiKey 为空时由 sendMessage 的 MISSING_CUSTOM_API 分支引导去「我的模型」配置。
   async function resolveAiConfig() {
     const textConfig = modelSettingsStore.effectiveTextConfig
 
-    if (textConfig.source === 'custom' && !modelSettingsStore.textPlatformFallback) {
-      const apiKey = await modelSettingsStore.resolveTextApiKey()
-      resolvedApiKey.value = apiKey || ''
-
-      return {
-        source: 'custom',
-        apiKey: apiKey || '',
-        baseUrl: textConfig.baseUrl,
-        model: textConfig.model,
-        temperature: textConfig.temperature,
-        topP: textConfig.topP,
-        maxOutputTokens: textConfig.maxOutputTokens,
-      }
+    let apiKey = ''
+    try {
+      apiKey = (await modelSettingsStore.resolveTextApiKey()) || ''
+    } catch (error) {
+      // 读取自定义 Key 失败（如主进程解密异常）不应中断发送流程，
+      // 交给下方 MISSING_CUSTOM_API 分支给出「设置 / 自己写」对话引导。
+      console.warn('[useAiChat] 读取自定义 API Key 失败:', error?.message || error)
+      apiKey = ''
     }
+    resolvedApiKey.value = apiKey
 
-    if (authStore.isGuest) {
-      resolvedApiKey.value = ''
-      return {
-        source: 'unavailable',
-        apiKey: '',
-        baseUrl: textConfig.baseUrl,
-        model: textConfig.model,
-        temperature: textConfig.temperature,
-        topP: textConfig.topP,
-        maxOutputTokens: textConfig.maxOutputTokens,
-      }
-    }
-
-    resolvedApiKey.value = textConfig.apiKey || ''
     return {
-      source: 'platform',
-      apiKey: textConfig.apiKey || resolvedApiKey.value,
+      source: 'custom',
+      apiKey: apiKey || '',
       baseUrl: textConfig.baseUrl,
       model: textConfig.model,
       temperature: textConfig.temperature,
@@ -173,34 +265,16 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     }
   }
 
-  async function handlePlatformTokensUsed(tokens) {
+  function handleCustomModelError(error) {
+    // V1.1 起仅使用用户自定义模型：调用失败统一给出可见提示，
+    // 避免「发消息后无任何反馈」的静默失败。错误详情同时由
+    // AiAssistantPlaceholder 的错误气泡展示。
+    const normalized = normalizeModelErrorForDisplay(error, { apiKey: resolvedApiKey.value })
     try {
-      await consumeFreeQuotaTokens({
-        tokens,
-        isGuest: false,
-        userId: authStore.currentUser?.id || null,
-      })
-    } catch (error) {
-      console.warn('[useAiChat] Failed to record platform token usage:', error)
+      toast.error(normalized.content)
+    } catch {
+      // toast 不可用时静默（面板错误气泡仍会兜底展示）
     }
-  }
-
-  async function handleCustomModelError(error) {
-    if (authStore.isGuest) {
-      return
-    }
-
-    const config = modelSettingsStore.effectiveTextConfig
-    if (config.source !== 'custom' || modelSettingsStore.textPlatformFallback) {
-      return
-    }
-
-    const activated = modelSettingsStore.activateTextPlatformFallback()
-    if (!activated) return
-
-    toast.warning('自定义模型调用失败，已回退到 WPX 平台模型')
-    console.warn('[useAiChat] Custom model failed, falling back to platform model:', error)
-    await recreateChat()
   }
 
   // ── M2.1：对话成功 → 情景记忆（桌面端） ──
@@ -243,28 +317,29 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     }
   }
 
-  function buildChatCallbacks(aiConfig) {
+  function buildChatCallbacks() {
     return {
       onError: handleCustomModelError,
-      onPlatformTokensUsed: aiConfig.source === 'platform' ? handlePlatformTokensUsed : undefined,
       onFinish: (event) => {
         void recordChatEpisode(event)
       },
+      onChatFinish,
+      onChatError,
     }
   }
 
-  let chat = createDeepSeekChat(toValue(systemPrompt), syncTick, {}, buildChatCallbacks({}))
+  const chatRef = shallowRef(createDeepSeekChat(toValue(systemPrompt), syncTick, {}, buildChatCallbacks()))
 
   async function recreateChat() {
-    const previousMessages = chat.messages
+    const previousMessages = chatRef.value.messages
     const aiConfig = await resolveAiConfig()
-    chat = createDeepSeekChat(toValue(systemPrompt), syncTick, aiConfig, buildChatCallbacks(aiConfig))
-    chat.messages = previousMessages
+    chatRef.value = createDeepSeekChat(toValue(systemPrompt), syncTick, aiConfig, buildChatCallbacks())
+    chatRef.value.messages = previousMessages
     syncTick.value += 1
   }
 
   void resolveAiConfig().then((aiConfig) => {
-    chat = createDeepSeekChat(toValue(systemPrompt), syncTick, aiConfig, buildChatCallbacks(aiConfig))
+    chatRef.value = createDeepSeekChat(toValue(systemPrompt), syncTick, aiConfig, buildChatCallbacks())
     syncTick.value += 1
   })
 
@@ -278,13 +353,11 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
   watch(
     () => [
       modelSettingsStore.configVersion,
-      modelSettingsStore.effectiveTextConfig.source,
       modelSettingsStore.effectiveTextConfig.baseUrl,
       modelSettingsStore.effectiveTextConfig.model,
       modelSettingsStore.effectiveTextConfig.temperature,
       modelSettingsStore.effectiveTextConfig.topP,
       modelSettingsStore.effectiveTextConfig.maxOutputTokens,
-      modelSettingsStore.textPlatformFallback,
       authStore.isGuest,
     ],
     () => {
@@ -294,55 +367,13 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
 
   const messages = computed(() => {
     syncTick.value
-    return chat.messages
+    return chatRef.value.messages
   })
 
   const isLoading = computed(() => {
     syncTick.value
-    return chat.status === 'submitted' || chat.status === 'streaming'
+    return chatRef.value.status === 'submitted' || chatRef.value.status === 'streaming'
   })
-
-  async function ensurePlatformFreeQuota() {
-    const aiConfig = await resolveAiConfig()
-    if (aiConfig.source !== 'platform') {
-      lastQuotaError.value = null
-      return { ok: true }
-    }
-
-    try {
-      const result = await checkFreeQuota({
-        isGuest: false,
-        userId: authStore.currentUser?.id || null,
-      })
-      lastQuotaError.value = null
-      return { ok: true, quota: result }
-    } catch (error) {
-      if (error instanceof FreeQuotaExhaustedError) {
-        const suggestConfigure = !modelSettingsStore.hasStoredTextApiKey
-        const message = suggestConfigure
-          ? LOGGED_IN_QUOTA_EXHAUSTED_CONFIGURE_MESSAGE
-          : LOGGED_IN_QUOTA_EXHAUSTED_RECHARGE_MESSAGE
-
-        lastQuotaError.value = {
-          code: FREE_QUOTA_EXHAUSTED,
-          message,
-          isGuest: false,
-          suggestConfigure,
-          details: error.details,
-        }
-        return {
-          ok: false,
-          code: FREE_QUOTA_EXHAUSTED,
-          message,
-          isGuest: false,
-          suggestConfigure,
-          details: error.details,
-        }
-      }
-
-      throw error
-    }
-  }
 
   /**
    * jcode 路由检查（透明降级提示）
@@ -431,7 +462,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
       return null
     }
     const message = buildHermesAssistantMessage(text, result.result)
-    chat.messages = [...chat.messages, message]
+    chatRef.value.messages = [...chatRef.value.messages, message]
     syncTick.value += 1
     return message
   }
@@ -441,31 +472,13 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     lastUserText.value = text || ''
     const aiConfig = await resolveAiConfig()
 
-    if (aiConfig.source === 'custom') {
-      if (!aiConfig.apiKey) {
-        const message = authStore.isGuest
-          ? GUEST_MISSING_CUSTOM_API_MESSAGE
-          : LOGGED_IN_MISSING_CUSTOM_API_MESSAGE
-
-        return {
-          ok: false,
-          code: MISSING_CUSTOM_API,
-          message,
-          isGuest: authStore.isGuest,
-          suggestConfigure: true,
-        }
-      }
-    } else if (aiConfig.source === 'platform') {
-      const quotaResult = await ensurePlatformFreeQuota()
-      if (!quotaResult.ok) {
-        return quotaResult
-      }
-    } else if (authStore.isGuest) {
+    // V1.1 起仅使用用户自定义模型：未配置 API Key 时拦截并引导配置。
+    if (!aiConfig.apiKey) {
       return {
         ok: false,
         code: MISSING_CUSTOM_API,
-        message: GUEST_MISSING_CUSTOM_API_MESSAGE,
-        isGuest: true,
+        message: MISSING_CUSTOM_API_MESSAGE,
+        isGuest: authStore.isGuest,
         suggestConfigure: true,
       }
     }
@@ -490,7 +503,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
           onSkillExecuting?.(lastSkillInvocation.value)
           const result = skillExecutor.executeSkillLenient(candidate.skillId, params)
           const payload = buildContextPrompt(result.prompt, context)
-          chat.sendMessage({ text: payload })
+          chatRef.value.sendMessage({ text: payload })
           syncTick.value += 1
           return { ok: true }
         }
@@ -513,7 +526,10 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
 
     // ── Step 1: 隐式 Skill 意图匹配（matchSkillByIntent）──
     if (skillExecutor && skillsStore) {
-      const matchedId = skillExecutor.matchSkillByIntent(text)
+      const docContext = typeof getDocumentContext === 'function' ? getDocumentContext() : null
+      const matchedId = skillExecutor.matchSkillByIntent(text, {
+        recommendedSkillIds: docContext?.recommendedSkillIds || [],
+      })
       if (matchedId) {
         if (skillsStore.isSkillEnabled(matchedId)) {
           const schema = skillExecutor.getSkillInputForm(matchedId)
@@ -529,7 +545,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
               lastSkillInvocation.value = { skillId: matchedId, skillName, params: {}, ts: Date.now() }
               onSkillExecuting?.(lastSkillInvocation.value)
               const payload = buildContextPrompt(result.prompt, context)
-              chat.sendMessage({ text: payload })
+              chatRef.value.sendMessage({ text: payload })
               syncTick.value += 1
               return { ok: true }
             }
@@ -546,7 +562,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     }
 
     const payload = buildContextPrompt(text, context)
-    chat.sendMessage({ text: payload })
+    chatRef.value.sendMessage({ text: payload })
     syncTick.value += 1
     return { ok: true }
   }
@@ -564,12 +580,12 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
       lastSkillInvocation.value = { skillId, skillName, params: formData || {}, ts: Date.now() }
       onSkillExecuting?.(lastSkillInvocation.value)
       const payload = buildContextPrompt(result.prompt, savedContext)
-      chat.sendMessage({ text: payload })
+      chatRef.value.sendMessage({ text: payload })
       syncTick.value += 1
     } else {
       // 执行失败（极少情况），回退为原始消息
       const payload = buildContextPrompt(originalText, savedContext)
-      chat.sendMessage({ text: payload })
+      chatRef.value.sendMessage({ text: payload })
       syncTick.value += 1
     }
     pendingSkill.value = null
@@ -582,7 +598,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     if (!pendingSkill.value) return
     const { originalText, context: savedContext } = pendingSkill.value
     const payload = buildContextPrompt(originalText, savedContext)
-    chat.sendMessage({ text: payload })
+    chatRef.value.sendMessage({ text: payload })
     syncTick.value += 1
     pendingSkill.value = null
   }
@@ -603,7 +619,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
       onSkillExecuting?.(lastSkillInvocation.value)
       const result = skillExecutor.executeSkillLenient(skillId, params)
       const payload = buildContextPrompt(result.prompt, context)
-      chat.sendMessage({ text: payload })
+      chatRef.value.sendMessage({ text: payload })
       syncTick.value += 1
     }
     pendingSkill.value = null
@@ -619,7 +635,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     const skill = skillExecutor.findSkill(skillId)
     const result = skillExecutor.executeSkillLenient(skillId, params || {})
     const payload = buildContextPrompt(result.prompt, [])
-    chat.sendMessage({ text: payload })
+    chatRef.value.sendMessage({ text: payload })
     syncTick.value += 1
     lastSkillInvocation.value = {
       skillId,
@@ -645,7 +661,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     input,
     handleSubmit,
     isLoading,
-    chat,
+    chatRef,
     sendMessage,
     submitSkillForm,
     cancelSkillForm,
@@ -654,12 +670,8 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     lastSkillInvocation,
     pendingSkill,
     buildContextPrompt,
-    lastQuotaError,
-    ensurePlatformFreeQuota,
-    FREE_QUOTA_EXHAUSTED,
     MISSING_CUSTOM_API,
-    GUEST_MISSING_CUSTOM_API_MESSAGE,
-    LOGGED_IN_QUOTA_EXHAUSTED_CONFIGURE_MESSAGE,
+    resolvedApiKey,
   }
 }
 

@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { BookOpen, FileText, Library, Settings, Type } from '@lucide/vue'
 import { useAppStore } from '@/stores/app'
@@ -6,6 +7,7 @@ import { shortcutTooltip } from '@/composables/useGlobalShortcuts'
 import { requestCreateAppWindow } from '@/composables/useCreateAppWindow'
 import { isEditorRoute } from '@/utils/windowContext'
 import { isElectron } from '@/utils/electron'
+import NewDocumentIntentDialog from '@/components/layout/NewDocumentIntentDialog.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -20,12 +22,47 @@ const navItems = [
   { label: '设置', to: '/settings', icon: Settings },
 ]
 
+// 意图对话框状态：与 TitleBar.vue 同样交给 NewDocumentIntentDialog（空白 / AI / 按格式新建）。
+const intentDialogVisible = ref(false)
+let intentDialogResolver = null
+
+function openIntentDialog() {
+  intentDialogVisible.value = true
+  return new Promise((resolve) => {
+    intentDialogResolver = resolve
+  })
+}
+
+function handleIntentDialogClose() {
+  intentDialogVisible.value = false
+  intentDialogResolver?.(null)
+  intentDialogResolver = null
+}
+
+async function handleIntentDialogSubmit(payload) {
+  intentDialogVisible.value = false
+  intentDialogResolver?.(payload)
+  intentDialogResolver = null
+}
+
 async function handleNewDocument() {
   if (isElectron()) {
-    await requestCreateAppWindow()
+    // 桌面端：弹意图对话框，让用户选 空白 / AI / 模板 格式。
+    const result = await openIntentDialog()
+    if (!result) return  // 用户取消
+
+    // 所有路径都开新窗口（mode + templateId/intent 通过 URL 传入）
+    await requestCreateAppWindow(undefined, {
+      mode: result.mode,
+      intent: result.intent || '',
+      templateId: result.templateId || '',
+    })
     return
   }
 
+  // Web 端：弹意图对话框；提交后落到 store 的 requestNewDocument（无 multi-window）。
+  const result = await openIntentDialog()
+  if (!result) return
   if (!isEditorRoute(router.currentRoute.value)) {
     await router.push({ name: 'editor' })
   }
@@ -81,5 +118,11 @@ async function handleNewDocument() {
         </RouterLink>
       </div>
     </div>
+
+    <NewDocumentIntentDialog
+      :visible="intentDialogVisible"
+      @close="handleIntentDialogClose"
+      @submit="handleIntentDialogSubmit"
+    />
   </header>
 </template>

@@ -131,7 +131,8 @@ watch(
   align-items: flex-start;
   justify-content: center;
   padding: 80px 16px 16px;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
 }
 
 .image-url-dialog {

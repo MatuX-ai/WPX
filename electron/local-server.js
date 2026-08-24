@@ -6,6 +6,7 @@ const { registerTokenRoutes } = require('./services/token-routes')
 const { registerCommercialFontRoutes } = require('./services/commercial-font-routes')
 const { registerJcodeRoutes } = require('./services/jcode-routes')
 const { registerHermesRoutes } = require('./services/hermes-routes')
+const { registerLibraryRoutes } = require('./services/library-routes')
 const hermesLauncher = require('./services/hermes-launcher')
 const { initTokenStore } = require('./services/token-store')
 const { initCommercialFontStore } = require('./services/commercial-font-store')
@@ -62,6 +63,9 @@ async function startLocalServer() {
   registerTokenRoutes(expressApp)
   registerCommercialFontRoutes(expressApp)
   registerJcodeRoutes(expressApp)
+  // 文库服务：移植自 wpx-app/src/server/library-service.py，
+  // 避免 Electron 桌面端 fetch `/api/library/*` 报 Failed to fetch。
+  registerLibraryRoutes(expressApp)
   // M3：Hermes Gateway 适配层（网关不可用时透明降级，不影响其他服务）
   // gatewayKey 动态取 launcher 当前生成的 API_SERVER_KEY
   registerHermesRoutes(expressApp, {

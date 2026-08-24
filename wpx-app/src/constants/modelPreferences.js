@@ -1,4 +1,4 @@
-/** @typedef {'platform' | 'custom'} ModelSource */
+/** @typedef {'custom'} ModelSource */
 
 /** @typedef {Object} CustomModelConfig
  * @property {string} endpoint
@@ -38,9 +38,11 @@ export function createDefaultModelParameters() {
   }
 }
 
+// V1.1 起仅支持用户自定义模型：平台不再提供任何「公共 / 免费」大模型。
+// source 恒为 custom，保留字段仅为兼容历史持久化数据。
 export function createDefaultModelBlockConfig(defaultCustom) {
   return {
-    source: 'platform',
+    source: 'custom',
     custom: { ...defaultCustom },
   }
 }

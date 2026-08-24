@@ -1,7 +1,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { analyzeDocument, saveDocument } from '@/utils/libraryApi'
+import { saveMarkdownToLocalFile, isLocalSaveAvailable } from '@/utils/documentFile'
 import { useLibraryStore } from '@/stores/library'
+import { useToast } from '@/composables/useToast'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 
 const props = defineProps({
@@ -22,6 +24,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 
 const libraryStore = useLibraryStore()
+const toast = useToast()
 
 const title = ref('')
 const suggestedPath = ref('')
@@ -31,11 +34,18 @@ const tagInput = ref('')
 const summary = ref('')
 const analyzing = ref(false)
 const saving = ref(false)
+const savingToLocal = ref(false)
 const error = ref('')
 
 const pathModified = computed(
   () => path.value.trim() !== suggestedPath.value.trim(),
 )
+
+/**
+ * 仅在 Electron 桌面端可见的本地保存入口。
+ * Web 环境返回 false → 按钮不渲染，零侵入。
+ */
+const localSaveSupported = computed(() => isLocalSaveAvailable())
 
 const submitToKnowledge = ref(true)
 
@@ -161,6 +171,39 @@ async function handleSave() {
     error.value = err.message || '保存失败'
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * 「另存为本地文件…」动作：
+ *  - 调起原生 dialog:show-save-dialog，选定路径后走 file:write-document
+ *  - 与「保存到文库」完全独立，二者可单独或同时使用，互不阻断
+ *  - 仅 Electron 环境可见（v-if 由 localSaveSupported 控制）
+ */
+async function handleSaveToLocal() {
+  if (savingToLocal.value) return
+
+  if (!props.content.trim()) {
+    error.value = '文档内容为空，无法保存'
+    return
+  }
+
+  savingToLocal.value = true
+
+  try {
+    const finalTitle = (title.value.trim() || props.defaultTitle || '未命名文档')
+    const result = await saveMarkdownToLocalFile({
+      title: finalTitle,
+      content: props.content,
+    })
+    if (result.canceled) return
+    if (result.error) {
+      toast.error(`保存到本地失败：${result.error}`)
+      return
+    }
+    toast.success(`已保存到本地：${result.filePath}`)
+  } finally {
+    savingToLocal.value = false
   }
 }
 
@@ -319,6 +362,15 @@ watch(
             取消
           </button>
           <button
+            v-if="localSaveSupported"
+            type="button"
+            class="save-dialog__secondary-btn wpx-btn"
+            :disabled="!content.trim() || saving || savingToLocal"
+            @click="handleSaveToLocal"
+          >
+            {{ savingToLocal ? '保存中…' : '另存为本地文件…' }}
+          </button>
+          <button
             type="button"
             class="save-dialog__primary-btn wpx-btn"
             :disabled="analyzing || saving || !content.trim()"
@@ -343,8 +395,8 @@ watch(
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
 }
 
 .save-dialog {

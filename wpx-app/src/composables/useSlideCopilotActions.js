@@ -18,7 +18,6 @@ import { z } from 'zod'
 import { useSlidesStore } from '@/stores/slides'
 import { useModelSettingsStore } from '@/stores/modelSettings'
 import { useToast } from '@/composables/useToast'
-import { useAuthStore } from '@/stores/auth'
 import { outlineToSlides } from '@/composables/useSlideGenerator'
 import { downloadSlidesAsHtml, downloadSlidesAsPptx, downloadSlidesAsPdf } from '@/utils/slideExport'
 
@@ -125,27 +124,16 @@ const SlideSnapshot = {
  */
 function useResolvedLlm() {
   const modelSettingsStore = useModelSettingsStore()
-  const authStore = useAuthStore()
 
   return computed(async () => {
     const cfg = modelSettingsStore.effectiveTextConfig
-    if (cfg.source === 'custom' && !modelSettingsStore.textPlatformFallback) {
-      const apiKey = await modelSettingsStore.resolveTextApiKey()
-      return {
-        source: 'custom',
-        baseUrl: cfg.baseUrl || PLATFORM_DEEPSEEK_BASE,
-        apiKey: apiKey || '',
-        model: cfg.model || PLATFORM_DEEPSEEK_MODEL,
-        isGuest: false,
-      }
-    }
-    if (authStore.isGuest) {
-      return { source: 'unavailable', baseUrl: cfg.baseUrl, apiKey: '', model: cfg.model, isGuest: true }
-    }
+    // V1.1 起仅使用用户在「我的模型」中自定义的大模型；未配置 Key 时返回空，
+    // 由调用方判定能力不可用。
+    const apiKey = await modelSettingsStore.resolveTextApiKey()
     return {
-      source: 'platform',
+      source: 'custom',
       baseUrl: cfg.baseUrl || PLATFORM_DEEPSEEK_BASE,
-      apiKey: cfg.apiKey || '',
+      apiKey: apiKey || '',
       model: cfg.model || PLATFORM_DEEPSEEK_MODEL,
       isGuest: false,
     }

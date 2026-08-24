@@ -62,6 +62,10 @@ const props = defineProps({
     type: Object,
     default: () => ({ active: false, step: 0, totalSteps: 6, label: '', counts: null, finished: false }),
   },
+  recommendedSkills: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -78,9 +82,11 @@ const emit = defineEmits([
   'insert-text',
   'local-command-select',
   'local-command-dismiss',
+  'write-self',
   'batch-clean',
   'batch-clean-abort',
   'batch-clean-undo',
+  'skill-quick-use',
 ])
 
 /* ── 浮窗 / 贴边 通用状态 ── */
@@ -309,6 +315,7 @@ function handleHostMouseDown(event) {
               :local-command-placeholders="localCommandPlaceholders"
               :cleanable-count="cleanableCount"
               :batch-progress="batchProgress"
+              :recommended-skills="recommendedSkills"
               :is-dark="isDark"
               :is-pinned="isPinned"
               :is-docked="isDocked"
@@ -326,9 +333,11 @@ function handleHostMouseDown(event) {
               @insert-text="(text) => emit('insert-text', text)"
               @local-command-select="(payload) => emit('local-command-select', payload)"
               @local-command-dismiss="(payload) => emit('local-command-dismiss', payload)"
+              @write-self="emit('write-self')"
               @batch-clean="emit('batch-clean')"
               @batch-clean-abort="emit('batch-clean-abort')"
               @batch-clean-undo="emit('batch-clean-undo')"
+              @skill-quick-use="(skill) => emit('skill-quick-use', skill)"
             />
           </div>
         </Vue3DraggableResizable>
@@ -349,6 +358,7 @@ function handleHostMouseDown(event) {
           :local-command-placeholders="localCommandPlaceholders"
           :cleanable-count="cleanableCount"
           :batch-progress="batchProgress"
+          :recommended-skills="recommendedSkills"
           :is-dark="isDark"
           :is-pinned="isPinned"
           :is-docked="isDocked"
@@ -366,9 +376,11 @@ function handleHostMouseDown(event) {
           @insert-text="(text) => emit('insert-text', text)"
           @local-command-select="(payload) => emit('local-command-select', payload)"
           @local-command-dismiss="(payload) => emit('local-command-dismiss', payload)"
+          @write-self="emit('write-self')"
           @batch-clean="emit('batch-clean')"
           @batch-clean-abort="emit('batch-clean-abort')"
           @batch-clean-undo="emit('batch-clean-undo')"
+          @skill-quick-use="(skill) => emit('skill-quick-use', skill)"
         />
       </div>
     </div>

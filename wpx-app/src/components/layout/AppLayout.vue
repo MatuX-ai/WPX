@@ -155,6 +155,8 @@ onUnmounted(() => {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* 固定 TitleBar 覆盖时，scrollIntoView / 锚点滚动为栏高留白，避免 CTA 被挡住 */
+  scroll-padding-top: var(--title-bar-height, 36px);
 }
 
 .app-main--immersive :deep(.editor-layout) {

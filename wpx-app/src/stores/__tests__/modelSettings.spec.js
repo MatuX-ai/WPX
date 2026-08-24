@@ -9,27 +9,24 @@ vi.mock('@/utils/electron', () => ({
   getElectronAPI: vi.fn(() => null),
 }))
 
-describe('modelSettings — 自定义 API Key 与回退', () => {
+describe('modelSettings — 仅用户自定义模型（无平台模型/免费额度）', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
   })
 
-  it('自定义模型失败时激活平台回退', () => {
+  it('默认配置即使用自定义模型，source 恒为 custom', () => {
     const store = useModelSettingsStore()
-    store.data.text.source = 'custom'
-    expect(store.textPlatformFallback).toBe(false)
-
-    const activated = store.activateTextPlatformFallback()
-    expect(activated).toBe(true)
-    expect(store.textPlatformFallback).toBe(true)
-    expect(store.effectiveTextConfig.source).toBe('platform')
+    expect(store.effectiveTextConfig.source).toBe('custom')
+    expect(store.effectiveVisionConfig.source).toBe('custom')
   })
 
-  it('已回退后不会重复激活', () => {
+  it('历史持久化的 platform source 不再生效，始终使用自定义模型配置', () => {
     const store = useModelSettingsStore()
-    store.activateTextPlatformFallback()
-    expect(store.activateTextPlatformFallback()).toBe(false)
+    store.data.text.source = 'platform'
+    store.data.vision.source = 'platform'
+    expect(store.effectiveTextConfig.source).toBe('custom')
+    expect(store.effectiveVisionConfig.source).toBe('custom')
   })
 
   it('API Key 掩码后不暴露完整密钥', () => {

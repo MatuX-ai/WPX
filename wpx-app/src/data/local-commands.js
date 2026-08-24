@@ -59,6 +59,69 @@ function hasContent(ctx) {
   return false
 }
 
+function isInList(ctx) {
+  if (!ctx.editor) return false
+  return ctx.editor.isActive('bulletList') || ctx.editor.isActive('orderedList')
+}
+
+/**
+ * 统一写 CustomList 扩展的 setListStyleType 命令。
+ * @param {object} ctx
+ * @param {string} listStyleType
+ */
+function applyListStyleType(ctx, listStyleType) {
+  if (typeof ctx.editor.commands.setListStyleType === 'function') {
+    const ok = ctx.editor.chain().focus().setListStyleType(listStyleType).run()
+    return ok
+      ? { ok: true, message: `✅ 已将列表样式切换为 ${listStyleType}` }
+      : { ok: false, message: '⚠️ 列表样式切换失败' }
+  }
+  return { ok: false, message: '⚠️ 编辑器不支持自定义列表样式' }
+}
+
+/**
+ * 统一写 CustomList 扩展的 setListIcon 命令。
+ * @param {object} ctx
+ * @param {string} glyph
+ */
+function applyListIcon(ctx, glyph) {
+  if (typeof ctx.editor.commands.setListIcon === 'function') {
+    const ok = ctx.editor.chain().focus().setListIcon(glyph).run()
+    return ok
+      ? { ok: true, message: `✅ 已用 ${glyph} 作为行首符号` }
+      : { ok: false, message: '⚠️ 行首符号设置失败' }
+  }
+  return { ok: false, message: '⚠️ 编辑器不支持行首符号' }
+}
+
+/**
+ * 统一写 CustomList 扩展的 setListStart 命令。
+ * @param {object} ctx
+ * @param {number} start
+ */
+function applyListStart(ctx, start) {
+  if (typeof ctx.editor.commands.setListStart === 'function') {
+    const ok = ctx.editor.chain().focus().setListStart(start).run()
+    return ok
+      ? { ok: true, message: `✅ 已将列表起始编号设置为 ${start}` }
+      : { ok: false, message: '⚠️ 起始编号设置失败' }
+  }
+  return { ok: false, message: '⚠️ 编辑器不支持起始编号' }
+}
+
+/**
+ * 从命令文本中提取首个 emoji 字符（1-4 字节 UTF-8 序列）。
+ * 优先匹配 emoji 区块；找不到则返回 null。
+ * @param {string} text
+ * @returns {string|null}
+ */
+function extractEmojiFromCommand(text) {
+  if (!text) return null
+  // 匹配 emoji 字符：BMP 之外的补充符号 + 表情符号
+  const match = text.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2700}-\u{27BF}]/u)
+  return match ? match[0] : null
+}
+
 // ── 批量清洗工具：删除链接（保留链接文字）────────────
 
 /**
@@ -1189,6 +1252,119 @@ const headingCommands = [
     },
     successMessage: '✅ 已切换为代码块',
     failureMessage: '⚠️ 请先选中或点击到段落中',
+  }),
+  // ── 列表样式扩展（CustomList） ──
+  defineCommand({
+    id: 'list-style-decimal',
+    category: 'list',
+    patterns: [/^(列表|编号).*(1\s*2|1、2、|数字|decimal)/i],
+    priority: 90,
+    condition: isInList,
+    action: (ctx) => applyListStyleType(ctx, 'decimal'),
+    successMessage: '✅ 已切换为数字编号 (1, 2, 3)',
+    failureMessage: '⚠️ 请先点击到列表中',
+  }),
+  defineCommand({
+    id: 'list-style-upper-alpha',
+    category: 'list',
+    patterns: [/^(列表|编号).*(A\s*B|A\.|大写字母|大写英文)/],
+    priority: 90,
+    condition: isInList,
+    action: (ctx) => applyListStyleType(ctx, 'upper-alpha'),
+    successMessage: '✅ 已切换为大写字母编号 (A, B, C)',
+    failureMessage: '⚠️ 请先点击到列表中',
+  }),
+  defineCommand({
+    id: 'list-style-lower-alpha',
+    category: 'list',
+    patterns: [/^(列表|编号).*(a\s*b|a\.|小写字母|小写英文)/i],
+    priority: 90,
+    condition: isInList,
+    action: (ctx) => applyListStyleType(ctx, 'lower-alpha'),
+    successMessage: '✅ 已切换为小写字母编号 (a, b, c)',
+    failureMessage: '⚠️ 请先点击到列表中',
+  }),
+  defineCommand({
+    id: 'list-style-upper-roman',
+    category: 'list',
+    patterns: [/^(列表|编号).*(I\s*II|罗马|大写罗马)/i],
+    priority: 90,
+    condition: isInList,
+    action: (ctx) => applyListStyleType(ctx, 'upper-roman'),
+    successMessage: '✅ 已切换为罗马数字编号 (I, II, III)',
+    failureMessage: '⚠️ 请先点击到列表中',
+  }),
+  defineCommand({
+    id: 'list-style-lower-roman',
+    category: 'list',
+    patterns: [/^(列表|编号).*(i\s*ii|小写罗马)/i],
+    priority: 90,
+    condition: isInList,
+    action: (ctx) => applyListStyleType(ctx, 'lower-roman'),
+    successMessage: '✅ 已切换为小写罗马数字 (i, ii, iii)',
+    failureMessage: '⚠️ 请先点击到列表中',
+  }),
+  defineCommand({
+    id: 'list-icon-emoji',
+    category: 'list',
+    patterns: [
+      /(列表|行首|列表项).*(用|是).*(emoji|表情).*(做|当|作为).*(行首|符号|custom)/i,
+      /^(emoji|表情).*(行首|列表|符号)/i,
+      /(用|是).+?(做|当|作为).+(行首|符号)/i,
+    ],
+    priority: 91,
+    condition: isInList,
+    action: (ctx) => {
+      // 命中后优先从 ctx.matchedText 提取第一个 emoji；找不到则用默认 ✓
+      const source = ctx.matchedText || ''
+      const glyph = extractEmojiFromCommand(source) || '✓'
+      return applyListIcon(ctx, glyph)
+    },
+    successMessage: '✅ 已用 emoji 作行首符号',
+    failureMessage: '⚠️ 请先点击到列表中',
+  }),
+  defineCommand({
+    id: 'clear-list-style',
+    category: 'list',
+    patterns: [
+      /^(清除|重置).*(列表|编号).*(样式|自定义)/,
+      /^列表.*?默认$/,
+    ],
+    priority: 90,
+    condition: isInList,
+    action: (ctx) => {
+      if (typeof ctx.editor.commands.unsetListStyle === 'function') {
+        const ok = ctx.editor.chain().focus().unsetListStyle().run()
+        return ok
+          ? { ok: true, message: '✅ 已清除列表自定义样式' }
+          : { ok: false, message: '⚠️ 当前列表未自定义样式' }
+      }
+      return { ok: false, message: '⚠️ 编辑器不支持清除列表样式' }
+    },
+    successMessage: '✅ 已清除列表自定义样式',
+    failureMessage: '⚠️ 当前不在列表中',
+  }),
+  defineCommand({
+    id: 'list-start-number',
+    category: 'list',
+    patterns: [
+      /(列表|编号).*(从|第).*?(\d+).*开始/i,
+      /(列表|编号).*起始.*?(\d+)/i,
+      /^列表.*?(\d+).*号/i,
+    ],
+    priority: 90,
+    condition: (ctx) => isInList(ctx) && ctx.editor.isActive('orderedList'),
+    action: (ctx) => {
+      const source = ctx.matchedText || ''
+      const match = source.match(/(\d+)/)
+      const start = match ? parseInt(match[1], 10) : 1
+      if (start < 1 || start > 9999) {
+        return { ok: false, message: '⚠️ 起始编号应在 1-9999 之间' }
+      }
+      return applyListStart(ctx, start)
+    },
+    successMessage: '✅ 已设置起始编号',
+    failureMessage: '⚠️ 请先点击到有序列表中',
   }),
 ]
 

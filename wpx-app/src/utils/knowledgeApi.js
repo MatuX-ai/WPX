@@ -228,6 +228,35 @@ export async function clearKnowledgeIndex() {
   return response.json()
 }
 
+/**
+ * Everything 式补充：正文关键词全文检索（非语义）
+ * @param {string} query
+ * @param {number} [limit=20]
+ */
+export async function searchKnowledgeFulltext(query, limit = 20) {
+  const keyword = String(query || '').trim()
+  if (!keyword) {
+    return { results: [], query: '', totalHits: 0 }
+  }
+
+  const api = getKnowledgeApi()
+  if (api?.fulltextSearch) {
+    return api.fulltextSearch(keyword, limit)
+  }
+
+  const formData = new URLSearchParams()
+  formData.append('query', keyword)
+  formData.append('limit', String(Math.max(1, Math.min(50, Number(limit) || 20))))
+
+  const response = await fetch(`${API_BASE}/api/knowledge/fulltext-search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData.toString(),
+  })
+  if (!response.ok) await parseError(response)
+  return response.json()
+}
+
 export function onKnowledgeUpdated(callback) {
   const api = getKnowledgeApi()
   if (typeof api?.onUpdated === 'function') {

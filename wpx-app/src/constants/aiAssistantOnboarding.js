@@ -3,11 +3,11 @@ export const AI_ASSISTANT_ONBOARDING_KEY = 'wpx-ai-assistant-onboarding-v1'
 export const AI_ONBOARDING_SETUP_MESSAGE =
   '老板您好～我是您的写作小秘书。\n\n为了让我更好帮您干活，劳您花几分钟把**本地大模型 API** 配置好；接好后我就能随时听候差遣啦。'
 
-// V1 完全免费模式：不再提供「注册领 100M Token」入口，
+// V1 免注册模式：不再提供「注册领 100M Token」入口，
 // 也不推荐用户去注册账户。V1 默认访客身份即可使用全部本地能力。
 // 保留常量仅为兼容历史 import；createAiOnboardingMessages 不再推送此消息。
 export const AI_ONBOARDING_ACCOUNT_MESSAGE =
-  'V1 完全免费模式：无需注册账户，请在「我的模型」中接入大模型 API 后即可使用。'
+  'V1 免注册模式：无需注册账户，请在「我的模型」中接入大模型 API 后即可使用。'
 
 export const AI_ASSISTANT_DEFAULT_WELCOME =
   '你好，我是写作小助手。无需接入大模型即可使用本地命令，如「批量清洗」「居中」「保存」等。输入「帮助」查看所有可用命令。选中编辑器中的文字后输入指令可自动替换选区，输入 @ 可引用资料库中的文档。'
@@ -39,7 +39,7 @@ export function shouldShowAiAssistantOnboarding(options = {}) {
 }
 
 /**
- * V1 完全免费模式：V1 无需注册，不推送「注册/领 Token」类型的引导消息。
+ * V1 免注册模式：V1 无需注册，不推送「注册/领 Token」类型的引导消息。
  * 仅返回「接入大模型 API」一条 setup 消息。
  *
  * @param {{ isGuest?: boolean, createMessageId: () => string }} options

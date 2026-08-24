@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { getAiModelDisplayName } from '@/constants/aiModel'
 import {
   createDefaultModelSettings,
   mergeModelSettings,
@@ -9,7 +8,6 @@ import {
   PLATFORM_VISION_MODEL,
 } from '@/constants/modelPreferences'
 import { usePreferencesStore } from '@/stores/preferences'
-import { useSettingsStore } from '@/stores/settings'
 import { maskApiKey } from '@/utils/apiKeyMask'
 import {
   decryptApiKey,
@@ -119,7 +117,6 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
   const data = ref(createDefaultModelSettings())
   const hydrated = ref(false)
   const configVersion = ref(0)
-  const textPlatformFallback = ref(false)
 
   const maskedTextApiKey = ref('')
   const maskedVisionApiKey = ref('')
@@ -217,10 +214,7 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
   }
 
   async function resolveTextApiKey() {
-    if (data.value.text.source !== 'custom' || textPlatformFallback.value) {
-      return ''
-    }
-
+    // V1.1 起仅使用用户自定义模型，始终尝试读取本地加密的 API Key。
     if (isElectron()) {
       const api = getElectronAPI()?.models
       if (!api?.getDecryptedApiKey) return ''
@@ -232,10 +226,6 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
   }
 
   async function resolveVisionApiKey() {
-    if (data.value.vision.source !== 'custom') {
-      return ''
-    }
-
     if (isElectron()) {
       const api = getElectronAPI()?.models
       if (!api?.getDecryptedApiKey) return ''
@@ -246,75 +236,39 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
     return webApiKeys.vision
   }
 
-  async function ensureTextCredentials() {
-    if (data.value.text.source === 'custom' && !textPlatformFallback.value) {
-      await resolveTextApiKey()
-    }
-  }
-
-  const usesCustomModel = computed(
-    () => data.value.text.source === 'custom' || data.value.vision.source === 'custom',
-  )
+  const usesCustomModel = computed(() => true)
 
   const parameters = computed(() => data.value.parameters)
 
+  // V1.1 起仅使用用户自定义模型：忽略历史持久化的 source 字段，
+  // 一律返回 custom 配置。未填写时 model/baseUrl 使用默认值，apiKey 由调用方校验。
   const effectiveTextConfig = computed(() => {
     const params = data.value.parameters
-
-    if (data.value.text.source === 'custom' && !textPlatformFallback.value) {
-      const custom = data.value.text.custom
-      return {
-        source: 'custom',
-        apiKey: isElectron() ? undefined : webApiKeys.text,
-        baseUrl: normalizeModelEndpoint(custom.endpoint),
-        model: custom.modelName || PLATFORM_TEXT_MODEL,
-        temperature: params.temperature,
-        topP: params.topP,
-        maxOutputTokens: params.maxOutputTokens,
-        displayName: custom.modelName || '自定义文本模型',
-      }
-    }
-
-    const settingsStore = useSettingsStore()
+    const custom = data.value.text.custom
     return {
-      source: 'platform',
-      apiKey: settingsStore.effectiveApiKey,
-      baseUrl: settingsStore.effectiveBaseUrl,
-      model: settingsStore.model || PLATFORM_TEXT_MODEL,
+      source: 'custom',
+      apiKey: isElectron() ? undefined : webApiKeys.text,
+      baseUrl: normalizeModelEndpoint(custom.endpoint),
+      model: custom.modelName || PLATFORM_TEXT_MODEL,
       temperature: params.temperature,
       topP: params.topP,
       maxOutputTokens: params.maxOutputTokens,
-      displayName: getAiModelDisplayName(settingsStore.model),
+      displayName: custom.modelName || '自定义文本模型',
     }
   })
 
   const effectiveVisionConfig = computed(() => {
     const params = data.value.parameters
-
-    if (data.value.vision.source === 'custom') {
-      const custom = data.value.vision.custom
-      return {
-        source: 'custom',
-        apiKey: isElectron() ? undefined : webApiKeys.vision,
-        baseUrl: normalizeModelEndpoint(custom.endpoint),
-        model: custom.modelName || PLATFORM_VISION_MODEL,
-        temperature: params.temperature,
-        topP: params.topP,
-        maxOutputTokens: params.maxOutputTokens,
-        displayName: custom.modelName || '自定义图片模型',
-      }
-    }
-
-    const settingsStore = useSettingsStore()
+    const custom = data.value.vision.custom
     return {
-      source: 'platform',
-      apiKey: settingsStore.effectiveApiKey,
-      baseUrl: settingsStore.effectiveBaseUrl,
-      model: PLATFORM_VISION_MODEL,
+      source: 'custom',
+      apiKey: isElectron() ? undefined : webApiKeys.vision,
+      baseUrl: normalizeModelEndpoint(custom.endpoint),
+      model: custom.modelName || PLATFORM_VISION_MODEL,
       temperature: params.temperature,
       topP: params.topP,
       maxOutputTokens: params.maxOutputTokens,
-      displayName: 'WPX 图片模型',
+      displayName: custom.modelName || '自定义图片模型',
     }
   })
 
@@ -358,7 +312,6 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
     }
 
     data.value = next
-    textPlatformFallback.value = false
     persistModelSettingsToStorage(next)
 
     const preferencesStore = usePreferencesStore()
@@ -376,13 +329,6 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
     return next
   }
 
-  function activateTextPlatformFallback() {
-    if (textPlatformFallback.value) return false
-    textPlatformFallback.value = true
-    configVersion.value += 1
-    return true
-  }
-
   /**
    * @param {'text' | 'vision'} block
    */
@@ -397,7 +343,6 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
     data,
     hydrated,
     configVersion,
-    textPlatformFallback,
     maskedTextApiKey,
     maskedVisionApiKey,
     hasStoredTextApiKey,
@@ -410,9 +355,7 @@ export const useModelSettingsStore = defineStore('modelSettings', () => {
     hydrateFromPreferences,
     saveSettings,
     refreshMaskedApiKeys,
-    ensureTextCredentials,
     resolveTextApiKey,
     getApiKeyForUse,
-    activateTextPlatformFallback,
   }
 })

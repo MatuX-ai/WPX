@@ -52,7 +52,6 @@ const WindowManager = require('./window-manager')
 const { initUserDataService } = require('./user-data-service')
 const { initModelIpc } = require('./model-ipc')
 const { initAuthStore } = require('./auth-store')
-const { initFreeQuotaIpc } = require('./free-quota-ipc')
 const {
   handleAuthCallbackUrl,
   extractProtocolUrlsFromArgv,
@@ -77,6 +76,7 @@ const { registerFontIpcHandlers } = require('./font-ipc')
 const { initJcodeIpc, shutdownJcodeIpc } = require('./jcode-ipc')
 const { registerSkillhubIpcHandlers } = require('./skillhub-ipc')
 const { initHermesIpc } = require('./hermes-ipc')
+const { registerDialogIpc } = require('./dialog-ipc')
 
 const devConfig = loadDevConfig({ isPackaged: app.isPackaged })
 initDevLogger(devConfig)
@@ -150,6 +150,23 @@ function showMainWindow() {
     mainWindow.restore()
   }
   mainWindow.focus()
+}
+
+/**
+ * 切换聚焦窗口的开发者工具（DevTools）。
+ * 桌面端的【视图】菜单和 Ctrl+Shift+I / F12 都会走这里。
+ * 在打包场景下仍需可用，便于用户排查问题。
+ */
+function toggleDevToolsForFocusedWindow() {
+  const target = BrowserWindow.getFocusedWindow() || mainWindow
+  if (!target || target.isDestroyed()) return
+  const wc = target.webContents
+  if (!wc || wc.isDestroyed()) return
+  if (wc.isDevToolsOpened()) {
+    wc.closeDevTools()
+  } else {
+    wc.openDevTools({ mode: 'detach' })
+  }
 }
 
 function hideMainWindow() {
@@ -412,6 +429,27 @@ function buildAppMenu() {
       ],
     },
     {
+      label: '视图',
+      submenu: [
+        {
+          label: '开发者工具',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => {
+            toggleDevToolsForFocusedWindow()
+          },
+        },
+        { type: 'separator' },
+        { role: 'reload', label: '重新加载' },
+        { role: 'forceReload', label: '强制重新加载' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: '实际大小' },
+        { role: 'zoomIn', label: '放大' },
+        { role: 'zoomOut', label: '缩小' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: '切换全屏' },
+      ],
+    },
+    {
       label: '窗口',
       submenu: windowSubmenu,
     },
@@ -606,6 +644,22 @@ function bindManagedWindow(window, { isMain = false } = {}) {
   })
 
   bindWindowCloseGuard(window)
+
+  /**
+   * 兜底拦截 Ctrl+Shift+I / F12。
+   * 渲染进程的 keydown 监听器（例如 useGlobalShortcuts 中打开图片编辑器的逻辑）
+   * 可能在某些时机调用 event.preventDefault()，导致菜单 accelerator 被吞掉。
+   * 这里在主进程提前拦截，无论渲染进程是否处理，都一定能打开 DevTools。
+   */
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const key = (input.key ?? '').toLowerCase()
+    if (!input.control && !input.meta) return
+    if (!input.shift) return
+    if (key !== 'i' && key !== 'f12') return
+    event.preventDefault()
+    toggleDevToolsForFocusedWindow()
+  })
 
   if (isMain) {
     window.once('ready-to-show', () => {
@@ -817,8 +871,8 @@ function registerIpcHandlers() {
     return { ok: true }
   })
 
-  ipcMain.handle('window:create', (_event, docPath) => {
-    return createManagedWindow(docPath, { suppressDialog: true })
+  ipcMain.handle('window:create', (_event, docPath, options = {}) => {
+    return createManagedWindow(docPath, { suppressDialog: true, ...options })
   })
 
   ipcMain.on('window:request-close', (event) => {
@@ -886,6 +940,10 @@ function registerIpcHandlers() {
     if (result.canceled || !result.filePaths.length) return null
     return result.filePaths[0]
   })
+
+  // 文件对话框相关 IPC（保存到本地文件等）。
+  // 拆到独立模块便于单测。
+  registerDialogIpc({ ipcMain, dialog, BrowserWindow })
 
   ipcMain.handle('file:get-modified-time', async (_event, filePath) => {
     if (!filePath || typeof filePath !== 'string') return null
@@ -1161,7 +1219,6 @@ app.whenReady().then(async () => {
   await initUserDataService()
   await initModelIpc()
   await initAuthStore()
-  await initFreeQuotaIpc()
   // initAuthProtocol 已重构为 noop：WPX 改为应用内嵌 AuthModal 登录，不再打开外部浏览器
   await initKnowledgeService()
   await initMemoryService()

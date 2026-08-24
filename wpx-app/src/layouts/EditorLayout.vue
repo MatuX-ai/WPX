@@ -26,6 +26,7 @@ import { useEditorFonts } from '@/composables/useEditorFonts'
 import { shortcutTooltip, getShortcutLabel, useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useToast } from '@/composables/useToast'
+import { useModelSettingsStore } from '@/stores/modelSettings'
 import { AI_CHAT_DOCKED } from '@/constants/floatingWindow'
 import { useDockPanelResize } from '@/composables/useDockPanelResize'
 import {
@@ -66,6 +67,7 @@ import { toEditorContent } from '@/utils/aiSelection'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import { zipFeatureAvailable } from '@/utils/zipApi'
 import { getDocPathFromUrl } from '@/utils/windowContext'
+import { getColdStartTemplate } from '@/data/cold-start-templates'
 import { useWindowStore } from '@/stores/window'
 import {
   getPaperWidthPx,
@@ -87,6 +89,7 @@ const userPreferencesStore = useUserPreferencesStore()
 const floatingWindows = useFloatingWindows()
 const overlay = provideEditorOverlay()
 const toast = useToast()
+const modelSettingsStore = useModelSettingsStore()
 const { applyFontToEditor } = useEditorFonts()
 const zipArchiveHost = inject('zipArchiveHost', ref(null))
 const { applyFormat } = useUserHabits()
@@ -366,18 +369,27 @@ function handlePdfImportConfirm(payload) {
 
 function createNewDocument(template = null) {
   appStore.openDocument()
+
+  // [FIX-0.1.24] Set template context (documentType) eagerly so subsequent
+  // onEditorChange-driven title / autosave is attributed to the right type.
+  // 无模板 / 空白新建时清空，避免上一份文档的推荐 Skills 残留。
+  habitsStore.setSessionDocumentType(template?.documentType || '')
+
+  // Cold-start templates carry an inline Markdown payload (content). Write
+  // it to the editor so users get a ready-to-fill skeleton instead of a
+  // blank document.
+  const initialContent = template?.content ?? ''
+
   nextTick(() => {
-    editorRef.value?.loadMarkdown('')
-    editorOutput.value = { html: '', json: null, markdown: '' }
+    editorRef.value?.loadMarkdown(initialContent)
+    editorOutput.value = { html: '', json: null, markdown: initialContent }
     appStore.resetDocumentState()
     editorStore.clearPendingReplace()
 
     if (template?.format) {
+      // Apply format on a second tick to avoid racing with the onUpdate fired
+      // by loadMarkdown; otherwise the cursor can land on an invalid position.
       nextTick(() => applyFormat(template.format))
-    }
-
-    if (template?.documentType) {
-      habitsStore.setSessionDocumentType(template.documentType)
     }
   })
 }
@@ -492,6 +504,39 @@ useWindowCloseInterceptor(handleWindowCloseCheck)
 useLaunchDocument({
   onOpen: openExternalDocument,
   onBlank: () => createNewDocument(),
+  /**
+   * FIX-2026-08-20：【新建文档 → AI 帮我写】触发后，新窗口会带 mode=ai&intent=... URL 启动。
+   * 之前 useLaunchDocument 只调用了 onBlank（创建空白文档），导致 intent 被丢弃，
+   * 用户看到空白文档但 AI 助手没有任何反应，且未提示需要接入大模型。
+   *
+   * 修复策略：
+   *   1) 把 intent 写入 editorStore.pendingAiIntent（state machine）
+   *   2) 主动打开 AI 助手浮窗，让用户立刻看到对话面板
+   *   3) AiAssistantPlaceholder 监听 pendingAiIntent → 自动调 handleSend
+   *   4) handleSend 内已有 MISSING_CUSTOM_API 错误处理 → 未接入大模型时会弹
+   *      「尚未接入大模型…【设置】【自己写】」对话引导，避免生硬报错
+   *
+   * 注意：未接入模型时不要 toast「正在生成」，否则像报错前置噪声。
+   */
+  onAiIntent: (intent) => {
+    const text = typeof intent === 'string' ? intent.trim() : ''
+    if (!text) return
+    editorStore.requestAiIntent(text)
+    overlay.openAiPanel()
+    if (modelSettingsStore.hasStoredTextApiKey) {
+      toast.info('AI 助手正在为你生成内容…')
+    }
+  },
+  onTemplate: (templateId) => {
+    const template = getColdStartTemplate(templateId)
+    if (!template) {
+      // 传入的 templateId 在主进程未知 → 降级为完全空白文档
+      console.warn('[EditorLayout] unknown templateId for launch:', templateId)
+      createNewDocument()
+      return
+    }
+    createNewDocument(template)
+  },
 })
 
 useGlobalShortcuts({

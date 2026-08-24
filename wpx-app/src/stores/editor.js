@@ -11,6 +11,8 @@ const emptySelection = () => ({
 export const useEditorStore = defineStore('editor', () => {
   const selection = ref(emptySelection())
   const frozenSelection = ref(null)
+  /** 最近一次非空选区：编辑器失焦折叠选区后仍可供 AI 替换使用 */
+  const lastNonEmptySelection = ref(null)
   const chatInputActive = ref(false)
   const pendingReplace = ref(null)
   const replaceRequest = ref(null)
@@ -34,16 +36,34 @@ export const useEditorStore = defineStore('editor', () => {
           nextSelection.from !== nextSelection.to,
       ),
     }
+    if (selection.value.hasSelection) {
+      lastNonEmptySelection.value = { ...selection.value }
+    }
   }
 
   function setChatInputActive(active) {
     chatInputActive.value = active
-    if (active && selection.value.hasSelection) {
-      frozenSelection.value = { ...selection.value }
+    if (active) {
+      if (selection.value.hasSelection) {
+        frozenSelection.value = { ...selection.value }
+      }
+      return
     }
-    if (!active) {
-      frozenSelection.value = null
+    // blur 时保留 frozenSelection：Playwright fill / 短暂失焦后 Enter 发送仍需选区替换
+  }
+
+  function freezeSelectionFromEditor() {
+    const source = selection.value.hasSelection
+      ? selection.value
+      : lastNonEmptySelection.value
+    if (source?.hasSelection) {
+      frozenSelection.value = { ...source }
     }
+  }
+
+  function clearChatSelectionFreeze() {
+    frozenSelection.value = null
+    lastNonEmptySelection.value = null
   }
 
   function setPendingReplace(range) {
@@ -140,6 +160,27 @@ export const useEditorStore = defineStore('editor', () => {
     pendingSlideDeckInsert.value = null
   }
 
+  /**
+   * 待发送的 AI 写文意图（来自【新建文档 → AI 帮我写】的 URL 启动参数）。
+   * EditorLayout 写入 → AiAssistantPlaceholder 监听 → 调用 handleSend 派发给 AI。
+   * 若用户未接入大模型，handleSend 会通过 MISSING_CUSTOM_API 错误码自动弹窗引导。
+   * @type {import('vue').Ref<{ text: string, ts: number } | null>}
+   */
+  const pendingAiIntent = ref(null)
+
+  function requestAiIntent(text) {
+    const value = typeof text === 'string' ? text.trim() : ''
+    if (!value) return
+    pendingAiIntent.value = {
+      text: value,
+      ts: Date.now(),
+    }
+  }
+
+  function clearPendingAiIntent() {
+    pendingAiIntent.value = null
+  }
+
   return {
     selection,
     frozenSelection,
@@ -149,6 +190,8 @@ export const useEditorStore = defineStore('editor', () => {
     activeSelection,
     setSelection,
     setChatInputActive,
+    freezeSelectionFromEditor,
+    clearChatSelectionFreeze,
     setPendingReplace,
     clearPendingReplace,
     requestReplace,
@@ -168,5 +211,8 @@ export const useEditorStore = defineStore('editor', () => {
     pendingSlideDeckInsert,
     requestSlideDeckInsert,
     clearPendingSlideDeckInsert,
+    pendingAiIntent,
+    requestAiIntent,
+    clearPendingAiIntent,
   }
 })

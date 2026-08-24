@@ -1,9 +1,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useMyFonts } from '@/composables/useMyFonts'
+import { useAuthStore } from '@/stores/auth'
 import { fetchConsumeRecords, fetchTokenBalance, formatRecordTime } from '@/utils/tokenApi'
 
+const authStore = useAuthStore()
+const { isGuest } = storeToRefs(authStore)
 const { loading: fontsLoading, fonts, loadFonts } = useMyFonts()
 
 const balance = ref(0)
@@ -79,7 +83,11 @@ onMounted(() => {
           </span>
           <span class="fonts-settings__metric-label">当前余额（Token）</span>
         </div>
-        <RouterLink to="/token/recharge" class="settings-btn-primary fonts-settings__action">
+        <RouterLink
+          v-if="!isGuest"
+          to="/token/recharge"
+          class="settings-btn-primary fonts-settings__action"
+        >
           充值
         </RouterLink>
       </article>

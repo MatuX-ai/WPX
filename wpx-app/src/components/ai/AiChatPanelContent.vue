@@ -55,6 +55,10 @@ const props = defineProps({
     type: Object,
     default: () => ({ active: false, step: 0, totalSteps: 6, label: '', counts: null, finished: false }),
   },
+  recommendedSkills: {
+    type: Array,
+    default: () => [],
+  },
   isDark: {
     type: Boolean,
     default: false,
@@ -88,9 +92,11 @@ const emit = defineEmits([
   'insert-text',
   'local-command-select',
   'local-command-dismiss',
+  'write-self',
   'batch-clean',
   'batch-clean-abort',
   'batch-clean-undo',
+  'skill-quick-use',
 ])
 
 const router = useRouter()
@@ -117,6 +123,11 @@ const cleanableTipSummary = computed(() => {
 })
 
 const isBatchActive = computed(() => Boolean(props.batchProgress?.active))
+
+function handleRecommendedSkillClick(skill) {
+  if (!skill?.id || isOffline.value) return
+  emit('skill-quick-use', skill)
+}
 const canUndoBatch = computed(() => Boolean(props.batchProgress?.finished))
 
 function handleBatchCleanClick() {
@@ -511,12 +522,13 @@ function handleInputBlur() {
   emit('input-blur')
 }
 
-function handleQuotaRecharge() {
+function handleGoToModelSettings() {
   void router.push({ name: 'settings-models' })
 }
 
-function handleGoToModelSettings() {
-  void router.push({ name: 'settings-models' })
+/** 未接入大模型时「自己写」：交给上层关闭面板，留下空白文档自行写作 */
+function handleWriteSelf() {
+  emit('write-self')
 }
 
 function completeOnboarding() {
@@ -874,35 +886,23 @@ watch(
             class="ai-chat-panel__quota-exhausted"
           >
             <p class="ai-chat-panel__message-text">{{ message.content }}</p>
-            <button
-              type="button"
-              class="ai-chat-panel__quota-action wpx-btn"
-              @click="handleGoToModelSettings"
-            >
-              去配置
-            </button>
-          </div>
-          <div
-            v-else-if="message.quotaExhausted"
-            class="ai-chat-panel__quota-exhausted"
-          >
-            <p class="ai-chat-panel__message-text">{{ message.content }}</p>
-            <button
-              v-if="message.suggestConfigure"
-              type="button"
-              class="ai-chat-panel__quota-action wpx-btn"
-              @click="handleGoToModelSettings"
-            >
-              去配置
-            </button>
-            <button
-              v-else
-              type="button"
-              class="ai-chat-panel__quota-action wpx-btn"
-              @click="handleQuotaRecharge"
-            >
-              去配置大模型
-            </button>
+            <div class="ai-chat-panel__quota-actions">
+              <button
+                type="button"
+                class="ai-chat-panel__quota-action wpx-btn"
+                @click="handleGoToModelSettings"
+              >
+                配置大模型
+              </button>
+              <button
+                v-if="message.suggestWriteSelf !== false"
+                type="button"
+                class="ai-chat-panel__quota-action ai-chat-panel__quota-action--ghost wpx-btn"
+                @click="handleWriteSelf"
+              >
+                自己动手
+              </button>
+            </div>
           </div>
           <LocalCommandMessage
             v-else-if="message.role === 'local'"
@@ -1294,6 +1294,25 @@ watch(
           </ul>
         </div>
 
+        <div
+          v-if="recommendedSkills.length && !isOffline"
+          class="ai-chat-panel__skill-chips"
+          data-testid="ai-chat-recommended-skills"
+        >
+          <span class="ai-chat-panel__skill-chips-label">推荐能力</span>
+          <button
+            v-for="skill in recommendedSkills"
+            :key="skill.id"
+            type="button"
+            class="ai-chat-panel__skill-chip"
+            :data-testid="`ai-chat-skill-chip-${skill.id}`"
+            :title="skill.description"
+            @click="handleRecommendedSkillClick(skill)"
+          >
+            {{ skill.name }}
+          </button>
+        </div>
+
         <textarea
           ref="textareaRef"
           v-model="inputValue"
@@ -1613,6 +1632,12 @@ watch(
   gap: 10px;
 }
 
+.ai-chat-panel__quota-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .ai-chat-panel__onboarding {
   display: flex;
   flex-direction: column;
@@ -1645,11 +1670,23 @@ watch(
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .ai-chat-panel__quota-action:hover:not(:disabled) {
   background: #6d28d9;
+}
+
+.ai-chat-panel__quota-action--ghost {
+  background: transparent;
+  color: var(--theme-fg, #334155);
+  border: 1px solid var(--theme-border, #cbd5e1);
+}
+
+.ai-chat-panel__quota-action--ghost:hover:not(:disabled) {
+  background: var(--theme-bg-muted, #f1f5f9);
+  color: var(--theme-fg, #0f172a);
+  border-color: var(--theme-border, #94a3b8);
 }
 
 .ai-chat-panel__quota-action:disabled {
@@ -1959,6 +1996,37 @@ watch(
 
 .ai-chat-panel__input::placeholder {
   color: #94a3b8;
+}
+
+.ai-chat-panel__skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ai-chat-panel__skill-chips-label {
+  font-size: 11px;
+  color: var(--theme-fg-muted, #64748b);
+  flex-shrink: 0;
+}
+
+.ai-chat-panel__skill-chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--theme-border, #e2e8f0);
+  border-radius: 999px;
+  background: var(--theme-bg-subtle, #f8fafc);
+  color: var(--theme-fg, #1a1a1a);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+
+.ai-chat-panel__skill-chip:hover {
+  border-color: var(--theme-accent, #2c5cff);
+  color: var(--theme-accent, #2c5cff);
+  background: var(--theme-accent-muted, rgba(44, 92, 255, 0.08));
 }
 
 /* ── Skill result ── */

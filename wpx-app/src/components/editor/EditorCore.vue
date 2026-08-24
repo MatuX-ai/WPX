@@ -19,6 +19,8 @@ import {
   ImagePlus,
   Italic,
   Link2,
+  List,
+  ListOrdered,
   Minus,
   Presentation,
   Redo2,
@@ -55,11 +57,13 @@ import {
 } from '@/utils/editorFindReplace'
 import { EditorImage } from '@/extensions/EditorImage'
 import { FontFamily, FontSize, LineHeight, ParagraphIndent } from '@/extensions/DocumentFormat'
+import { CustomList } from '@/extensions/CustomList'
 import { SlideDeckNode } from '@/extensions/SlideDeckNode'
 import { HtmlSourceExtension } from '@/extensions/HtmlSourceExtension'
 import TableInsertDialog from '@/components/editor/TableInsertDialog.vue'
 import TableBubbleMenu from '@/components/editor/TableBubbleMenu.vue'
 import ImageBubbleMenu from '@/components/editor/ImageBubbleMenu.vue'
+import ListBubbleMenu from '@/components/editor/ListBubbleMenu.vue'
 import FindReplaceDialog from '@/components/editor/FindReplaceDialog.vue'
 import ImageUrlDialog from '@/components/editor/ImageUrlDialog.vue'
 import FontFamilySelect from '@/components/editor/FontFamilySelect.vue'
@@ -146,6 +150,7 @@ function applyReplaceRequest(request) {
   syncSelection(currentEditor)
   editorStore.clearReplaceRequest()
   editorStore.clearPendingReplace()
+  editorStore.clearChatSelectionFreeze()
 }
 
 function emitContent(editor) {
@@ -227,6 +232,8 @@ const editor = useEditor({
     FontFamily,
     FontSize,
     LineHeight,
+    // 列表样式扩展：支持多种编号样式、emoji 行首符号、起始编号
+    CustomList,
     // HTML 导入扩展：把 htmlSource / sourceUrl / importedAt / importSource / lastFormattedTemplate /
     // lastFormattedAt 注入到 doc schema，保证随文档 JSON 持久化、跨窗口传输。
     HtmlSourceExtension,
@@ -760,6 +767,24 @@ const toolbarItems = computed(() => {
       disabled: !ed.can().chain().focus().toggleItalic().run(),
       action: () => ed.chain().focus().toggleItalic().run(),
     },
+    {
+      key: 'bulletList',
+      icon: List,
+      title: shortcutTooltip('无序列表', 'bulletList'),
+      ariaLabel: '无序列表',
+      active: ed.isActive('bulletList'),
+      disabled: !ed.can().chain().focus().toggleBulletList().run(),
+      action: () => ed.chain().focus().toggleBulletList().run(),
+    },
+    {
+      key: 'orderedList',
+      icon: ListOrdered,
+      title: shortcutTooltip('有序列表', 'orderedList'),
+      ariaLabel: '有序列表',
+      active: ed.isActive('orderedList'),
+      disabled: !ed.can().chain().focus().toggleOrderedList().run(),
+      action: () => ed.chain().focus().toggleOrderedList().run(),
+    },
     { key: 'divider-1', type: 'divider' },
     {
       key: 'insertTable',
@@ -944,6 +969,7 @@ const toolbarItems = computed(() => {
 
     <TableBubbleMenu v-if="editor" :editor="editor" />
     <ImageBubbleMenu v-if="editor" :editor="editor" @edit-image="openImageEditor" />
+    <ListBubbleMenu v-if="editor" :editor="editor" />
 
     <TableInsertDialog
       :visible="showTableDialog"
@@ -1249,6 +1275,8 @@ const toolbarItems = computed(() => {
   padding-left: 1.5rem;
 }
 
+/* 默认符号由 CustomList 扩展通过 inline style 覆盖；
+   保留 CSS 作为未设置 listStyleType 时的 fall-back。 */
 .editor-content :deep(.editor-prose ul) {
   list-style-type: disc;
 }

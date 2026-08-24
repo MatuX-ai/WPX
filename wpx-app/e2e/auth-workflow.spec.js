@@ -9,7 +9,7 @@ import {
   setupAuthE2eMocks,
   dismissAuthModal,
   switchAuthModalToRegister,
-  registerThroughAuthModal,
+  submitRegisterFormInAuthModal,
 } from './helpers/auth-mocks.js'
 import {
   applyFontToEditorSelection,
@@ -27,9 +27,8 @@ import {
   typeInEditor,
 } from './helpers/editor.js'
 
-const GUEST_MISSING_API_MESSAGE = '您无需注册，但是需要配置自己的大模型 API 接口'
-const LOGGED_IN_QUOTA_CONFIGURE_MESSAGE =
-  '免费 Token 额度已用完。你可以配置自己的大模型 API（免费）继续使用 AI 能力。'
+const MISSING_CUSTOM_API_MESSAGE =
+  '未配置大模型，我无法思考，请你【配置大模型】【自己动手】'
 
 test.describe('认证与访客工作流', () => {
   test.beforeEach(async ({ page }) => {
@@ -66,8 +65,9 @@ test.describe('认证与访客工作流', () => {
     await openAiChat(page)
     await sendAiInstruction(page, '你好')
 
-    await expect(page.getByText(GUEST_MISSING_API_MESSAGE)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: '去配置' })).toBeVisible()
+    await expect(page.getByText(MISSING_CUSTOM_API_MESSAGE)).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.ai-chat-panel__quota-actions').getByRole('button', { name: '设置' })).toBeVisible()
+    await expect(page.locator('.ai-chat-panel__quota-actions').getByRole('button', { name: '自己写' })).toBeVisible()
   })
 
   test('4. 点击登录弹出嵌入式 AuthModal，提交后变为已登录', async ({ page }) => {
@@ -115,7 +115,7 @@ test.describe('认证与访客工作流', () => {
     // 注册表单应出现昵称字段
     await expect(page.locator('.auth-modal input[autocomplete="nickname"]')).toBeVisible()
 
-    await registerThroughAuthModal(page, {
+    await submitRegisterFormInAuthModal(page, {
       email: 'new-user@prowpx.com',
       password: 'new-password-123',
       nickname: 'E2E 注册用户',
@@ -143,10 +143,9 @@ test.describe('认证与访客工作流', () => {
     await page.getByRole('link', { name: '我的模型' }).click()
     await expect(page.getByRole('button', { name: '登录后解锁' })).toHaveCount(0)
 
-    await page.getByRole('radio', { name: '使用自定义模型' }).first().check()
-    await page.getByLabel('API 地址（Endpoint）').fill('https://api.deepseek.com/v1')
-    await page.getByLabel('API Key').fill('sk-e2e-test-key')
-    await page.getByLabel('模型名称').fill('deepseek-chat')
+    await page.getByLabel('API 地址（Endpoint）').first().fill('https://api.deepseek.com/v1')
+    await page.getByLabel('API Key').first().fill('sk-e2e-test-key')
+    await page.getByLabel('模型名称').first().fill('deepseek-chat')
     await page.getByRole('button', { name: '测试连接' }).first().click()
 
     await expect(page.getByText('连接成功，模型服务可用')).toBeVisible({ timeout: 10_000 })
@@ -243,15 +242,15 @@ test.describe('登录后 Token 与商业字体导出', () => {
     await expect(page.getByRole('button', { name: '立即充值' })).toBeVisible()
   })
 
-  test('11. 登录用户公共模型额度用尽且未配置自定义 Key 时提示去配置', async ({ page }) => {
-    await setupAuthE2eMocks(page, { quotaExhausted: true })
+  test('11. 登录用户未配置自定义 Key 时提示去配置', async ({ page }) => {
     await openEditor(page)
     await loginThroughTitleBar(page)
-    await typeInEditor(page, '测试额度用尽')
+    await typeInEditor(page, '测试未配置模型')
     await openAiChat(page)
     await sendAiInstruction(page, '你好')
 
-    await expect(page.getByText(LOGGED_IN_QUOTA_CONFIGURE_MESSAGE)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: '去配置' })).toBeVisible()
+    await expect(page.getByText(MISSING_CUSTOM_API_MESSAGE)).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.ai-chat-panel__quota-actions').getByRole('button', { name: '设置' })).toBeVisible()
+    await expect(page.locator('.ai-chat-panel__quota-actions').getByRole('button', { name: '自己写' })).toBeVisible()
   })
 })

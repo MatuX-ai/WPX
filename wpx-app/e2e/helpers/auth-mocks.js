@@ -1,5 +1,5 @@
 /**
- * E2E 认证 / 访客 / 免费额度 mock
+ * E2E 认证 / 访客 mock
  *
  * 适配 WPX 自托管邮箱认证（prowpx.com）：
  * - 不再模拟打开外部浏览器（移除 auth.startLogin / auth.onCallback）
@@ -25,9 +25,6 @@ import { expect } from '@playwright/test'
  * @typedef {{
  *   user?: AuthUserPayload,
  *   tokens?: TokenPair,
- *   guestQuota?: { limit?: number, used?: number, remaining?: number },
- *   userQuota?: { limit?: number, used?: number, remaining?: number },
- *   quotaExhausted?: boolean,
  *   refreshValid?: boolean,
  *   withFonts?: boolean,
  *   loginShouldFail?: boolean,
@@ -57,32 +54,11 @@ async function setupAuthInitScript(page, options = {}) {
     access: 'e2e-access-token',
     refresh: 'e2e-refresh-token',
   }
-  const guestQuota = {
-    limit: options.guestQuota?.limit ?? 0,
-    used: options.guestQuota?.used ?? 0,
-    remaining:
-      options.guestQuota?.remaining ??
-      Math.max(0, (options.guestQuota?.limit ?? 0) - (options.guestQuota?.used ?? 0)),
-  }
-  const userQuota = {
-    limit: options.userQuota?.limit ?? 100_000_000,
-    used: options.userQuota?.used ?? 0,
-    remaining:
-      options.userQuota?.remaining ??
-      Math.max(
-        0,
-        (options.userQuota?.limit ?? 100_000_000) - (options.userQuota?.used ?? 0),
-      ),
-  }
-  const quotaExhausted = Boolean(options.quotaExhausted)
 
   await page.addInitScript(
     ({
       user,
       tokens,
-      guestQuota,
-      userQuota,
-      quotaExhausted,
       withFonts,
       loginShouldFail,
       loginErrorMessage,
@@ -117,77 +93,6 @@ async function setupAuthInitScript(page, options = {}) {
         loginErrorMessage: loginErrorMessage || '账号或密码错误',
       }
 
-      function getTodayKey() {
-        return new Date().toISOString().slice(0, 10)
-      }
-
-      function isLoggedIn() {
-        return Boolean(storedCredentials?.token)
-      }
-
-      function buildSubjectKey() {
-        if (isLoggedIn()) {
-          return `user:${user.id}`
-        }
-        let deviceId = localStorage.getItem('wpx-device-id') || ''
-        if (!deviceId) {
-          deviceId = crypto.randomUUID()
-          localStorage.setItem('wpx-device-id', deviceId)
-        }
-        return `guest:${deviceId}`
-      }
-
-      function readTokenUsage() {
-        const key = 'wpx-free-quota-web'
-        const subjectKey = buildSubjectKey()
-        try {
-          const raw = localStorage.getItem(key)
-          const parsed = raw ? JSON.parse(raw) : {}
-          const row = parsed[subjectKey]
-          const today = getTodayKey()
-          if (!row || row.date !== today) return 0
-          return Number(row.tokensUsed) || 0
-        } catch {
-          return 0
-        }
-      }
-
-      function writeTokenUsage(tokensUsed) {
-        const key = 'wpx-free-quota-web'
-        const subjectKey = buildSubjectKey()
-        const today = getTodayKey()
-        try {
-          const raw = localStorage.getItem(key)
-          const parsed = raw ? JSON.parse(raw) : {}
-          parsed[subjectKey] = { date: today, tokensUsed }
-          localStorage.setItem(key, JSON.stringify(parsed))
-        } catch {
-          // ignore
-        }
-      }
-
-      function getActiveQuotaConfig() {
-        if (isLoggedIn()) {
-          return userQuota
-        }
-        return guestQuota
-      }
-
-      function buildQuotaStatus() {
-        const config = getActiveQuotaConfig()
-        const used = quotaExhausted ? config.limit : readTokenUsage()
-        const remaining = Math.max(0, config.limit - used)
-        return {
-          ok: true,
-          isGuest: !isLoggedIn(),
-          limit: config.limit,
-          used,
-          remaining,
-          unit: 'token',
-          subjectKey: buildSubjectKey(),
-        }
-      }
-
       const baseApi = window.electronAPI || {}
 
       window.electronAPI = {
@@ -218,54 +123,6 @@ async function setupAuthInitScript(page, options = {}) {
             storedCredentials = null
             persistCredentials()
             return { ok: true }
-          },
-        },
-        freeQuota: {
-          getStatus: async () => buildQuotaStatus(),
-          check: async () => {
-            const status = buildQuotaStatus()
-            if (status.limit <= 0 || status.remaining <= 0) {
-              return {
-                ok: false,
-                code: 'FREE_QUOTA_EXHAUSTED',
-                ...status,
-              }
-            }
-            return {
-              ok: true,
-              ...status,
-            }
-          },
-          consumeTokens: async (payload = {}) => {
-            const tokens = Math.max(0, Math.ceil(Number(payload.tokens) || 0))
-            const status = buildQuotaStatus()
-            if (tokens === 0) {
-              return { ok: true, consumed: 0, ...status }
-            }
-            const nextUsed = status.used + tokens
-            writeTokenUsage(nextUsed)
-            const refreshed = buildQuotaStatus()
-            return {
-              ok: true,
-              consumed: tokens,
-              ...refreshed,
-            }
-          },
-          resetDeviceId: async () => {
-            const oldDeviceId = localStorage.getItem('wpx-device-id') || ''
-            const newDeviceId = crypto.randomUUID()
-            if (oldDeviceId) {
-              try {
-                const raw = localStorage.getItem('wpx-free-quota-web')
-                const parsed = raw ? JSON.parse(raw) : {}
-                delete parsed[`guest:${oldDeviceId}`]
-                localStorage.setItem('wpx-free-quota-web', JSON.stringify(parsed))
-              } catch {
-                // ignore
-              }
-            }
-            localStorage.setItem('wpx-device-id', newDeviceId)
-            return { ok: true, deviceId: newDeviceId, previousDeviceId: oldDeviceId || null }
           },
         },
         models: {
@@ -303,9 +160,6 @@ async function setupAuthInitScript(page, options = {}) {
     {
       user,
       tokens,
-      guestQuota,
-      userQuota,
-      quotaExhausted,
       withFonts: Boolean(options.withFonts),
       loginShouldFail: Boolean(options.loginShouldFail),
       loginErrorMessage: options.loginErrorMessage || '',
@@ -330,24 +184,6 @@ export async function setupAuthAccountRoutes(page, options = {}) {
     access: 'e2e-access-token',
     refresh: 'e2e-refresh-token',
   }
-  const guestQuota = {
-    limit: options.guestQuota?.limit ?? 0,
-    used: options.guestQuota?.used ?? 0,
-    remaining:
-      options.guestQuota?.remaining ??
-      Math.max(0, (options.guestQuota?.limit ?? 0) - (options.guestQuota?.used ?? 0)),
-  }
-  const userQuota = {
-    limit: options.userQuota?.limit ?? 100_000_000,
-    used: options.userQuota?.used ?? 0,
-    remaining:
-      options.userQuota?.remaining ??
-      Math.max(
-        0,
-        (options.userQuota?.limit ?? 100_000_000) - (options.userQuota?.used ?? 0),
-      ),
-  }
-  const quotaExhausted = Boolean(options.quotaExhausted)
   const refreshValid = options.refreshValid !== false
   const loginShouldFail = Boolean(options.loginShouldFail)
   const loginErrorMessage = options.loginErrorMessage || '账号或密码错误'
@@ -408,13 +244,21 @@ export async function setupAuthAccountRoutes(page, options = {}) {
       } catch {
         body = {}
       }
+      const nickname =
+        String(body?.nickname || '').trim() ||
+        String(body?.email || user.email || '').split('@')[0] ||
+        user.nickname
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
         body: JSON.stringify({
           token: tokens.access,
           refresh_token: tokens.refresh,
-          user: { ...user, email: body?.email || user.email },
+          user: {
+            ...user,
+            email: body?.email || user.email,
+            nickname,
+          },
         }),
       })
       return
@@ -507,20 +351,6 @@ export async function setupAuthAccountRoutes(page, options = {}) {
     })
   })
 
-  // AI 子域改为 ai.prowpx.com
-  await page.route('**/ai.prowpx.com/api/free/quota', async (route) => {
-    const activeQuota = userQuota.limit > 0 ? userQuota : guestQuota
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        limit: activeQuota.limit,
-        remaining: quotaExhausted ? 0 : activeQuota.remaining,
-        used: quotaExhausted ? activeQuota.limit : activeQuota.used,
-        unit: 'token',
-      }),
-    })
-  })
 }
 
 /**
@@ -563,30 +393,33 @@ export async function switchAuthModalToRegister(page) {
 }
 
 /**
+ * 在已打开的 AuthModal 注册表单中填写并提交（不再重复点击 TitleBar 登录）。
+ * @param {import('@playwright/test').Page} page
+ * @param {{ email?: string, password?: string, nickname?: string }} [options]
+ */
+export async function submitRegisterFormInAuthModal(page, options = {}) {
+  const email = options.email ?? 'new-user@prowpx.com'
+  const password = options.password ?? 'e2e-password'
+  const nickname = options.nickname ?? 'E2E 注册用户'
+
+  await page.locator('.auth-modal input[type="email"]').fill(email)
+  await page.locator('.auth-modal input[autocomplete="nickname"]').fill(nickname)
+  await page.locator('.auth-modal input[type="password"]').fill(password)
+  await page.locator('.auth-modal').getByRole('button', { name: '注册账号' }).click()
+
+  await expectTitleBarLoggedIn(page, nickname)
+}
+
+/**
  * 在 AuthModal 中填写注册信息并提交。
  * @param {import('@playwright/test').Page} page
  * @param {{ email?: string, password?: string, nickname?: string }} [options]
  */
 export async function registerThroughAuthModal(page, options = {}) {
-  const email = options.email ?? 'new-user@prowpx.com'
-  const password = options.password ?? 'e2e-password'
-  const nickname = options.nickname ?? 'E2E 注册用户'
-
   await clickTitleBarLogin(page)
   await expectAuthModal(page)
   await switchAuthModalToRegister(page)
-
-  await page.locator('.auth-modal input[type="email"]').fill(email)
-  await page
-    .locator('.auth-modal input[autocomplete="nickname"]')
-    .fill(nickname)
-  await page.locator('.auth-modal input[type="password"]').fill(password)
-  await page
-    .locator('.auth-modal')
-    .getByRole('button', { name: '注册账号' })
-    .click()
-
-  await expectTitleBarLoggedIn(page, nickname)
+  await submitRegisterFormInAuthModal(page, options)
 }
 
 /**

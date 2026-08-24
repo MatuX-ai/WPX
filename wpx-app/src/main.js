@@ -12,6 +12,7 @@ import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useWindowFocus } from '@/composables/useWindowFocus'
 import { isElectron } from '@/utils/electron'
 import { primeLocalApiBase } from '@/utils/localApi'
+import { primeLibraryApiBase } from '@/utils/libraryApi'
 import '@/composables/useWindowCloseInterceptor'
 import {
   getDocPathFromUrl,
@@ -64,7 +65,8 @@ async function syncEditorRoute() {
 
 async function bootstrap() {
   if (isElectron()) {
-    await primeLocalApiBase()
+    // 并行预热本地 API 与文库 API，让保存对话框首屏直接拿到 fetch 可用地址。
+    await Promise.all([primeLocalApiBase(), primeLibraryApiBase()])
   }
 
   await router.isReady()

@@ -11,10 +11,12 @@ import {
   fetchKnowledgePreview,
   fetchKnowledgeUrlPreview,
   onKnowledgeUpdated,
+  searchKnowledgeFulltext,
   shouldPromptWebUrlImport,
   uploadKnowledgeFile,
   uploadKnowledgeUrl,
 } from '@/utils/knowledgeApi'
+import { filterKnowledgeItems } from '@/utils/knowledgeEverythingSearch'
 import WebUrlImportSheet from '@/components/knowledge/WebUrlImportSheet.vue'
 import { useEditorOverlayOptional } from '@/composables/useEditorOverlay'
 import { useEscapeKey } from '@/composables/useEscapeKey'
@@ -50,11 +52,57 @@ const urlInput = ref('')
 const preview = ref(null)
 const previewLoading = ref(false)
 const fileInputRef = ref(null)
+const searchInputRef = ref(null)
+const searchQuery = ref('')
+const contentHits = ref([])
+const contentSearching = ref(false)
 const urlPreview = ref(null)
 const urlImportOpen = ref(false)
 const urlImportSubmitting = ref(false)
 const urlImportError = ref('')
 const isAntiBotError = ref(false)
+
+const isSearchMode = computed(() => searchQuery.value.trim().length > 0)
+const nameMatchedItems = computed(() => filterKnowledgeItems(items.value, searchQuery.value))
+const contentOnlyItems = computed(() => {
+  if (!isSearchMode.value || !contentHits.value.length) return []
+  const nameIds = new Set(nameMatchedItems.value.map((item) => item.id))
+  return contentHits.value
+    .filter((hit) => {
+      const id = hit.doc_id || hit.id
+      return id && !nameIds.has(id)
+    })
+    .map((hit) => {
+      const id = hit.doc_id || hit.id
+      const listed = items.value.find((item) => item.id === id)
+      return {
+        id,
+        filename: hit.filename || listed?.filename || '未知文件',
+        type: hit.type || listed?.type || '',
+        uploadedAt: hit.uploadedAt || listed?.uploadedAt,
+        parseStatus: listed?.parseStatus || 'parsed',
+        errorMessage: listed?.errorMessage,
+        snippet: hit.snippet || '',
+        matchCount: hit.matchCount || 0,
+        fromContent: true,
+      }
+    })
+})
+const displayItems = computed(() => {
+  if (!isSearchMode.value) return items.value
+  const nameItems = nameMatchedItems.value.map((item) => {
+    const hit = contentHits.value.find((entry) => (entry.doc_id || entry.id) === item.id)
+    return hit?.snippet ? { ...item, snippet: hit.snippet, matchCount: hit.matchCount } : item
+  })
+  return [...nameItems, ...contentOnlyItems.value]
+})
+const resultCountLabel = computed(() => {
+  if (!isSearchMode.value) {
+    return items.value.length ? `${items.value.length} 项` : ''
+  }
+  const total = displayItems.value.length
+  return contentSearching.value ? `搜索中… · ${total} 项` : `${total} / ${items.value.length} 项`
+})
 
 const typeLabels = {
   pdf: 'PDF',
@@ -328,6 +376,20 @@ function handleClose() {
   emit('close')
 }
 
+function clearSearch() {
+  window.clearTimeout(contentSearchTimer)
+  contentSearchTimer = null
+  contentSearchSeq += 1
+  searchQuery.value = ''
+  contentHits.value = []
+  contentSearching.value = false
+}
+
+function focusSearch() {
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select?.()
+}
+
 function handlePanelEscape() {
   if (hasUrlImport.value) {
     closeUrlImport()
@@ -337,22 +399,83 @@ function handlePanelEscape() {
     closePreview()
     return
   }
+  if (isSearchMode.value) {
+    clearSearch()
+    return
+  }
   handleClose()
 }
 
-useEscapeKey(() => props.open, handlePanelEscape)
+function onSearchShortcut(event) {
+  if (!props.open && !props.embedded) return
+  const isFind = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f'
+  if (!isFind) return
+  event.preventDefault()
+  focusSearch()
+}
+
+useEscapeKey(() => props.open || props.embedded, handlePanelEscape)
 
 let unsubscribeKnowledgeUpdated = null
+let contentSearchTimer = null
+let contentSearchSeq = 0
+
+async function runContentSearch(query) {
+  const keyword = String(query || '').trim()
+  if (!keyword) {
+    contentHits.value = []
+    contentSearching.value = false
+    return
+  }
+
+  const seq = ++contentSearchSeq
+  contentSearching.value = true
+  try {
+    const data = await searchKnowledgeFulltext(keyword, 30)
+    if (seq !== contentSearchSeq) return
+    contentHits.value = Array.isArray(data?.results) ? data.results : []
+  } catch {
+    if (seq !== contentSearchSeq) return
+    contentHits.value = []
+  } finally {
+    if (seq === contentSearchSeq) contentSearching.value = false
+  }
+}
+
+function onSearchInput() {
+  window.clearTimeout(contentSearchTimer)
+  const keyword = searchQuery.value.trim()
+  if (!keyword) {
+    contentHits.value = []
+    contentSearching.value = false
+    return
+  }
+  contentSearchTimer = window.setTimeout(() => {
+    runContentSearch(keyword)
+  }, 220)
+}
 
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) loadList()
+    if (isOpen) {
+      loadList()
+      queueMicrotask(() => focusSearch())
+    } else {
+      clearSearch()
+    }
   },
 )
 
 onMounted(() => {
-  if (props.open) loadList()
+  if (props.open || props.embedded) {
+    loadList()
+    if (props.embedded || props.open) {
+      queueMicrotask(() => focusSearch())
+    }
+  }
+
+  window.addEventListener('keydown', onSearchShortcut)
 
   if (isElectron()) {
     unsubscribeKnowledgeUpdated = onKnowledgeUpdated(() => {
@@ -362,6 +485,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.clearTimeout(contentSearchTimer)
+  window.removeEventListener('keydown', onSearchShortcut)
   unsubscribeKnowledgeUpdated?.()
   unsubscribeKnowledgeUpdated = null
 })
@@ -455,17 +580,75 @@ onUnmounted(() => {
           {{ error }}
         </p>
 
+        <section class="knowledge-search" aria-label="资料搜索">
+          <label class="sr-only" for="knowledge-search-input">搜索资料</label>
+          <div class="knowledge-search__row">
+            <svg
+              class="knowledge-search__icon"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+            </svg>
+            <input
+              id="knowledge-search-input"
+              ref="searchInputRef"
+              v-model="searchQuery"
+              type="search"
+              class="knowledge-search__input"
+              placeholder="即时搜索文件名，支持 * ? 通配符"
+              autocomplete="off"
+              spellcheck="false"
+              @input="onSearchInput"
+              @keydown.escape.stop="clearSearch"
+            />
+            <button
+              v-if="isSearchMode"
+              type="button"
+              class="knowledge-search__clear"
+              aria-label="清除搜索"
+              @click="clearSearch"
+            >
+              清除
+            </button>
+            <kbd class="knowledge-search__kbd" title="聚焦搜索框">Ctrl+F</kbd>
+          </div>
+          <p class="knowledge-search__hint">
+            空格多词同时匹配 · 输入即搜文件名 · 正文匹配稍后补充
+          </p>
+        </section>
+
         <section class="knowledge-list">
           <div class="knowledge-list__head">
-            <h3 class="knowledge-list__title">已上传资料</h3>
-            <span v-if="items.length" class="knowledge-list__count">{{ items.length }} 项</span>
+            <h3 class="knowledge-list__title">
+              {{ isSearchMode ? '搜索结果' : '已上传资料' }}
+            </h3>
+            <span v-if="resultCountLabel" class="knowledge-list__count">{{ resultCountLabel }}</span>
           </div>
 
           <div v-if="loading" class="knowledge-list__empty">加载中…</div>
           <div v-else-if="!items.length" class="knowledge-list__empty">暂无资料，请先上传</div>
+          <div
+            v-else-if="isSearchMode && !displayItems.length && contentSearching"
+            class="knowledge-list__empty"
+          >
+            搜索中…
+          </div>
+          <div
+            v-else-if="isSearchMode && !displayItems.length"
+            class="knowledge-list__empty"
+          >
+            无匹配结果，试试通配符如 <code>*.pdf</code> 或关键词
+          </div>
 
           <ul v-else class="knowledge-list__items">
-            <li v-for="item in items" :key="item.id">
+            <li v-for="item in displayItems" :key="item.id">
               <button
                 type="button"
                 class="knowledge-item"
@@ -479,6 +662,8 @@ onUnmounted(() => {
                   <span class="knowledge-item__name" :title="item.filename">{{ item.filename }}</span>
                   <span class="knowledge-item__meta">
                     <span class="knowledge-item__type">{{ typeLabel(item.type) }}</span>
+                    <span v-if="item.fromContent" class="knowledge-item__dot">·</span>
+                    <span v-if="item.fromContent" class="knowledge-item__badge">正文命中</span>
                     <span v-if="parseStatusLabel(item.parseStatus)" class="knowledge-item__dot">·</span>
                     <span
                       v-if="parseStatusLabel(item.parseStatus)"
@@ -489,6 +674,13 @@ onUnmounted(() => {
                     </span>
                     <span class="knowledge-item__dot">·</span>
                     <span class="knowledge-item__time">{{ formatTime(item.uploadedAt) }}</span>
+                  </span>
+                  <span
+                    v-if="item.snippet"
+                    class="knowledge-item__snippet"
+                    :title="item.snippet"
+                  >
+                    {{ item.snippet }}
                   </span>
                   <span
                     v-if="item.parseStatus === 'failed' && item.errorMessage"
@@ -573,8 +765,8 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: var(--z-knowledge-backdrop);
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
   pointer-events: auto;
 }
 
@@ -766,6 +958,89 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.knowledge-search {
+  margin-top: 16px;
+}
+
+.knowledge-search__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.knowledge-search__row:focus-within {
+  border-color: #a78bfa;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+
+.knowledge-search__icon {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.knowledge-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+}
+
+.knowledge-search__input::placeholder {
+  color: #94a3b8;
+}
+
+.knowledge-search__clear {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.knowledge-search__clear:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.knowledge-search__kbd {
+  flex-shrink: 0;
+  display: none;
+  padding: 1px 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #fff;
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (min-width: 640px) {
+  .knowledge-search__kbd {
+    display: inline-block;
+  }
+}
+
+.knowledge-search__hint {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 .knowledge-panel__error {
   margin: 12px 0 0;
   padding: 8px 12px;
@@ -896,6 +1171,24 @@ onUnmounted(() => {
 
 .knowledge-item__status--failed {
   color: #dc2626;
+}
+
+.knowledge-item__badge {
+  color: #7c3aed;
+  font-weight: 500;
+}
+
+.knowledge-item__snippet {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .knowledge-item__error {

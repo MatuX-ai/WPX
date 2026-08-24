@@ -1,7 +1,32 @@
 <script setup>
+import { computed } from 'vue'
 import SmartTemplate from '@/components/templates/SmartTemplate.vue'
+import {
+  getColdStartTemplate,
+} from '@/data/cold-start-templates'
 
-defineEmits(['create', 'import', 'use-template'])
+const emit = defineEmits(['create', 'import', 'use-template'])
+
+/**
+ * 高频格式快捷入口：用户从 EmptyState 一眼就能选 Markdown / 表格 / PPT / 教案
+ * - 通过 use-template 事件复用 SmartTemplate 的传递链路
+ * - 选中的模板仍是 cold-start-templates 中的完整对象（含 content / format / documentType）
+ */
+const quickFormats = computed(() => [
+  { id: 'blank', label: 'Markdown', desc: '纯 Markdown', icon: 'M' },
+  { id: 'weekly-plan', label: '表格', desc: '周计划 / 数据表', icon: 'T' },
+  { id: 'ppt-outline', label: 'PPT', desc: '课件大纲', icon: 'P' },
+  { id: 'lesson-plan', label: '教案', desc: '教师专用', icon: 'L' },
+])
+
+function handleQuickFormat(format) {
+  const template = getColdStartTemplate(format.id)
+  if (!template) {
+    console.warn('[EmptyState] quick-format template missing:', format.id)
+    return
+  }
+  emit('use-template', template)
+}
 </script>
 
 <template>
@@ -123,6 +148,33 @@ defineEmits(['create', 'import', 'use-template'])
         </button>
       </div>
 
+      <!--
+        高频格式快捷入口：解决冷启动用户不知道可以按"格式"新建文档的问题。
+        点击 -> 复用 use-template 事件链路 -> EditorLayout.createNewDocument
+        -> 应用模板 content / format / documentType 到新窗口。
+      -->
+      <div
+        class="empty-state__quick-formats"
+        role="group"
+        aria-label="按格式快速创建"
+      >
+        <span class="empty-state__quick-formats-label">按格式快速创建：</span>
+        <button
+          v-for="format in quickFormats"
+          :key="format.id"
+          type="button"
+          class="empty-state__quick-format wpx-btn"
+          :data-testid="`quick-format-${format.id}`"
+          @click="handleQuickFormat(format)"
+        >
+          <span class="empty-state__quick-format-icon" aria-hidden="true">
+            {{ format.icon }}
+          </span>
+          <span class="empty-state__quick-format-label">{{ format.label }}</span>
+          <span class="empty-state__quick-format-desc">{{ format.desc }}</span>
+        </button>
+      </div>
+
       <SmartTemplate @use-template="$emit('use-template', $event)" />
     </div>
   </section>
@@ -131,7 +183,9 @@ defineEmits(['create', 'import', 'use-template'])
 <style scoped>
 .empty-state {
   display: flex;
-  align-items: center;
+  /* 内容过高时避免主 CTA 被顶出视口；safe center 不支持时回退 flex-start */
+  align-items: flex-start;
+  align-items: safe center;
   justify-content: center;
   min-height: 100%;
   width: 100%;
@@ -143,7 +197,7 @@ defineEmits(['create', 'import', 'use-template'])
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 420px;
+  max-width: 520px;
   width: 100%;
   text-align: center;
 }
@@ -164,14 +218,8 @@ defineEmits(['create', 'import', 'use-template'])
 }
 
 @keyframes empty-state-pen-float {
-  0%,
-  100% {
-    transform: rotate(-2deg) translateY(0);
-  }
-
-  50% {
-    transform: rotate(2deg) translateY(-3px);
-  }
+  0%, 100% { transform: rotate(-2deg) translateY(0); }
+  50% { transform: rotate(2deg) translateY(-3px); }
 }
 
 .empty-state__title {
@@ -194,6 +242,8 @@ defineEmits(['create', 'import', 'use-template'])
   flex-direction: column;
   gap: 12px;
   width: 100%;
+  /* Playwright / 锚点滚动时避开固定 TitleBar（含 editor-layout padding-top 占位） */
+  scroll-margin-top: calc(var(--title-bar-height, 36px) + 12px);
 }
 
 @media (min-width: 480px) {
@@ -202,11 +252,7 @@ defineEmits(['create', 'import', 'use-template'])
     justify-content: center;
     flex-wrap: wrap;
   }
-
-  .empty-state__btn {
-    flex: 0 1 auto;
-    min-width: 180px;
-  }
+  .empty-state__btn { flex: 0 1 auto; min-width: 180px; }
 }
 
 .empty-state__btn {
@@ -229,11 +275,7 @@ defineEmits(['create', 'import', 'use-template'])
     transform 0.2s ease;
 }
 
-.empty-state__btn-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
+.empty-state__btn-icon { width: 18px; height: 18px; flex-shrink: 0; }
 
 .empty-state__btn--primary {
   background: var(--theme-accent);
@@ -241,14 +283,12 @@ defineEmits(['create', 'import', 'use-template'])
   border-color: var(--theme-accent);
   box-shadow: var(--theme-shadow-sm);
 }
-
 .empty-state__btn--primary:hover {
   background: var(--theme-accent-hover);
   border-color: var(--theme-accent-hover);
   box-shadow: var(--theme-shadow-md);
   transform: translateY(-2px);
 }
-
 .empty-state__btn--primary:active {
   transform: translateY(0);
   box-shadow: var(--theme-shadow-sm);
@@ -260,7 +300,6 @@ defineEmits(['create', 'import', 'use-template'])
   border-color: var(--theme-border);
   box-shadow: var(--theme-shadow-sm);
 }
-
 .empty-state__btn--secondary:hover {
   background: var(--theme-accent-muted);
   border-color: var(--theme-accent);
@@ -268,7 +307,6 @@ defineEmits(['create', 'import', 'use-template'])
   box-shadow: var(--theme-shadow-md);
   transform: translateY(-2px);
 }
-
 .empty-state__btn--secondary:active {
   transform: translateY(0);
   box-shadow: var(--theme-shadow-sm);
@@ -279,13 +317,86 @@ defineEmits(['create', 'import', 'use-template'])
   outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .empty-state__pen {
-    animation: none;
-  }
+/* Quick format chips */
+.empty-state__quick-formats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+  width: 100%;
+}
 
+.empty-state__quick-formats-label {
+  font-size: 12px;
+  color: var(--theme-fg-muted);
+  margin-right: 4px;
+}
+
+.empty-state__quick-format {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-bg);
+  color: var(--theme-fg);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 120ms ease;
+}
+
+.empty-state__quick-format:hover {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+  background: var(--theme-accent-muted);
+  transform: translateY(-1px);
+}
+
+.empty-state__quick-format:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+.empty-state__quick-format-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--theme-accent-muted);
+  color: var(--theme-accent);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.empty-state__quick-format-label {
+  font-weight: 600;
+}
+
+.empty-state__quick-format-desc {
+  color: var(--theme-fg-subtle);
+  font-size: 11px;
+}
+
+@media (max-width: 480px) {
+  .empty-state__quick-format-desc { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-state__pen { animation: none; }
   .empty-state__btn:hover,
-  .empty-state__btn:active {
+  .empty-state__btn:active,
+  .empty-state__quick-format:hover {
     transform: none;
   }
 }

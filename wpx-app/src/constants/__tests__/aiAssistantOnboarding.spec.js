@@ -22,7 +22,7 @@ describe('aiAssistantOnboarding', () => {
     expect(localStorage.getItem(AI_ASSISTANT_ONBOARDING_KEY)).toBe('done')
   })
 
-  it('V1 完全免费模式：无论访客/登录，仅展示接入大模型 API 一条 setup 消息', () => {
+  it('V1 免注册模式：无论访客/登录，仅展示接入大模型 API 一条 setup 消息', () => {
     const guestMessages = createAiOnboardingMessages({
       createMessageId: () => 'msg-1',
     })

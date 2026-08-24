@@ -27,7 +27,7 @@ const electronAPI = {
   unmaximize: () => ipcRenderer.send('window:unmaximize'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   requestWindowList: () => ipcRenderer.invoke('window:list-request'),
-  createWindow: (docPath) => ipcRenderer.invoke('window:create', docPath),
+  createWindow: (docPath, options) => ipcRenderer.invoke('window:create', docPath, options ?? {}),
   focusWindow: (windowId) => ipcRenderer.send('window:focus-other', windowId),
   closeWindow: (windowId) => ipcRenderer.invoke('window:close-other', windowId),
   close: () => ipcRenderer.send('window:close'),
@@ -48,6 +48,14 @@ const electronAPI = {
       ipcRenderer.invoke('file:write-document', filePath, content),
     getModifiedTime: (filePath) => ipcRenderer.invoke('file:get-modified-time', filePath),
     convertDocx: (filePath) => ipcRenderer.invoke('file:convert-docx', filePath),
+    /**
+     * 调起主进程 dialog.showSaveDialog，让用户选择本地保存路径。
+     * 对应 IPC：dialog:show-save-dialog
+     * @param {{ title?: string, defaultPath?: string, filters?: Array<{ name: string, extensions: string[] }> }} [payload]
+     * @returns {Promise<{ canceled: boolean, filePath: string | null }>}
+     */
+    showSaveDialog: (payload) =>
+      ipcRenderer.invoke('dialog:show-save-dialog', payload ?? {}),
     onOpenFile: (callback) => onChannel('file:open', callback),
     onOpenMarkdown: (callback) => onChannel('file:open', callback),
     onOpenArchive: (callback) => onChannel('file:open-archive', callback),
@@ -74,12 +82,6 @@ const electronAPI = {
     // 注意：旧的 auth.startLogin / auth.onCallback 已移除。
     // WPX 改为应用内嵌 AuthModal 登录（POST prowpx.com/api/auth/login），
     // 不再走外部浏览器回调。
-  },
-  freeQuota: {
-    getStatus: (payload) => ipcRenderer.invoke('free-quota:get-status', payload),
-    check: (payload) => ipcRenderer.invoke('free-quota:check', payload),
-    consumeTokens: (payload) => ipcRenderer.invoke('free-quota:consume-tokens', payload),
-    resetDeviceId: () => ipcRenderer.invoke('free-quota:reset-device-id'),
   },
   models: {
     setApiKey: (payload) => ipcRenderer.invoke('models:api-key:set', payload),

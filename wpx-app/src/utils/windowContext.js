@@ -67,6 +67,36 @@ export function getDocPathFromUrl() {
 }
 
 /**
+ * 读取 AI 模式下的用户意图（作为 Hermes 流式任务的输入）。
+ * @returns {string}
+ */
+export function getLaunchIntentFromUrl() {
+  return getLaunchSearchParams().get('intent') || ''
+}
+
+/**
+ * 读取新窗口启动模式：'normal' | 'blank' | 'ai' | 'template'。
+ * - normal：常规窗口（首启动 / 任务栏点击恢复）仍走草稿恢复逻辑
+ * - blank：强制空白，工具栏【新建】选择完全空白时触发
+ * - ai：强制空白 + 启动后调用 AI 流式写文
+ * - template：强制空白 + 启动后按 templateId 应用冷启动模板
+ * @returns {string}
+ */
+export function getLaunchModeFromUrl() {
+  const mode = getLaunchSearchParams().get('mode')
+  if (mode === 'blank' || mode === 'ai' || mode === 'template') return mode
+  return 'normal'
+}
+
+/**
+ * 读取模板模式下的冷启动模板 ID（与 cold-start-templates.js 中的 id 对齐）。
+ * @returns {string}
+ */
+export function getLaunchTemplateIdFromUrl() {
+  return getLaunchSearchParams().get('templateId') || ''
+}
+
+/**
  * 为需要按窗口隔离的 localStorage 键附加 windowId 后缀。
  * @param {string} baseKey
  * @returns {string}

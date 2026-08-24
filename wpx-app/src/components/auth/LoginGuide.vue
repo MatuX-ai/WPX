@@ -88,7 +88,8 @@ function handleKeydown(event) {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgb(15 23 42 / 45%);
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(3px);
 }
 
 .login-guide {

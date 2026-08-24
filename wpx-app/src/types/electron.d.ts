@@ -135,57 +135,6 @@ declare global {
           }) => void,
         ) => () => void
       }
-      freeQuota?: {
-        getStatus?: (payload: {
-          isGuest?: boolean
-          userId?: string | null
-        }) => Promise<{
-          ok: boolean
-          subjectKey?: string
-          isGuest?: boolean
-          limit: number
-          used: number
-          remaining: number
-          date?: string
-          unit?: 'token'
-          code?: string
-        }>
-        check?: (payload: {
-          isGuest?: boolean
-          userId?: string | null
-        }) => Promise<{
-          ok: boolean
-          code?: string
-          subjectKey?: string
-          isGuest?: boolean
-          limit: number
-          used: number
-          remaining: number
-          date?: string
-          unit?: 'token'
-        }>
-        consumeTokens?: (payload: {
-          isGuest?: boolean
-          userId?: string | null
-          tokens?: number
-        }) => Promise<{
-          ok: boolean
-          consumed?: number
-          code?: string
-          subjectKey?: string
-          isGuest?: boolean
-          limit: number
-          used: number
-          remaining: number
-          date?: string
-          unit?: 'token'
-        }>
-        resetDeviceId?: () => Promise<{
-          ok: boolean
-          deviceId?: string
-          previousDeviceId?: string | null
-        }>
-      }
       models?: {
         setApiKey?: (payload: {
           block: 'text' | 'vision'
@@ -223,6 +172,27 @@ declare global {
         upload?: (payload: KnowledgeUploadPayload) => Promise<{ success: boolean; item: KnowledgeItem }>
         delete?: (id: string) => Promise<{ success: boolean; id: string }>
         clearIndex?: () => Promise<{ success: boolean; cleared?: number }>
+        search?: (
+          query: string,
+          topK?: number,
+        ) => Promise<{ results?: unknown[]; error?: string }>
+        fulltextSearch?: (
+          query: string,
+          limit?: number,
+        ) => Promise<{
+          results?: Array<{
+            doc_id?: string
+            id?: string
+            filename?: string
+            type?: string
+            uploadedAt?: string
+            snippet?: string
+            matchCount?: number
+          }>
+          query?: string
+          totalHits?: number
+          error?: string
+        }>
         onUpdated?: (callback: () => void) => () => void
       }
       memory?: {

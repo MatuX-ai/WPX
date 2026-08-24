@@ -1,9 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@/composables/useToast'
-import { useAuthStore } from '@/stores/auth'
 import { useUserHabitsStore } from '@/stores/userHabits'
 import { clearKnowledgeIndex } from '@/utils/knowledgeApi'
 import { clearMemoryData } from '@/utils/memoryApi'
@@ -14,14 +12,11 @@ import {
   runLearning,
 } from '@/utils/memoryApi'
 import { isElectron } from '@/utils/electron'
-import { resetGuestDeviceId } from '@/utils/freeQuota'
 import { exportSettingsToFile, importSettingsFromFile } from '@/utils/settingsBackup'
 
 const toast = useToast()
 const router = useRouter()
 const route = useRoute()
-const authStore = useAuthStore()
-const { isGuest } = storeToRefs(authStore)
 const habitsStore = useUserHabitsStore()
 
 // ── AI 记忆（M2.1：四层记忆开关，仅桌面端） ──
@@ -90,7 +85,6 @@ onMounted(loadMemorySettings)
 const confirmDialog = ref(null)
 const memoryClearing = ref(false)
 const cacheClearing = ref(false)
-const deviceIdResetting = ref(false)
 const exporting = ref(false)
 const importing = ref(false)
 const importInputRef = ref(null)
@@ -100,7 +94,7 @@ function openConfirmDialog(config) {
 }
 
 function closeConfirmDialog() {
-  if (memoryClearing.value || cacheClearing.value || deviceIdResetting.value) return
+  if (memoryClearing.value || cacheClearing.value) return
   confirmDialog.value = null
 }
 
@@ -115,11 +109,6 @@ async function handleConfirmAction() {
 
   if (action === 'clear-knowledge') {
     await runClearKnowledgeCache()
-    return
-  }
-
-  if (action === 'clear-device-id') {
-    await runClearDeviceId()
   }
 }
 
@@ -140,17 +129,6 @@ function requestClearKnowledgeCache() {
     title: '清除资料库缓存？',
     description:
       '将清空已上传资料的索引与解析缓存，不会删除您电脑上的原始文件。资料库列表将变为空。',
-    confirmLabel: '确认清除',
-    danger: true,
-  })
-}
-
-function requestClearDeviceId() {
-  openConfirmDialog({
-    action: 'clear-device-id',
-    title: '清除设备 ID？',
-    description:
-      '将重置本机访客设备标识，并清零今日免费 AI 调用次数计数。此操作不会影响已登录账户的数据。',
     confirmLabel: '确认清除',
     danger: true,
   })
@@ -190,24 +168,6 @@ async function runClearKnowledgeCache() {
     toast.error(error?.message || '清除资料库缓存失败，请重试')
   } finally {
     cacheClearing.value = false
-  }
-}
-
-async function runClearDeviceId() {
-  deviceIdResetting.value = true
-
-  try {
-    const result = await resetGuestDeviceId()
-    if (!result?.ok) {
-      throw new Error('清除设备 ID 失败')
-    }
-
-    closeConfirmDialog()
-    toast.success('设备 ID 已重置，Token 用量计数已清零')
-  } catch (error) {
-    toast.error(error?.message || '清除设备 ID 失败，请重试')
-  } finally {
-    deviceIdResetting.value = false
   }
 }
 
@@ -332,21 +292,6 @@ function goToModelSettings() {
         </div>
       </li>
 
-      <li v-if="isGuest">
-        <strong>清除设备 ID</strong>
-        <span>重置访客设备标识，并清零今日免费 AI 调用次数计数。</span>
-        <div class="privacy-item__actions">
-          <button
-            type="button"
-            class="settings-btn-danger"
-            :disabled="deviceIdResetting"
-            @click="requestClearDeviceId"
-          >
-            {{ deviceIdResetting ? '处理中…' : '清除设备 ID' }}
-          </button>
-        </div>
-      </li>
-
       <li>
         <strong>导出所有设置</strong>
         <span>将 Agent、模型、通用设置等导出为 JSON 文件（不含 API Key）。</span>
@@ -425,7 +370,7 @@ function goToModelSettings() {
             <button
               type="button"
               class="settings-btn-secondary"
-              :disabled="memoryClearing || cacheClearing || deviceIdResetting"
+              :disabled="memoryClearing || cacheClearing"
               @click="closeConfirmDialog"
             >
               取消
@@ -433,11 +378,11 @@ function goToModelSettings() {
             <button
               type="button"
               class="settings-btn-danger"
-              :disabled="memoryClearing || cacheClearing || deviceIdResetting"
+              :disabled="memoryClearing || cacheClearing"
               @click="handleConfirmAction"
             >
               {{
-                memoryClearing || cacheClearing || deviceIdResetting
+                memoryClearing || cacheClearing
                   ? '处理中…'
                   : confirmDialog.confirmLabel
               }}
@@ -496,7 +441,8 @@ function goToModelSettings() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(15 23 42 / 45%);
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(3px);
   padding: 16px;
 }
 

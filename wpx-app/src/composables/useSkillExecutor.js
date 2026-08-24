@@ -3,8 +3,32 @@
  *
  * 管理内置 Skills 和外部 SkillHub 的统一调度，
  * 提供 Prompt 组装、表单获取、意图匹配等能力。
+ *
+ * 目录范围：
+ * - 通用写作/编辑 Skills（@/data/skills.js + core-skill-prompts）
+ * - 教师/大学生 Skills（@/data/built-in-skills.js）
+ * - SkillHub 外部注册表
  */
-import { getSkillById, BUILT_IN_SKILLS } from '@/data/built-in-skills'
+import { getSkillById, BUILT_IN_SKILLS as EDUCATION_SKILLS } from '@/data/built-in-skills'
+import { BUILT_IN_SKILLS as CORE_SKILLS } from '@/data/skills'
+import { getCoreSkillPrompt } from '@/data/core-skill-prompts'
+
+/**
+ * 将通用 Skill 元数据补齐为可执行定义（promptTemplate / inputSchema）
+ * @param {import('@/data/skills').SkillDefinition} skill
+ */
+function normalizeCoreSkill (skill) {
+  return {
+    ...skill,
+    builtIn: true,
+    requiresAuth: false,
+    promptTemplate: getCoreSkillPrompt(skill.id, skill),
+    inputSchema: skill.inputSchema || {},
+  }
+}
+
+/** @type {ReturnType<typeof normalizeCoreSkill>[]} */
+const NORMALIZED_CORE_SKILLS = CORE_SKILLS.map(normalizeCoreSkill)
 
 // ── 变量名提取 ──────────────────────────────────
 
@@ -120,20 +144,31 @@ export function registerExternalSkills (skills) {
 // ── 合并查找（内置 + 外部）─────────────────────
 
 /**
- * 从内置 Skills 和外部注册表中查找 Skill
+ * 从通用 / 教育内置 Skills 和外部注册表中查找 Skill
  * @param {string} skillId
- * @returns {import('@/data/built-in-skills').TeacherSkillDefinition | undefined}
+ * @returns {import('@/data/built-in-skills').TeacherSkillDefinition | ReturnType<typeof normalizeCoreSkill> | undefined}
  */
 function findSkill (skillId) {
-  return getSkillById(skillId) || externalSkills.find((s) => s.id === skillId)
+  return (
+    getSkillById(skillId) ||
+    NORMALIZED_CORE_SKILLS.find((s) => s.id === skillId) ||
+    externalSkills.find((s) => s.id === skillId)
+  )
 }
 
 /**
- * 获取所有可用 Skills（内置 + 外部）
- * @returns {import('@/data/built-in-skills').TeacherSkillDefinition[]}
+ * 获取所有可用 Skills（通用 + 教育内置 + 外部，按 ID 去重：教育优先）
+ * @returns {Array<import('@/data/built-in-skills').TeacherSkillDefinition | ReturnType<typeof normalizeCoreSkill>>}
  */
 export function getAllSkills () {
-  return [...BUILT_IN_SKILLS, ...externalSkills]
+  const seen = new Set()
+  const merged = []
+  for (const skill of [...EDUCATION_SKILLS, ...NORMALIZED_CORE_SKILLS, ...externalSkills]) {
+    if (!skill?.id || seen.has(skill.id)) continue
+    seen.add(skill.id)
+    merged.push(skill)
+  }
+  return merged
 }
 
 // ── 手动指定解析 ────────────────────────────────
@@ -294,7 +329,7 @@ function executeSkillLenient (skillId, userInput) {
     return { prompt: `[Skill "${skillId}" 不存在]` }
   }
 
-  const template = skill.promptTemplate
+  const template = skill.promptTemplate || getCoreSkillPrompt(skillId, skill)
   const input = userInput || {}
 
   const prompt = template.replace(VAR_PATTERN, (match, varName, defaultVal) => {
@@ -347,7 +382,7 @@ export function useSkillExecutor () {
       return { missingFields: [`Skill "${skillId}" 不存在`] }
     }
 
-    const template = skill.promptTemplate
+    const template = skill.promptTemplate || getCoreSkillPrompt(skillId, skill)
     const input = userInput || {}
     const missingFields = []
 
@@ -390,16 +425,21 @@ export function useSkillExecutor () {
    * 匹配策略：
    * - 如果消息中明确包含 "用{skillName}" 或 "{skillName}" 且精确匹配某个 Skill 名称，直接返回
    * - 否则扫描 BUILT_IN_SKILLS 和外部 Skills，计算 name + description 的关键词匹配分数
-   * - 超过阈值（0.3）返回最高分 Skill；否则返回 null
+   * - 若传入 recommendedSkillIds，对推荐 Skill 额外加分（文档上下文感知）
+   * - 超过阈值（0.45）返回最高分 Skill；否则返回 null
    *
    * @param {string} userMessage - 用户原始消息
+   * @param {{ recommendedSkillIds?: string[] }} [options]
    * @returns {string | null} 匹配到的 Skill ID，或 null
    */
-  function matchSkillByIntent (userMessage) {
+  function matchSkillByIntent (userMessage, options = {}) {
     if (!userMessage || typeof userMessage !== 'string') return null
 
     const msg = userMessage.trim()
     if (!msg) return null
+
+    const recommendedSet = new Set(options.recommendedSkillIds || [])
+    const RECOMMENDED_BOOST = 0.15
 
     // 1. 精确名称匹配 —— 用户明确说出 Skill 名称
     const allSkills = getAllSkills()
@@ -421,10 +461,22 @@ export function useSkillExecutor () {
 
     for (const skill of allSkills) {
       // 从 name 和 description 中提取有意义的词作为关键词
+      // 中文复合名（如「标题生成」）额外拆成双字词，便于「生成几个标题」类弱意图命中
       const nameWords = skill.name.split(/[,，。；;、\s]+/).filter((w) => w.length >= 2)
       const descWords = skill.description.split(/[,，。；;、\s]+/).filter((w) => w.length >= 2)
-      const keywords = [...nameWords, ...descWords]
-      const score = scoreMatch(msg, keywords, skill.name)
+      const cjkChunks = []
+      for (const w of nameWords) {
+        if (/^[\u4e00-\u9fa5]{4,}$/.test(w)) {
+          for (let i = 0; i + 2 <= w.length; i += 2) {
+            cjkChunks.push(w.slice(i, i + 2))
+          }
+        }
+      }
+      const keywords = [...nameWords, ...cjkChunks, ...descWords]
+      let score = scoreMatch(msg, keywords, skill.name)
+      if (recommendedSet.has(skill.id)) {
+        score += RECOMMENDED_BOOST
+      }
       if (score > bestScore) {
         bestScore = score
         bestId = skill.id

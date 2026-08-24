@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { FolderOpen, Infinity as InfinityIcon, Square, User } from '@lucide/vue'
+import { FilePlus, FolderOpen, Infinity as InfinityIcon, Square, User } from '@lucide/vue'
 import { useAuth } from '@/composables/useAuth'
 import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useAuthStore } from '@/stores/auth'
@@ -11,6 +11,9 @@ import { useSettingsStore } from '@/stores/settings'
 import { useAppStore } from '@/stores/app'
 import { useFocusModeFormatPrompt } from '@/composables/useFocusModeFormatPrompt'
 import { getElectronAPI, isElectron } from '@/utils/electron'
+import { requestCreateAppWindow } from '@/composables/useCreateAppWindow'
+import { shortcutTooltip } from '@/composables/useGlobalShortcuts'
+import { isEditorRoute } from '@/utils/windowContext'
 import {
   FLOATING_WINDOW_ID,
   useFloatingWindowState,
@@ -26,6 +29,7 @@ import {
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import UserAccountMenu from '@/components/layout/UserAccountMenu.vue'
 import WindowListMenu from '@/components/layout/WindowListMenu.vue'
+import NewDocumentIntentDialog from '@/components/layout/NewDocumentIntentDialog.vue'
 import { getWindowId } from '@/utils/windowContext'
 import { useRouter } from 'vue-router'
 
@@ -84,6 +88,7 @@ const focusModeButtonTitle = computed(() =>
 const focusModeButtonLabel = computed(() =>
   focusModeEnabled.value ? '退出焦点模式' : '进入焦点模式',
 )
+const newDocumentTooltip = shortcutTooltip('新建文档', 'newDocument')
 
 async function handleToggleFocusMode() {
   if (!focusModeAvailable.value) return
@@ -121,6 +126,61 @@ async function handleOpenFile() {
 
   if (router.currentRoute.value.name !== 'editor') {
     router.push({ name: 'editor' })
+  }
+}
+
+// 意图对话框状态：弹出后让用户选 空白 / AI 帮我写 / 按格式新建
+const intentDialogVisible = ref(false)
+let intentDialogResolver = null
+
+function openIntentDialog() {
+  intentDialogVisible.value = true
+  return new Promise((resolve) => {
+    intentDialogResolver = resolve
+  })
+}
+
+function handleIntentDialogClose() {
+  // cancel 路径——用户主动关闭或取消
+  intentDialogVisible.value = false
+  intentDialogResolver?.(null)
+  intentDialogResolver = null
+}
+
+async function handleIntentDialogSubmit(payload) {
+  intentDialogVisible.value = false
+  intentDialogResolver?.(payload)
+  intentDialogResolver = null
+}
+
+async function handleNewDocument() {
+  console.log('[TitleBar] handleNewDocument called, isElectron():', isElectron())
+  try {
+    const appStore = useAppStore()
+
+    if (!isElectron()) {
+      console.log('[TitleBar] Not Electron, using web path')
+      // Web 端：保留旧路径（路由跳转 + store 新建 tick）
+      if (!isEditorRoute(router.currentRoute.value)) {
+        await router.push({ name: 'editor' })
+      }
+      appStore.requestNewDocument()
+      return
+    }
+
+    console.log('[TitleBar] Opening intent dialog...')
+    // 桌面端：弹意图对话框，让用户选空白 / AI 写文 / 按格式新建
+    const result = await openIntentDialog()
+    if (!result) return  // 用户取消
+
+    // 所有路径都开新窗口（mode + templateId/intent 通过 URL 传入）
+    await requestCreateAppWindow(undefined, {
+      mode: result.mode,
+      intent: result.intent || '',
+      templateId: result.templateId || '',
+    })
+  } catch (error) {
+    console.error('[TitleBar] handleNewDocument failed:', error)
   }
 }
 
@@ -305,6 +365,7 @@ async function handleTitleBarDblClick(event) {
   if (event.target.closest('.title-bar__menu-btn')) return
   if (event.target.closest('.title-bar__settings-btn')) return
   if (event.target.closest('.title-bar__focus-btn')) return
+  if (event.target.closest('.title-bar__new-btn')) return
   if (event.target.closest('.title-bar__user')) return
   await handleToggleMaximize()
 }
@@ -358,6 +419,18 @@ onUnmounted(() => {
     <div class="title-bar__spacer" aria-hidden="true" />
 
     <div class="title-bar__actions">
+      <!-- 新建文档按钮 -->
+      <button
+        type="button"
+        class="title-bar__menu-btn title-bar__new-btn"
+        :aria-label="newDocumentTooltip"
+        :title="newDocumentTooltip"
+        data-new-document
+        @click="handleNewDocument"
+      >
+        <FilePlus :size="16" :stroke-width="1.8" aria-hidden="true" />
+      </button>
+
       <button
         type="button"
         class="title-bar__menu-btn title-bar__focus-btn"
@@ -586,6 +659,12 @@ onUnmounted(() => {
       </template>
     </div>
   </header>
+
+  <NewDocumentIntentDialog
+    :visible="intentDialogVisible"
+    @close="handleIntentDialogClose"
+    @submit="handleIntentDialogSubmit"
+  />
 </template>
 
 <style scoped>
@@ -603,16 +682,29 @@ onUnmounted(() => {
   app-region: drag;
 }
 
+/*
+ * Immersive overlay：标题栏浮在编辑器内容之上（毛玻璃）。
+ * 默认 pointer-events: none，避免内容被滚到栏下时整条 header 拦截点击；
+ * leading / actions / controls 再打开交互（leading 仍可作 Electron 拖拽区）。
+ * spacer 保持穿透，否则居中 CTA 滚到顶栏下时仍会被挡住。
+ */
 .title-bar--overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: var(--z-title-bar, 80);
+  pointer-events: none;
   background: color-mix(in srgb, var(--theme-bg-subtle) 52%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom-color: color-mix(in srgb, var(--theme-border) 38%, transparent);
+}
+
+.title-bar--overlay .title-bar__leading,
+.title-bar--overlay .title-bar__actions,
+.title-bar--overlay .title-bar__controls {
+  pointer-events: auto;
 }
 
 .title-bar__leading {
@@ -680,6 +772,12 @@ onUnmounted(() => {
 }
 
 .title-bar__focus-btn--active {
+  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+  color: var(--theme-accent);
+}
+
+/* 新建文档按钮 hover 时使用强调色（其余图标按钮使用 muted 背景） */
+.title-bar__new-btn:hover {
   background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
   color: var(--theme-accent);
 }

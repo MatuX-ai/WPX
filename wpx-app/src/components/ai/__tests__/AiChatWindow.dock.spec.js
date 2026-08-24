@@ -146,6 +146,7 @@ vi.mock('@/components/ai/AiChatPanelContent.vue', () => ({
       'insert-slide-deck',
       'local-command-select',
       'local-command-dismiss',
+      'write-self',
       'batch-clean',
       'batch-clean-abort',
       'batch-clean-undo',

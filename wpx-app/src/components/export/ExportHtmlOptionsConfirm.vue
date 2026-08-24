@@ -303,7 +303,8 @@ function handleGenerateTocChange(event) {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
 }
 
 .export-html-options-confirm {

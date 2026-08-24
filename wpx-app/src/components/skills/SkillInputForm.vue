@@ -360,7 +360,8 @@ function handleKeydown (event) {
   align-items: center;
   justify-content: center;
   padding: calc(var(--title-bar-height, 36px) + var(--editor-toolbar-height, 36px) + 16px) 16px 16px;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
 }
 
 .skill-form-dialog {

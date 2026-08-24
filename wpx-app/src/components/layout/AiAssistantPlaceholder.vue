@@ -5,6 +5,7 @@ import { useEditorStore } from '@/stores/editor'
 import { useSettingsStore } from '@/stores/settings'
 import { useModelSettingsStore } from '@/stores/modelSettings'
 import { useSkillsStore } from '@/stores/skills'
+import { useUserHabitsStore } from '@/stores/userHabits'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -16,7 +17,7 @@ import {
 } from '@/composables/useFloatingWindows'
 import AiAvatar from '@/components/ai/AiAvatar.vue'
 import AiChatWindow from '@/components/ai/AiChatWindow.vue'
-import { getMessageText, getMessageReasoning, hasMessageReasoning, useAiChat } from '@/composables/useAiChat'
+import { getMessageText, getMessageReasoning, hasMessageReasoning, useAiChat, normalizeModelErrorForDisplay } from '@/composables/useAiChat'
 import { useSkillExecutor } from '@/composables/useSkillExecutor'
 import { useLocalCommands, getLocalCommandPlaceholders, countCleanableItems, runBatchClean, runBatchCleanAsync } from '@/composables/useLocalCommands'
 import { getActiveEditor } from '@/composables/useEditorRegistry'
@@ -24,7 +25,6 @@ import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useRouter } from 'vue-router'
 import SkillInputForm from '@/components/skills/SkillInputForm.vue'
 import { MISSING_CUSTOM_API } from '@/constants/aiModelMessages'
-import { FREE_QUOTA_EXHAUSTED } from '@/utils/freeQuota'
 import {
   buildSelectionPrompt,
   extractReplacementText,
@@ -58,11 +58,13 @@ import {
   getDefaultTemplate,
   setDefaultTemplate,
 } from '@/utils/markdownFormatPreference'
+import { getDocumentSkillContext, buildQuickSkillMessage } from '@/utils/templateSkillContext'
 
 const editorStore = useEditorStore()
 const settingsStore = useSettingsStore()
 const modelSettingsStore = useModelSettingsStore()
 const skillsStore = useSkillsStore()
+const habitsStore = useUserHabitsStore()
 const userPreferencesStore = useUserPreferencesStore()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
@@ -377,11 +379,18 @@ const disabledSkills = computed(() =>
   skillsStore.allSkills.filter((skill) => !skillsStore.isSkillEnabled(skill.id)),
 )
 
+const documentSkillContext = computed(() =>
+  getDocumentSkillContext(habitsStore.sessionDocumentType, skillsStore),
+)
+
+const recommendedSkills = computed(() => documentSkillContext.value.recommendedSkills)
+
 const systemPrompt = computed(() =>
   buildEditorAiSystemPrompt({
     enabledSkills: skillsStore.enabledSkills,
     disabledSkills: disabledSkills.value,
     agentSettings: userPreferencesStore.agent,
+    documentContext: documentSkillContext.value,
   }),
 )
 
@@ -430,10 +439,21 @@ const onSkillExecuting = (info) => {
   activeSkillInvocation.value = { ...info }
 }
 
-const { chat, isLoading, sendMessage, pendingSkill, submitSkillForm, cancelSkillForm, selectSkillCandidate, retrySkill, lastSkillInvocation } = useAiChat(systemPrompt, {
+function handleChatIdle() {
+  if (activeSkillInvocation.value) {
+    handleSkillResponse()
+  } else {
+    syncLatestAssistantMessage()
+  }
+}
+
+const { chatRef, isLoading, sendMessage, pendingSkill, submitSkillForm, cancelSkillForm, selectSkillCandidate, retrySkill, lastSkillInvocation, resolvedApiKey } = useAiChat(systemPrompt, {
   skillExecutor,
   skillsStore,
+  getDocumentContext: () => documentSkillContext.value,
   onSkillExecuting,
+  onChatFinish: handleChatIdle,
+  onChatError: () => handleChatIdle(),
 })
 
 // 关闭/切换候选弹窗时重置拖拽偏移
@@ -447,6 +467,9 @@ watch(
 )
 
 const selectionPreview = computed(() => {
+  if (editorStore.frozenSelection?.hasSelection) {
+    return editorStore.frozenSelection.text
+  }
   if (!editorStore.chatInputActive) return ''
   return editorStore.activeSelection.hasSelection
     ? editorStore.activeSelection.text
@@ -492,7 +515,25 @@ function handleOnboardingComplete() {
  * @param {object} activeSelection 当前选区快照 { from, to, hasSelection, text }
  * @returns {boolean} true = 已处理，false = 未命中本地指令
  */
-function tryLocalCommand(text, activeSelection) {
+async function tryReadClipboardText() {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) return ''
+  try {
+    const value = await navigator.clipboard.readText()
+    return typeof value === 'string' ? value : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 尝试以本地指令方式处理用户输入。
+ * 返回 true 表示已处理（无需再走 AI 流程），false 表示需要走 AI。
+ *
+ * @param {string} text 原始用户输入
+ * @param {object} activeSelection 当前选区快照 { from, to, hasSelection, text }
+ * @returns {Promise<boolean>} true = 已处理，false = 未命中本地指令
+ */
+async function tryLocalCommand(text, activeSelection) {
   if (!text || typeof text !== 'string') return false
   // 仅有引用资料时（text 为空）也跳过本地指令
   if (!text.trim()) return false
@@ -506,16 +547,8 @@ function tryLocalCommand(text, activeSelection) {
   const hasSelection = Boolean(sel.hasSelection)
   const hasCursor = Boolean(editor && sel.from != null)
 
-  // 读取剪贴板（用于 paste 指令）。失败时降级为空串。
-  let clipboardText = ''
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
-    navigator.clipboard
-      .readText()
-      .then((v) => {
-        if (typeof v === 'string' && v) clipboardText = v
-      })
-      .catch(() => {})
-  }
+  // 剪贴板必须在匹配前读取完成，否则“粘贴”会因异步读取尚未结束而被误判为普通对话。
+  const clipboardText = await tryReadClipboardText()
 
   // 文档摘要（用于 export-* 指令判断是否为空）
   const documentContent = editor
@@ -1053,7 +1086,7 @@ async function handleSend(payload) {
 
   // ── Step -1: 本地指令拦截层 ──
   // 在所有 AI 流程之前优先匹配确定性操作，毫秒级响应、零 Token 消耗、离线可用。
-  const localResult = tryLocalCommand(text, activeSelection)
+  const localResult = await tryLocalCommand(text, activeSelection)
   if (localResult) {
     // 本地指令已处理：不需要走 AI 流程
     return
@@ -1068,18 +1101,42 @@ async function handleSend(payload) {
 
   let result
 
-  if (editorStore.chatInputActive && activeSelection.hasSelection) {
-    editorStore.setPendingReplace({
-      from: activeSelection.from,
-      to: activeSelection.to,
-    })
-    result = await sendMessage({
-      text: buildSelectionPrompt(text, activeSelection.text),
-      context,
-    })
-  } else {
+  const replaceSelection = editorStore.frozenSelection?.hasSelection
+    ? editorStore.frozenSelection
+    : activeSelection.hasSelection
+      ? activeSelection
+      : null
+
+  try {
+    if (replaceSelection) {
+      editorStore.setPendingReplace({
+        from: replaceSelection.from,
+        to: replaceSelection.to,
+      })
+      result = await sendMessage({
+        text: buildSelectionPrompt(text, replaceSelection.text),
+        context,
+      })
+    } else {
+      editorStore.clearPendingReplace()
+      result = await sendMessage({ text, context })
+    }
+  } catch (error) {
+    // 发送链路意外异常（如 IPC/本地引擎挂起被中断等）也不允许“无声失败”，
+    // 转为可见的配置/失败提醒。
+    console.warn('[AiAssistantPlaceholder] sendMessage 异常:', error?.message || error)
     editorStore.clearPendingReplace()
-    result = await sendMessage({ text, context })
+    const normalized = normalizeModelErrorForDisplay(error, { apiKey: resolvedApiKey.value })
+    displayMessages.value.push({
+      id: createMessageId(),
+      role: 'assistant',
+      content: normalized.content,
+      chatErrorMessage: normalized.content,
+      needsModelConfig: normalized.needsModelConfig || undefined,
+      suggestConfigure: normalized.suggestConfigure || undefined,
+      suggestWriteSelf: normalized.suggestWriteSelf || undefined,
+    })
+    return
   }
 
   if (!result?.ok && result?.code === MISSING_CUSTOM_API) {
@@ -1089,27 +1146,24 @@ async function handleSend(payload) {
       role: 'assistant',
       content: result.message,
       needsModelConfig: true,
+      suggestWriteSelf: true,
       isGuest: result.isGuest,
     })
     return
   }
+}
 
-  if (!result?.ok && result?.code === FREE_QUOTA_EXHAUSTED) {
-    editorStore.clearPendingReplace()
-    displayMessages.value.push({
-      id: createMessageId(),
-      role: 'assistant',
-      content: result.message,
-      quotaExhausted: true,
-      suggestConfigure: Boolean(result.suggestConfigure),
-      isGuest: result.isGuest,
-    })
-  }
+function handleSkillQuickUse(skill) {
+  if (!skill?.id || !skillsStore.isSkillEnabled(skill.id)) return
+  const text = buildQuickSkillMessage(skill)
+  if (!text) return
+  void handleSend({ text, references: [] })
 }
 
 function handleSkillResponse() {
   const skillInfo = { ...activeSkillInvocation.value }
   activeSkillInvocation.value = null
+  const chat = chatRef.value
 
   // 获取 AI 返回的最后一个 assistant 消息
   const assistantMessages = chat.messages.filter((m) => m.role === 'assistant')
@@ -1122,7 +1176,12 @@ function handleSkillResponse() {
     const rawContent = getMessageText(lastAssistant)
     const content = extractReplacementText(rawContent)
 
-    if (lastDisplay?.role === 'assistant' && lastDisplay.content === rawContent && !lastDisplay.skillResult) return
+    if (lastDisplay?.role === 'assistant' && lastDisplay.content === rawContent && !lastDisplay.skillResult) {
+      if (editorStore.pendingReplace && content) {
+        editorStore.requestReplace(content, editorStore.pendingReplace)
+      }
+      return
+    }
 
     if (content) {
       // 成功：插入编辑器
@@ -1218,6 +1277,17 @@ function handleInsertText(text) {
 function handleClose() {
   aiChat.close()
   editorStore.setChatInputActive(false)
+  editorStore.clearChatSelectionFreeze()
+}
+
+/**
+ * 未接入大模型引导里的「自己写」：关闭 AI 面板，让用户在空白文档自行写作。
+ * 不跳转设置，也不继续尝试调用模型。
+ */
+function handleWriteSelf() {
+  editorStore.clearPendingAiIntent()
+  editorStore.clearPendingReplace()
+  handleClose()
 }
 
 function handlePinChange() {
@@ -1245,31 +1315,45 @@ function handleChatFocus() {
 }
 
 function syncLatestAssistantMessage() {
+  const chat = chatRef.value
   const assistantMessages = chat.messages.filter((message) => message.role === 'assistant')
   const lastAssistant = assistantMessages[assistantMessages.length - 1]
+
+  // chat.error 不为空 → API 错误，需要明确提示用户。
+  // 必须先于 lastAssistant 判断：当请求在产出任何 assistant 消息之前就失败时，
+  // chat.messages 里只有 user 消息，lastAssistant 为空。若先 return，
+  // 错误会被静默吞掉，表现为「发消息后 AI 没有任何回复」。
+  if (chat.error) {
+    const normalized = normalizeModelErrorForDisplay(chat.error, { apiKey: resolvedApiKey.value })
+    const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
+    if (lastDisplay?.role === 'assistant' && lastDisplay.chatErrorMessage === normalized.content) return
+    displayMessages.value.push({
+      id: createMessageId(),
+      role: 'assistant',
+      content: normalized.content,
+      chatErrorMessage: normalized.content,
+      needsModelConfig: normalized.needsModelConfig || undefined,
+      suggestConfigure: normalized.suggestConfigure || undefined,
+      suggestWriteSelf: normalized.suggestWriteSelf || undefined,
+    })
+    return
+  }
+
   if (!lastAssistant) return
 
   const content = extractReplacementText(getMessageText(lastAssistant))
   // 提取 reasoning（思考过程）以便在折叠面板中渲染，仅供展示，不会插入编辑器
   const reasoning = getMessageReasoning(lastAssistant)
 
-  // chat.error 不为空 → API 错误，需要明确提示用户
-  if (!content && chat.error) {
-    const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
-    if (lastDisplay?.role === 'assistant' && lastDisplay.chatErrorMessage === chat.error?.message) return
-    displayMessages.value.push({
-      id: createMessageId(),
-      role: 'assistant',
-      content: `⚠️ AI 调用失败：${chat.error?.message || '未知错误'}`,
-      chatErrorMessage: chat.error?.message || '',
-    })
-    return
-  }
-
   if (!content) return
 
   const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
-  if (lastDisplay?.role === 'assistant' && lastDisplay.content === content) return
+  if (lastDisplay?.role === 'assistant' && lastDisplay.content === content) {
+    if (editorStore.pendingReplace) {
+      editorStore.requestReplace(content, editorStore.pendingReplace)
+    }
+    return
+  }
 
   displayMessages.value.push({
     id: createMessageId(),
@@ -1322,11 +1406,41 @@ watch(
   },
 )
 
+/**
+ * FIX-2026-08-20：【新建文档 → AI 帮我写】 启动参数 → 实际发送 AI 消息的桥梁。
+ * EditorLayout.useLaunchDocument.onAiIntent 把 intent 写入 editorStore.pendingAiIntent；
+ * 这里 watch 响应后调用 handleSend，复用现有 sendMessage + MISSING_CUSTOM_API
+ * 对话引导。未接入大模型时展示「尚未接入…【设置】【自己写】」，而非生硬报错。
+ *
+ * 关键点：
+ *  - 跳过本地指令（handleSend 内部已处理），不会误命中新建/帮助等本地命令
+ *  - 发送后立即 clearPendingAiIntent，避免重复消费
+ *  - 即使当前文档为空也不会阻塞调用（AI 会写入空白文档）
+ */
+watch(
+  () => editorStore.pendingAiIntent,
+  async (pending) => {
+    if (!pending || !pending.text) return
+    const text = pending.text
+    // 先清除，避免后续 reactive 触发重复发送
+    editorStore.clearPendingAiIntent()
+    try {
+      await handleSend(text)
+    } catch (err) {
+      // handleSend 内部已经做了完整的错误处理，这里只兜底异常
+      console.warn('[AiAssistantPlaceholder] handleSend(aiIntent) failed:', err?.message || err)
+    }
+  },
+)
+
 // 浮窗打开 / 选区变化时刷新可清洗统计
 watch(
   () => aiChatWindowVisible.value,
   (visible) => {
-    if (visible) scheduleCleanableScan(120)
+    if (visible) {
+      editorStore.freezeSelectionFromEditor()
+      scheduleCleanableScan(120)
+    }
   },
 )
 watch(
@@ -1370,6 +1484,7 @@ watch(
       :local-command-placeholders="localCommandPlaceholders"
       :cleanable-count="cleanableCount"
       :batch-progress="batchProgress"
+      :recommended-skills="recommendedSkills"
       @send="handleSend"
       @close="handleClose"
       @pin-change="handlePinChange"
@@ -1382,9 +1497,11 @@ watch(
       @insert-slide-deck="handleInsertSlideDeck"
       @insert-text="handleInsertText"
       @local-command-select="handleLocalCommandSelect"
+      @write-self="handleWriteSelf"
       @batch-clean="handleBatchClean"
       @batch-clean-abort="abortBatchClean"
       @batch-clean-undo="undoBatchClean"
+      @skill-quick-use="handleSkillQuickUse"
     />
   </Teleport>
   <AiChatWindow
@@ -1399,6 +1516,7 @@ watch(
     :local-command-placeholders="localCommandPlaceholders"
     :cleanable-count="cleanableCount"
     :batch-progress="batchProgress"
+    :recommended-skills="recommendedSkills"
     @send="handleSend"
     @close="handleClose"
     @pin-change="handlePinChange"
@@ -1411,9 +1529,11 @@ watch(
     @insert-slide-deck="handleInsertSlideDeck"
     @insert-text="handleInsertText"
     @local-command-select="handleLocalCommandSelect"
+    @write-self="handleWriteSelf"
     @batch-clean="handleBatchClean"
     @batch-clean-abort="abortBatchClean"
     @batch-clean-undo="undoBatchClean"
+    @skill-quick-use="handleSkillQuickUse"
   />
 
   <!--
@@ -1497,7 +1617,8 @@ watch(
   align-items: center;
   justify-content: center;
   padding: calc(var(--title-bar-height, 36px) + var(--editor-toolbar-height, 36px) + 16px) 16px 16px;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
 }
 
 .skill-candidate-dialog {

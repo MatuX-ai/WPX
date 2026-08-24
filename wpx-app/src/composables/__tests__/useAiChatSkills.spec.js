@@ -33,24 +33,6 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ warning: vi.fn(), error: vi.fn(), success: vi.fn() }),
 }))
 
-const mockCheckFreeQuota = vi.fn()
-const mockConsumeFreeQuotaTokens = vi.fn()
-
-vi.mock('@/utils/freeQuota', () => ({
-  checkFreeQuota: (...args) => mockCheckFreeQuota(...args),
-  consumeFreeQuotaTokens: (...args) => mockConsumeFreeQuotaTokens(...args),
-  resolveUsageTokens: (usage) => Number(usage?.totalTokens) || 1,
-  FREE_QUOTA_EXHAUSTED: 'FREE_QUOTA_EXHAUSTED',
-  FreeQuotaExhaustedError: class FreeQuotaExhaustedError extends Error {
-    constructor(details = {}) {
-      super('免费 Token 额度已用完')
-      this.name = 'FreeQuotaExhaustedError'
-      this.code = 'FREE_QUOTA_EXHAUSTED'
-      this.details = details
-    }
-  },
-}))
-
 // ═══════════════════════════════════════════════════════════════════════
 // useSkillExecutor — 纯函数测试（不依赖 Pinia 或 AI SDK）
 // ═══════════════════════════════════════════════════════════════════════
@@ -238,13 +220,20 @@ describe('useAiChat — Skill 集成', () => {
     vi.clearAllMocks()
     setActivePinia(createPinia())
     localStorage.clear()
-    mockCheckFreeQuota.mockResolvedValue({ ok: true, remaining: 99_999_980, unit: 'token' })
-    mockConsumeFreeQuotaTokens.mockResolvedValue({ ok: true, consumed: 20 })
 
-    // 配置平台模型（非 guest）
+    // V1.1 仅使用用户自定义模型：配置一个自定义 API Key，供 Skill 流程发送使用。
     const { useModelSettingsStore } = await import('@/stores/modelSettings')
     const ms = useModelSettingsStore()
-    ms.data.text.source = 'platform'
+    await ms.saveSettings({
+      text: {
+        source: 'custom',
+        custom: {
+          endpoint: 'https://api.deepseek.com/v1',
+          modelName: 'deepseek-chat',
+        },
+      },
+      textApiKey: 'sk-test-key-12345678',
+    })
 
     const { useAuthStore } = await import('@/stores/auth')
     const auth = useAuthStore()

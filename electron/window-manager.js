@@ -49,13 +49,60 @@ function resolveIconPath() {
   return ICON_CANDIDATES.find((candidate) => fs.existsSync(candidate)) ?? ICON_CANDIDATES[0]
 }
 
-function buildSearchParams(windowId, docPath) {
+function buildSearchParams(windowId, docPath, options = {}) {
   const params = new URLSearchParams()
   params.set('windowId', String(windowId))
   if (docPath) {
     params.set('docPath', docPath)
   }
+  const { mode, intent, templateId } = options
+  if (mode && mode !== 'normal') {
+    params.set('mode', mode)
+  }
+  if (intent) {
+    params.set('intent', intent)
+  }
+  if (templateId) {
+    params.set('templateId', templateId)
+  }
   return params.toString()
+}
+
+/**
+ * 持久化窗口计数器：把 _nextId 写到 userData，避免进程重启后
+ * 新窗口复用已关闭窗口的 windowId，导致 scoped localStorage 误读。
+ */
+function resolveCounterPath() {
+  try {
+    return path.join(app.getPath('userData'), 'window-counter.json')
+  } catch {
+    return null
+  }
+}
+
+function loadCounterFromDisk() {
+  const file = resolveCounterPath()
+  if (!file) return null
+  try {
+    if (!fs.existsSync(file)) return null
+    const raw = fs.readFileSync(file, 'utf-8')
+    const parsed = JSON.parse(raw)
+    const nextId = Number(parsed?.nextId)
+    return Number.isFinite(nextId) && nextId >= 1 ? nextId : null
+  } catch (err) {
+    console.warn('[window] failed to load window counter:', err?.message)
+    return null
+  }
+}
+
+function saveCounterToDisk(nextId) {
+  const file = resolveCounterPath()
+  if (!file) return
+  try {
+    fs.writeFileSync(file, JSON.stringify({ nextId }), 'utf-8')
+  } catch (err) {
+    console.warn('[window] failed to save window counter:', err?.message)
+  }
 }
 
 class WindowManager {
@@ -69,8 +116,8 @@ class WindowManager {
 
   /**
    * @param {string} [docPath]
-   * @param {{ suppressDialog?: boolean }} [options]
-   * @returns {{ ok: true, windowId: number } | { ok: false, error: string }}
+   * @param {{ suppressDialog?: boolean, mode?: string, intent?: string, templateId?: string }} [options]
+   * @returns {{ ok: true, windowId: number, mode?: string, intent?: string, templateId?: string } | { ok: false, error: string }}
    */
   createWindow(docPath, options = {}) {
     if (this._windows.size >= MAX_WINDOWS) {
@@ -85,10 +132,17 @@ class WindowManager {
       return { ok: false, error: WINDOW_CREATE_ERROR.MAX_WINDOWS }
     }
 
+    const persistedNextId = loadCounterFromDisk()
+    if (persistedNextId !== null && persistedNextId > this._nextId) {
+      this._nextId = persistedNextId
+    }
     const windowId = this._nextId++
+    saveCounterToDisk(this._nextId)
+
+    const { mode = 'normal', intent = '', templateId = '' } = options
     const isDev = !app.isPackaged
-    const search = buildSearchParams(windowId, docPath)
-    const meta = { docPath: docPath ?? '' }
+    const search = buildSearchParams(windowId, docPath, { mode, intent, templateId })
+    const meta = { docPath: docPath ?? '', mode, intent, templateId }
 
     const window = new BrowserWindow({
       width: 1400,
@@ -143,7 +197,7 @@ class WindowManager {
       window.loadFile(resolveProdIndexHtml(), { search })
     }
 
-    return { ok: true, windowId }
+    return { ok: true, windowId, mode, intent, templateId }
   }
 
   /**

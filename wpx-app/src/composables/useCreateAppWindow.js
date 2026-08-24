@@ -7,9 +7,14 @@ import { getElectronAPI, isElectron } from '@/utils/electron'
 /**
  * 通过主进程创建新的应用窗口（Electron）。
  * @param {string} [docPath]
- * @returns {Promise<{ ok: boolean, windowId?: number, error?: string }>}
+ * @param {{
+ *   mode?: 'normal' | 'blank' | 'ai' | 'template',
+ *   intent?: string,
+ *   templateId?: string,
+ * }} [options]
+ * @returns {Promise<{ ok: boolean, windowId?: number, mode?: string, intent?: string, error?: string }>}
  */
-export async function requestCreateAppWindow(docPath) {
+export async function requestCreateAppWindow(docPath, options = {}) {
   if (!isElectron()) {
     return { ok: false, error: 'UNSUPPORTED' }
   }
@@ -20,7 +25,7 @@ export async function requestCreateAppWindow(docPath) {
   }
 
   try {
-    const result = await api.createWindow(docPath)
+    const result = await api.createWindow(docPath, options)
     if (!result?.ok && result?.error) {
       const message = WINDOW_CREATE_ERROR_MESSAGES[result.error]
       if (message) {

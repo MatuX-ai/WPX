@@ -76,4 +76,18 @@ describe('buildEditorAiSystemPrompt', () => {
     expect(prompt).toContain(DISABLED_SKILL_REPLY)
     expect(prompt).not.toMatch(/翻译（translate）：/)
   })
+
+  it('传入 documentContext 时注入当前文档上下文', () => {
+    const rewrite = BUILT_IN_SKILLS.find((skill) => skill.id === 'rewrite')
+    const prompt = buildEditorAiSystemPrompt({
+      enabledSkills: [rewrite],
+      documentContext: {
+        documentType: '公众号文章',
+        recommendedSkills: [rewrite],
+      },
+    })
+
+    expect(prompt).toContain('【当前文档上下文】')
+    expect(prompt).toContain('公众号文章')
+  })
 })

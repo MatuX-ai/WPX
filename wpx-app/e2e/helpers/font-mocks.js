@@ -229,6 +229,12 @@ export async function openCommercialFontExportDialog(page, options = {}) {
   await expect(exportPdfButton).toBeEnabled()
   await exportPdfButton.click()
 
+  const optionsDialog = page
+    .getByRole('dialog')
+    .filter({ has: page.locator('#export-options-confirm-title') })
+  await expect(optionsDialog).toBeVisible({ timeout: 15_000 })
+  await optionsDialog.getByRole('button', { name: '确认导出' }).click()
+
   const title = page.locator('#export-font-confirm-title')
   await expect(title).toBeVisible({ timeout: 15_000 })
   await expect(title).toHaveText(expectedTitle)

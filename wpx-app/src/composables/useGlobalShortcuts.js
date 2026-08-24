@@ -10,7 +10,10 @@ export const GLOBAL_SHORTCUTS = {
   newDocument: { win: 'Ctrl+N', mac: '⌘N' },
   save: { win: 'Ctrl+S', mac: '⌘S' },
   toggleAiChat: { win: 'Ctrl+Shift+W', mac: '⌘⇧W' },
-  openImageEditor: { win: 'Ctrl+Shift+I', mac: '⌘⇧I' },
+  // 注意：原先 openImageEditor 使用 Ctrl+Shift+I / ⌘⇧I，
+  // 但与 Chromium DevTools 快捷键冲突，导致打包后用户无法打开开发者工具。
+  // 改为 Ctrl+Shift+E / ⌘⇧E（E for Edit）以同时保留两个能力。
+  openImageEditor: { win: 'Ctrl+Shift+E', mac: '⌘⇧E' },
   bold: { win: 'Ctrl+B', mac: '⌘B' },
   italic: { win: 'Ctrl+I', mac: '⌘I' },
   toggleHtmlSourcePanel: { win: 'Ctrl+Shift+H', mac: '⌘⇧H' },
@@ -117,7 +120,7 @@ export function useGlobalShortcuts(handlers = {}) {
       return
     }
 
-    if (event.shiftKey && key === 'i') {
+    if (event.shiftKey && key === 'e') {
       if (editor?.isActive?.('image')) {
         event.preventDefault()
         handlers.onOpenImageEditor?.()
