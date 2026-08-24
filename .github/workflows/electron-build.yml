@@ -39,10 +39,25 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Print environment
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          node --version
-          npm --version
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libasound2 \
+            libxshmfence1
 
       - name: Install root dependencies
         run: npm install --legacy-peer-deps
@@ -58,8 +73,8 @@ jobs:
       - name: Build Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: ""
-          ELECTRON_BUILDER_BINARIES_MIRROR: ""
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_FOR_PULL_REQUEST: false
         run: |
           npm --prefix wpx-app run build
           npx electron-builder --${{ matrix.platform }}
@@ -78,7 +93,7 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
 
@@ -87,9 +102,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: false
 
       - name: List artifacts
-        run: ls -R artifacts/
+        run: ls -laR artifacts/ || echo "No artifacts found"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -100,6 +116,7 @@ jobs:
             artifacts/**/*.AppImage
             artifacts/**/latest*.yml
             artifacts/**/*.blockmap
+          fail_on_unmatched_files: false
           generate_release_notes: true
           draft: false
           prerelease: false
