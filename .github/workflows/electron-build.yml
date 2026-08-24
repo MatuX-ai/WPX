@@ -1,0 +1,97 @@
+name: Electron Build &amp; Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（可选，留空使用 package.json 中的版本）'
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            platform: win
+            artifact_name: WPX-Setup-*.exe
+          - os: macos-latest
+            platform: mac
+            artifact_name: WPX-*.dmg
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: WPX-*.AppImage
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install wpx-app dependencies
+        run: npm ci
+        working-directory: wpx-app
+
+      - name: Build frontend (electron target)
+        run: npm run build:electron
+        working-directory: wpx-app
+
+      - name: Build Electron app (${{ matrix.platform }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run electron:build:${{ matrix.platform }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WPX-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            release/${{ matrix.artifact_name }}
+            release/latest*.yml
+            release/*.blockmap
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: ls -R artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage
+            artifacts/**/latest*.yml
+            artifacts/**/*.blockmap
+          generate_release_notes: true
+          draft: false
+          prerelease: false
