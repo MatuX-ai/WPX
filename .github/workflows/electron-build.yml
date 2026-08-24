@@ -21,15 +21,12 @@ jobs:
         include:
           - os: windows-latest
             platform: win
-            shell: pwsh
             artifact_name: WPX-Setup-*.exe
           - os: macos-latest
             platform: mac
-            shell: bash
             artifact_name: WPX-*.dmg
           - os: ubuntu-latest
             platform: linux
-            shell: bash
             artifact_name: WPX-*.AppImage
 
     steps:
@@ -68,14 +65,12 @@ jobs:
           WPX_PRERENDER: '0'
         run: npm run build
         working-directory: wpx-app
-        shell: ${{ matrix.shell }}
 
       - name: Package Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder --${{ matrix.platform }} -p never
-        shell: ${{ matrix.shell }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
