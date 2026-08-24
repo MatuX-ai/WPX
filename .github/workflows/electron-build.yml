@@ -35,13 +35,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            wpx-app/package-lock.json
+
+      - name: Print environment
+        run: |
+          node --version
+          npm --version
 
       - name: Install root dependencies
         run: npm install
@@ -52,9 +53,9 @@ jobs:
 
       - name: Prepare build resources
         run: mkdir -p resources/fonts
+        shell: bash
 
       - name: Build Electron app (${{ matrix.platform }})
-        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run electron:build:${{ matrix.platform }}
