@@ -46,10 +46,11 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Install wpx-app dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps --include=optional
         working-directory: wpx-app
 
       - name: Install platform native bindings
+        if: matrix.platform != 'win'
         run: bash scripts/ci-install-native-bindings.sh
 
       - name: Prepare build resources
