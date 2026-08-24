@@ -45,10 +45,10 @@ jobs:
           npm --version
 
       - name: Install root dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install wpx-app dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
         working-directory: wpx-app
 
       - name: Prepare build resources
