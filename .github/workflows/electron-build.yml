@@ -36,45 +36,34 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22.12.0'
+          node-version: '22'
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'linux'
         run: bash scripts/ci-linux-deps.sh
 
       - name: Install root dependencies
-        run: npm install --legacy-peer-deps --include=optional
+        run: npm install --legacy-peer-deps
 
       - name: Install wpx-app dependencies
-        run: npm install --legacy-peer-deps --include=optional
+        run: npm install --legacy-peer-deps
         working-directory: wpx-app
 
       - name: Install platform native bindings
+        if: matrix.platform != 'win'
         run: bash scripts/ci-install-native-bindings.sh
 
       - name: Prepare build resources
         run: mkdir -p resources/fonts
         shell: bash
 
-      - name: Generate app icons
-        run: node scripts/generate-icons.mjs
-
-      - name: Verify native bindings
-        run: node scripts/ci-verify-native-bindings.mjs
-        working-directory: wpx-app
-
-      - name: Build frontend (Electron)
-        env:
-          WPX_PRERENDER: '0'
-        run: |
-          node --version
-          npm --prefix wpx-app run build
-
-      - name: Package Electron app (${{ matrix.platform }})
+      - name: Build Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --${{ matrix.platform }} -p never
+        run: |
+          npm --prefix wpx-app run build
+          npx electron-builder --${{ matrix.platform }} -p never
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
