@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '22.12.0'
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'linux'
@@ -63,8 +63,9 @@ jobs:
       - name: Build frontend (Electron)
         env:
           WPX_PRERENDER: '0'
-        run: npm run build
-        working-directory: wpx-app
+        run: |
+          node --version
+          npm --prefix wpx-app run build
 
       - name: Package Electron app (${{ matrix.platform }})
         env:

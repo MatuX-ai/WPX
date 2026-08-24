@@ -1,5 +1,5 @@
 /**
- * CI 预检：确保 Vite 8 / Tailwind 4 的平台原生 binding 已安装。
+ * CI 预检：确保 Vite 8 / Tailwind 4 的平台原生 binding 可加载。
  * 解决 npm optional dependency bug (npm/cli#4828) 在 GHA 上跳过 transitive optional deps 的问题。
  */
 import { createRequire } from 'node:module'
@@ -25,6 +25,8 @@ const key = `${platform()}-${arch()}`
 const rolldownPkg = ROLLDOWN_BINDINGS[key]
 const oxidePkg = OXIDE_BINDINGS[key]
 
+console.log(`[ci-native] node ${process.version} on ${key}`)
+
 if (!rolldownPkg || !oxidePkg) {
   console.error(`[ci-native] Unsupported runner platform: ${key}`)
   process.exit(1)
@@ -33,12 +35,22 @@ if (!rolldownPkg || !oxidePkg) {
 for (const pkg of [rolldownPkg, oxidePkg]) {
   try {
     require.resolve(pkg)
+    require(pkg)
     console.log(`[ci-native] OK ${pkg}`)
-  } catch {
-    console.error(`[ci-native] Missing native binding: ${pkg}`)
-    console.error('[ci-native] Run npm install --include=optional in wpx-app')
+  } catch (err) {
+    console.error(`[ci-native] Failed to load native binding: ${pkg}`)
+    console.error(err)
     process.exit(1)
   }
 }
 
-console.log('[ci-native] All native bindings present')
+try {
+  await import('vite')
+  console.log('[ci-native] vite import OK')
+} catch (err) {
+  console.error('[ci-native] Failed to import vite')
+  console.error(err)
+  process.exit(1)
+}
+
+console.log('[ci-native] All checks passed')
