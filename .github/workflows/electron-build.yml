@@ -58,7 +58,11 @@ jobs:
       - name: Build Electron app (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run electron:build:${{ matrix.platform }}
+          ELECTRON_MIRROR: ""
+          ELECTRON_BUILDER_BINARIES_MIRROR: ""
+        run: |
+          npm --prefix wpx-app run build
+          npx electron-builder --${{ matrix.platform }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
