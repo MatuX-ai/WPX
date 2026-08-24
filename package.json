@@ -228,7 +228,7 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "wpx-app/public/icon.png",
+      "icon": "wpx-app/public/icon.icns",
       "identity": null,
       "gatekeeperAssess": false,
       "hardenedRuntime": false

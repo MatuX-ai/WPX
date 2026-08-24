@@ -53,4 +53,13 @@ try {
   process.exit(1)
 }
 
+try {
+  await import('@tailwindcss/vite')
+  console.log('[ci-native] @tailwindcss/vite import OK')
+} catch (err) {
+  console.error('[ci-native] Failed to import @tailwindcss/vite')
+  console.error(err)
+  process.exit(1)
+}
+
 console.log('[ci-native] All checks passed')
