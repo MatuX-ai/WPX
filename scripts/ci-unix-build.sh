@@ -18,6 +18,11 @@ if npm run build 2>&1 | tee "$LOG"; then
 fi
 
 echo "[ci-unix-build] vite build FAILED"
+if [ -f "$LOG" ]; then
+  tail -40 "$LOG" | while IFS= read -r line; do
+    echo "::error title=Vite build::$line"
+  done
+fi
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
     echo "## Vite build failed ($(uname -s)/$(uname -m))"
