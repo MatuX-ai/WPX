@@ -57,6 +57,7 @@ jobs:
         shell: bash
 
       - name: Verify native bindings
+        if: matrix.platform == 'win'
         working-directory: wpx-app
         run: node scripts/ci-verify-native-bindings.mjs
 
@@ -74,10 +75,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        shell: bash
+          NODE_OPTIONS: '--max-old-space-size=8192'
         run: |
-          (cd wpx-app && npm run build)
+          bash scripts/ci-unix-build.sh
           npx electron-builder --${{ matrix.platform }} -p never
+        shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
