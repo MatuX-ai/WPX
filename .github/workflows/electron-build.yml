@@ -50,7 +50,11 @@ jobs:
         run: npm install
         working-directory: wpx-app
 
+      - name: Prepare build resources
+        run: mkdir -p resources/fonts
+
       - name: Build Electron app (${{ matrix.platform }})
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run electron:build:${{ matrix.platform }}
