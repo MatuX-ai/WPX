@@ -6,24 +6,19 @@ cd wpx-app
 
 case "$(uname -s)/$(uname -m)" in
   Linux/x86_64)
-    rolldown_pkg="@rolldown/binding-linux-x64-gnu@1.0.0-rc.17"
-    oxide_pkg="@tailwindcss/oxide-linux-x64-gnu@4.3.1"
+    pkgs="@rolldown/binding-linux-x64-gnu@1.0.0-rc.17 @tailwindcss/oxide-linux-x64-gnu@4.3.1"
     ;;
   Linux/aarch64|Linux/arm64)
-    rolldown_pkg="@rolldown/binding-linux-arm64-gnu@1.0.0-rc.17"
-    oxide_pkg="@tailwindcss/oxide-linux-arm64-gnu@4.3.1"
+    pkgs="@rolldown/binding-linux-arm64-gnu@1.0.0-rc.17 @tailwindcss/oxide-linux-arm64-gnu@4.3.1"
     ;;
   Darwin/arm64)
-    rolldown_pkg="@rolldown/binding-darwin-arm64@1.0.0-rc.17"
-    oxide_pkg="@tailwindcss/oxide-darwin-arm64@4.3.1"
+    pkgs="@rolldown/binding-darwin-arm64@1.0.0-rc.17 @tailwindcss/oxide-darwin-arm64@4.3.1"
     ;;
   Darwin/x86_64)
-    rolldown_pkg="@rolldown/binding-darwin-x64@1.0.0-rc.17"
-    oxide_pkg="@tailwindcss/oxide-darwin-x64@4.3.1"
+    pkgs="@rolldown/binding-darwin-x64@1.0.0-rc.17 @tailwindcss/oxide-darwin-x64@4.3.1"
     ;;
   MINGW*|MSYS*|CYGWIN*)
-    rolldown_pkg="@rolldown/binding-win32-x64-msvc@1.0.0-rc.17"
-    oxide_pkg="@tailwindcss/oxide-win32-x64-msvc@4.3.1"
+    pkgs="@rolldown/binding-win32-x64-msvc@1.0.0-rc.17 @tailwindcss/oxide-win32-x64-msvc@4.3.1"
     ;;
   *)
     echo "Unsupported platform: $(uname -s)/$(uname -m)"
@@ -31,32 +26,5 @@ case "$(uname -s)/$(uname -m)" in
     ;;
 esac
 
-pkgs="$rolldown_pkg $oxide_pkg"
 echo "Installing native bindings: $pkgs"
 npm install --no-save --legacy-peer-deps $pkgs
-
-link_binding() {
-  local pkg="$1"
-  local nested_root="$2"
-  local rel="${pkg%@*}"
-  local hoisted="node_modules/${rel}"
-  if [ ! -d "$hoisted" ]; then
-    echo "Missing hoisted binding: $hoisted"
-    return 1
-  fi
-  local dest="$nested_root/node_modules/${rel}"
-  mkdir -p "$(dirname "$dest")"
-  if [ -e "$dest" ]; then
-    rm -rf "$dest"
-  fi
-  ln -sf "../../../../${rel}" "$dest"
-  echo "Linked $dest -> hoisted binding"
-}
-
-rolldown_dir="$(node -e "console.log(require('path').dirname(require.resolve('rolldown/package.json')))")"
-oxide_dir="$(node -e "console.log(require('path').dirname(require.resolve('@tailwindcss/oxide/package.json')))")"
-
-link_binding "$rolldown_pkg" "$rolldown_dir"
-link_binding "$oxide_pkg" "$oxide_dir"
-
-echo "Native bindings installed (hoisted + symlinked)"
