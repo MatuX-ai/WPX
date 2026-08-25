@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unix CI：Vite 构建，失败时将日志写入 Job Summary
+# Unix CI?Vite ??????????? Job Summary
 set -o pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

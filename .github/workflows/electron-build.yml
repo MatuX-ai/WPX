@@ -46,7 +46,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Install wpx-app dependencies
-        run: npm ci --legacy-peer-deps --include=optional
+        run: npm ci --legacy-peer-deps
         working-directory: wpx-app
 
       - name: Install platform native bindings
