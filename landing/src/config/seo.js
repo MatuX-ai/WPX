@@ -72,7 +72,7 @@ export const siteConfig = {
   ogImagePng: '/og-image.svg', // 兼容旧客户端
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  ogImageAlt: 'WPX - 永久免费的桌面写作工具，多窗口 / 64 条本地指令 · v0.1.26',
+  ogImageAlt: 'WPX - 永久免费的桌面写作工具，多窗口 / 64 条本地指令 · v0.1.44',
   twitterHandle: '@wpx_app',
   locale: 'zh_CN',
   themeColor: '#4F46E5',

@@ -102,13 +102,13 @@ const socials = [
           <a
             href="/changelog"
             class="mt-5 inline-flex items-center gap-2 rounded-full border border-primary-from/20 bg-wpx-gradient-soft px-3 py-1 text-xs font-semibold text-primary-600 transition-all hover:-translate-y-0.5 hover:shadow-wpx"
-            aria-label="当前桌面端版本 v0.1.26，点击查看完整更新日志"
+            aria-label="当前桌面端版本 v0.1.44，点击查看完整更新日志"
           >
             <span
               aria-hidden="true"
               class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
             />
-            当前桌面端 v0.1.26 · 已迭代更多版本
+            当前桌面端 v0.1.44 · 已迭代更多版本
             <span aria-hidden="true">→</span>
           </a>
 

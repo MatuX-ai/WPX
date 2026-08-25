@@ -82,7 +82,7 @@ function scrollToShowcase(e) {
   <!-- ============== HERO（首屏，eager） ============== -->
   <section
     id="hero"
-    class="relative isolate overflow-hidden pt-24 md:pt-28 lg:pt-32"
+    class="relative isolate overflow-hidden pb-12 pt-8 sm:pb-16 sm:pt-10 md:pb-20 md:pt-14 lg:pb-24 lg:pt-16"
     aria-labelledby="hero-title"
   >
     <!-- 背景装饰 -->
@@ -94,20 +94,20 @@ function scrollToShowcase(e) {
       <div class="absolute -bottom-32 right-0 h-[200px] w-[320px] rounded-full bg-accent-mint/20 blur-3xl sm:h-[280px] sm:w-[480px]" />
     </div>
 
-    <div class="wpx-container grid items-center gap-10 md:grid-cols-2 md:gap-10 lg:gap-12">
+    <div class="wpx-container grid items-center gap-8 md:grid-cols-2 md:gap-10 lg:gap-12">
       <div class="min-w-0">
-        <span class="wpx-chip">
+        <span class="wpx-chip max-w-full truncate">
           <span
             aria-hidden="true"
-            class="h-1.5 w-1.5 rounded-full bg-primary-from"
+            class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-from"
           />
-          v0.1.26 · Hermes Agent 已接入
+          v0.1.44 · Windows / macOS / Linux
         </span>
 
         <h1
           id="hero-title"
           ref="heroTitle"
-          class="mt-6 text-[1.65rem] font-extrabold leading-[1.15] tracking-tight sm:text-4xl sm:leading-[1.1] md:text-5xl md:leading-[1.1] lg:text-6xl lg:leading-[1.05]"
+          class="mt-5 text-[1.7rem] font-extrabold leading-[1.18] tracking-tight sm:mt-6 sm:text-4xl sm:leading-[1.1] md:text-5xl md:leading-[1.1] lg:text-6xl lg:leading-[1.05]"
         >
           <span class="block">为认真写字的人，</span>
           <span class="block">
@@ -117,17 +117,19 @@ function scrollToShowcase(e) {
 
         <p
           ref="heroSub"
-          class="mt-6 max-w-xl text-lg leading-relaxed text-dark/70"
+          class="mt-4 max-w-xl text-[0.95rem] leading-relaxed text-dark/70 sm:mt-6 sm:text-lg"
         >
           永久免费、不弹窗、不上传文档的桌面写作工具。
           多窗口独立 + 64 条斜杠指令 + 32 项 Skills，论文 / 报告 / 教案 / 随笔都顺手。
-          可选接入 Hermes Agent 本地智能体，复杂任务自动路由；SKILL.md 技能标准互通。
-          资料库、表格导入、字体管理，桌面写作所需一次配齐。
+          <span class="hidden sm:inline">
+            可选接入 Hermes Agent 本地智能体，复杂任务自动路由；SKILL.md 技能标准互通。
+            资料库、表格导入、字体管理，桌面写作所需一次配齐。
+          </span>
         </p>
 
         <div
           ref="heroCta"
-          class="mt-8 flex flex-wrap items-center gap-3"
+          class="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap sm:items-center"
         >
           <a
             href="#download"
@@ -146,60 +148,60 @@ function scrollToShowcase(e) {
           </a>
         </div>
 
-        <ul class="mt-10 grid grid-cols-2 gap-4 text-sm text-dark/60 md:max-w-md">
+        <ul class="mt-8 grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm text-dark/60 sm:mt-10 sm:gap-3 md:max-w-md">
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-accent-mint"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-mint"
             />
             完全本地离线
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-accent-yellow"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-yellow"
             />
             多窗口独立
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-primary-from"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-from"
             />
             64 条斜杠指令
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-primary-to"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-to"
             />
             永久免费
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-rose-400"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400"
             />
             PDF / OCR / 压缩一体
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-sky-400"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400"
             />
             100+ 开源字体
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-violet-400"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400"
             />
             Hermes Agent 可选
           </li>
           <li class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="h-1.5 w-1.5 rounded-full bg-amber-500"
+              class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
             />
             SKILL.md 互通
           </li>
@@ -209,11 +211,11 @@ function scrollToShowcase(e) {
       <!-- 视觉占位：编辑器 Hero 卡片 -->
       <div
         ref="heroVisual"
-        class="relative min-w-0"
+        class="relative mx-auto min-w-0 w-full max-w-lg md:mx-0 md:max-w-none"
         role="img"
         aria-label="WPX 桌面端编辑器截图示意"
       >
-        <div class="rounded-3xl border border-dark/5 bg-white p-4 shadow-wpx-glow">
+        <div class="rounded-2xl border border-dark/5 bg-white p-3 shadow-wpx-glow sm:rounded-3xl sm:p-4">
           <!-- 模拟窗口栏 -->
           <div class="flex items-center gap-2 border-b border-dark/5 px-2 pb-3">
             <span
@@ -228,11 +230,11 @@ function scrollToShowcase(e) {
               aria-hidden="true"
               class="h-3 w-3 rounded-full bg-accent-mint/90"
             />
-            <span class="ml-2 text-xs text-dark/40">毕业论文 · 第一章</span>
+            <span class="ml-2 truncate text-xs text-dark/40">毕业论文 · 第一章</span>
           </div>
 
-          <div class="space-y-3 p-3">
-            <div class="text-2xl font-extrabold tracking-tight">
+          <div class="space-y-3 p-2 sm:p-3">
+            <div class="text-lg font-extrabold tracking-tight sm:text-2xl">
               <span class="wpx-gradient-text">基于深度学习的图像去背景研究</span>
             </div>
             <div class="flex gap-2 text-xs text-dark/50">

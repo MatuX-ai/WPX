@@ -28,7 +28,7 @@ const faqs = [
   },
   {
     q: '支持哪些平台？',
-    a: '首发 Windows 桌面端（Electron），macOS 与 Linux 在路线图中。所有功能在 Windows 上 100% 可用。'
+    a: '已提供 Windows（.exe）、macOS Apple Silicon（.dmg）与 Linux（.AppImage）桌面安装包，均可从官网下载区或 GitHub Releases 获取。'
   },
   {
     q: '我的文档会被上传吗？',
@@ -37,7 +37,7 @@ const faqs = [
 ]
 
 const faqNotes = [
-  '本 FAQ 已随 v0.1.26 同步；旧版中涉及 Token 计费、按字扣费、每日免费额度的表述已全部废弃。',
+  '本 FAQ 已随 v0.1.44 同步；旧版中涉及 Token 计费、按字扣费、每日免费额度的表述已全部废弃。',
   '更多详情请查阅 docs/ 目录下的最新文档，或在桌面端「设置 → 帮助」中查看。'
 ]
 </script>

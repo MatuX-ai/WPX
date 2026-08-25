@@ -40,7 +40,7 @@ const platforms = [
     name: 'macOS',
     suffix: '.dmg',
     icon: 'mac',
-    note: 'Apple Silicon · Intel'
+    note: 'Apple Silicon'
   },
   {
     key: 'linux',
@@ -54,13 +54,36 @@ const platforms = [
 // ---------------- GitHub Releases API ----------------
 const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
-// 静态 fallback（产品版本；下载走 Releases latest，体积 / 校验以页面为准）
+const FALLBACK_ASSETS = {
+  windows:
+    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-Setup-0.1.27.exe',
+  macos:
+    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27-arm64.dmg',
+  linux:
+    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27.AppImage',
+}
+
+// 静态 fallback（产品版本；下载走平台安装包直链）
 const fallbackVersion = {
-  version: 'v0.1.26',
-  date: '2026-08-24',
+  version: 'v0.1.44',
+  date: '2026-08-25',
   size: '以 Releases 为准',
   url: 'https://github.com/MatuX-ai/WPX/releases/latest',
+  assets: { ...FALLBACK_ASSETS },
   sha256: null
+}
+
+function pickAssetUrl(assets, platform) {
+  if (!Array.isArray(assets)) return null
+  const matchers = {
+    windows: (n) => /\.exe$/i.test(n) && !/\.blockmap$/i.test(n) && /Setup/i.test(n),
+    macos: (n) => /\.dmg$/i.test(n) && !/\.blockmap$/i.test(n),
+    linux: (n) => /\.AppImage$/i.test(n),
+  }
+  const match = matchers[platform]
+  if (!match) return null
+  const hit = assets.find((a) => a?.name && match(a.name) && a.browser_download_url)
+  return hit?.browser_download_url || null
 }
 
 const release = ref({ ...fallbackVersion, loading: true, source: 'static' })
@@ -73,6 +96,11 @@ async function fetchLatestRelease() {
     clearTimeout(timer)
     if (!res.ok) throw new Error('HTTP ' + res.status)
     const data = await res.json()
+    const assets = {
+      windows: pickAssetUrl(data.assets, 'windows') || FALLBACK_ASSETS.windows,
+      macos: pickAssetUrl(data.assets, 'macos') || FALLBACK_ASSETS.macos,
+      linux: pickAssetUrl(data.assets, 'linux') || FALLBACK_ASSETS.linux,
+    }
     release.value = {
       version: (data.tag_name || fallbackVersion.version).replace(/^v/, '').replace(/^/, 'v'),
       date: data.published_at
@@ -80,6 +108,7 @@ async function fetchLatestRelease() {
         : fallbackVersion.date,
       size: '以 Releases 为准',
       url: data.html_url || fallbackVersion.url,
+      assets,
       loading: false,
       source: 'github'
     }
@@ -125,14 +154,11 @@ async function startDownload() {
   // 1.5s 召唤动画
   await new Promise((r) => setTimeout(r, 1500))
 
-  const latestUrl = 'https://github.com/MatuX-ai/WPX/releases/latest'
-  const platformUrls = {
-    windows: release.value.url || latestUrl,
-    macos: latestUrl,
-    linux: latestUrl
-  }
-
-  const url = platformUrls[activePlatform.value] || platformUrls.windows
+  const assets = release.value.assets || FALLBACK_ASSETS
+  const url =
+    assets[activePlatform.value] ||
+    assets.windows ||
+    'https://github.com/MatuX-ai/WPX/releases/latest'
 
   // 打开新窗口触发下载
   window.open(url, '_blank', 'noopener,noreferrer')

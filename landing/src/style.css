@@ -103,19 +103,21 @@ h6 {
   }
 
   .wpx-btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full
-           bg-wpx-gradient px-6 py-3 font-semibold text-white
+    @apply inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full
+           bg-wpx-gradient px-5 py-3 text-sm font-semibold text-white
            shadow-wpx transition-all duration-300
            hover:shadow-wpx-glow hover:-translate-y-0.5
-           focus:outline-none focus:ring-2 focus:ring-primary-500/50;
+           focus:outline-none focus:ring-2 focus:ring-primary-500/50
+           sm:w-auto sm:px-6 sm:text-base;
   }
 
   .wpx-btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-full
-           border border-dark/10 bg-white/60 px-6 py-3
-           font-semibold text-dark backdrop-blur
+    @apply inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full
+           border border-dark/10 bg-white/60 px-5 py-3
+           text-sm font-semibold text-dark backdrop-blur
            transition-all duration-300
-           hover:bg-white hover:border-primary-500/40 hover:text-primary-600;
+           hover:bg-white hover:border-primary-500/40 hover:text-primary-600
+           sm:w-auto sm:px-6 sm:text-base;
   }
 
   /* 脉冲 CTA：2s 循环，适合作为主行动召唤 */
@@ -129,11 +131,12 @@ h6 {
   }
 
   .wpx-section {
-    @apply relative w-full px-6 py-24 md:py-32;
+    /* 仅纵向间距；水平边距统一由 .wpx-container 控制，避免双重 padding */
+    @apply relative w-full py-14 sm:py-20 md:py-28 lg:py-32;
   }
 
   .wpx-container {
-    @apply mx-auto max-w-6xl;
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
   }
 
   .wpx-chip {

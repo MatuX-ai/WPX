@@ -233,12 +233,16 @@ onBeforeUnmount(() => {
     <div
       v-if="mobileOpen"
       class="lg:hidden fixed inset-0 z-[60] flex flex-col bg-white/95 backdrop-blur-lg"
+      style="padding-bottom: env(safe-area-inset-bottom, 0px)"
       role="dialog"
       aria-modal="true"
       aria-label="主导航"
     >
       <!-- 顶部：Logo + 关闭 -->
-      <div class="wpx-container flex h-16 items-center justify-between">
+      <div
+        class="wpx-container flex h-16 shrink-0 items-center justify-between"
+        style="padding-top: env(safe-area-inset-top, 0px)"
+      >
         <router-link
           id="wpx-nav-logo-mobile"
           to="/"
@@ -286,9 +290,9 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <!-- 链接列表 -->
-      <nav class="wpx-container flex-1 overflow-y-auto py-6">
-        <ul class="space-y-3">
+      <!-- 链接列表：靠上紧凑排布，避免中间大片空白 -->
+      <nav class="wpx-container min-h-0 flex-1 overflow-y-auto py-4">
+        <ul class="space-y-2.5">
           <template v-for="(link, idx) in navLinks" :key="link.id">
             <li
               :style="{
@@ -299,7 +303,7 @@ onBeforeUnmount(() => {
               <router-link
                 v-if="link.type === 'route'"
                 :to="link.to"
-                class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
+                class="flex min-h-12 items-center justify-between rounded-2xl border border-dark/5 bg-white px-4 py-3.5 text-base font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600 sm:px-5 sm:text-lg"
               >
                 <span>{{ link.label }}</span>
                 <span class="text-dark/30">→</span>
@@ -307,7 +311,7 @@ onBeforeUnmount(() => {
               <a
                 v-else
                 :href="`#${link.id}`"
-                class="flex items-center justify-between rounded-2xl border border-dark/5 bg-white px-5 py-4 text-lg font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600"
+                class="flex min-h-12 items-center justify-between rounded-2xl border border-dark/5 bg-white px-4 py-3.5 text-base font-semibold text-dark shadow-sm transition-all hover:border-primary-500/30 hover:text-primary-600 sm:px-5 sm:text-lg"
                 @click="(e) => handleAnchor(e, link.id)"
               >
                 <span>{{ link.label }}</span>
@@ -318,11 +322,11 @@ onBeforeUnmount(() => {
         </ul>
       </nav>
 
-      <!-- 底部：免费下载 CTA（脉冲） -->
-      <div class="wpx-container pb-8 pt-2">
+      <!-- 底部：免费下载 CTA -->
+      <div class="wpx-container shrink-0 border-t border-dark/5 bg-white/80 pb-6 pt-4 backdrop-blur">
         <a
           href="#download"
-          class="wpx-btn-cta-pulse w-full !py-4 text-base"
+          class="wpx-btn-cta-pulse w-full !py-3.5 text-base"
           aria-label="免费下载 WPX"
           @click="(e) => handleAnchor(e, 'download')"
         >
@@ -342,8 +346,8 @@ onBeforeUnmount(() => {
           </svg>
           <span>免费下载 WPX</span>
         </a>
-        <p class="mt-3 text-center text-xs text-dark/50">
-          Windows 10/11 · 完全免费 · 永久使用
+        <p class="mt-2.5 text-center text-xs text-dark/50">
+          Windows · macOS · Linux · 完全免费
         </p>
       </div>
     </div>
