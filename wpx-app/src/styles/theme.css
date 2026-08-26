@@ -1,6 +1,6 @@
 /**
  * WPX 双主题设计令牌
- * 浅色默认；深色通过 [data-theme="dark"] 或 prefers-color-scheme 生效
+ * 浅色默认；深色通过 [data-theme="dark"] 生效（跟随系统由 JS 解析后写入 data-theme）
  */
 
 /* ── 浅色主题 ── */
@@ -77,32 +77,3 @@
   --wpx-focus-mode-paper-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
-/* 跟随系统：JS 未加载前的兜底（默认 system） */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-
-    --theme-bg: #1e1e1e;
-    --theme-bg-subtle: #252525;
-    --theme-bg-muted: #2d2d2d;
-    --theme-fg: #e0e0e0;
-    --theme-fg-muted: #a3a3a3;
-    --theme-fg-subtle: #737373;
-    --theme-accent: #3b82f6;
-    --theme-accent-hover: #60a5fa;
-    --theme-accent-muted: #1e3a5f;
-    --theme-border: #404040;
-    --theme-surface: #252525;
-
-    --theme-danger-bg: #2d1f1f;
-    --theme-danger-border: #5c2929;
-    --theme-danger-fg: #fca5a5;
-
-    --theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --theme-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
-    --theme-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
-
-    --wpx-focus-mode-bg: #1a1a1a;
-    --wpx-focus-mode-paper-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 12px 28px rgba(0, 0, 0, 0.45);
-  }
-}

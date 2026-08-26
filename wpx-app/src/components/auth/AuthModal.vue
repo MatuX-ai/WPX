@@ -574,11 +574,9 @@ const submitDisabled = computed(() => {
   transform: translateY(8px) scale(0.98);
 }
 
-@media (prefers-color-scheme: dark) {
-  .auth-modal__error {
-    color: #fecaca;
-    background: rgb(127 29 29 / 40%);
-    border-color: rgb(185 28 28 / 50%);
-  }
+:root[data-theme='dark'] .auth-modal__error {
+  color: #fecaca;
+  background: rgb(127 29 29 / 40%);
+  border-color: rgb(185 28 28 / 50%);
 }
 </style>

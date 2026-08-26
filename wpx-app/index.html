@@ -88,17 +88,44 @@
       ;(function () {
         var theme = 'light'
         try {
-          var raw = localStorage.getItem('wpx-theme')
-          if (raw) {
-            var mode = JSON.parse(raw).mode
-            if (mode === 'dark') theme = 'dark'
-            else if (mode === 'system') {
-              theme = window.matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light'
+          var mode = null
+          var stored = localStorage.getItem('theme')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') {
+            mode = stored
+          }
+          if (!mode) {
+            var generalRaw = localStorage.getItem('wpx-general-settings')
+            if (generalRaw) {
+              var general = JSON.parse(generalRaw)
+              if (
+                general &&
+                (general.theme === 'light' ||
+                  general.theme === 'dark' ||
+                  general.theme === 'system')
+              ) {
+                mode = general.theme
+              }
             }
-          } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            theme = 'dark'
+          }
+          if (!mode) {
+            var legacyRaw = localStorage.getItem('wpx-theme')
+            if (legacyRaw) {
+              var legacy = JSON.parse(legacyRaw)
+              if (
+                legacy &&
+                (legacy.mode === 'light' ||
+                  legacy.mode === 'dark' ||
+                  legacy.mode === 'system')
+              ) {
+                mode = legacy.mode
+              }
+            }
+          }
+          if (mode === 'dark') theme = 'dark'
+          else if (mode === 'system') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
           }
         } catch (e) {}
         document.documentElement.setAttribute('data-theme', theme)

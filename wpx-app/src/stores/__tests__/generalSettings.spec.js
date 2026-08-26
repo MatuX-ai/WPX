@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useGeneralSettingsStore } from '@/stores/generalSettings'
 import { useThemeStore } from '@/stores/theme'
-import { EDITOR_FONT_SIZE_PX } from '@/constants/generalPreferences'
+import { EDITOR_FONT_SIZE_PX, normalizeGeneralPreferences } from '@/constants/generalPreferences'
 
 describe('generalSettings — 即时生效', () => {
   beforeEach(() => {
@@ -11,6 +11,11 @@ describe('generalSettings — 即时生效', () => {
     document.documentElement.removeAttribute('data-theme')
     document.documentElement.lang = 'zh-CN'
     document.documentElement.style.removeProperty('--wpx-editor-base-font-size')
+  })
+
+  it('未设置主题时默认为浅色', () => {
+    expect(normalizeGeneralPreferences({}).theme).toBe('light')
+    expect(useGeneralSettingsStore().theme).toBe('light')
   })
 
   it('切换主题立即写入 data-theme', async () => {

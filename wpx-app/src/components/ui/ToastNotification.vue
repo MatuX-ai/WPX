@@ -259,26 +259,4 @@ function ariaRole(type) {
 :root[data-theme='dark'] .toast-item__close:hover {
   background: rgba(255, 255, 255, 0.08);
 }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .toast-item--success {
-    color: #bbf7d0;
-  }
-
-  :root:not([data-theme='light']) .toast-item--error {
-    color: #fecaca;
-  }
-
-  :root:not([data-theme='light']) .toast-item--warning {
-    color: #fef08a;
-  }
-
-  :root:not([data-theme='light']) .toast-item--info {
-    color: #bfdbfe;
-  }
-
-  :root:not([data-theme='light']) .toast-item__close:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-}
 </style>

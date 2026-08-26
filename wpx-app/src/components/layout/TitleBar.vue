@@ -1039,9 +1039,7 @@ onUnmounted(() => {
   filter: brightness(0.85);
 }
 
-@media (prefers-color-scheme: dark) {
-  .title-bar__control--win.title-bar__control--close:hover {
-    background: #c42b1c;
-  }
+:root[data-theme='dark'] .title-bar__control--win.title-bar__control--close:hover {
+  background: #c42b1c;
 }
 </style>

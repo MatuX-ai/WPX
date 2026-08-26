@@ -2,7 +2,7 @@ const { BrowserWindow, ipcMain } = require('electron')
 
 const DEFAULT_PREFERENCES = {
   version: 1,
-  theme: 'system',
+  theme: 'light',
   language: 'zh-CN',
   defaultFont: {
     family: 'system-ui',

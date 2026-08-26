@@ -105,7 +105,7 @@ export function normalizeGeneralPreferences(prefs) {
 
   let theme = prefs?.theme
   if (!VALID_THEMES.has(theme)) {
-    theme = 'system'
+    theme = 'light'
   }
 
   let language = prefs?.language

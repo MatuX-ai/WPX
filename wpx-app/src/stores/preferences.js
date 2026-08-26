@@ -17,7 +17,7 @@ const DEFAULT_BASE_URL = 'https://api.deepseek.com'
 export function createDefaultPreferences() {
   return {
     version: 1,
-    theme: 'system',
+    theme: 'light',
     language: 'zh-CN',
     defaultFont: {
       family: 'system-ui',

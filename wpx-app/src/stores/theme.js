@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 export const STORAGE_KEY = 'theme'
 const LEGACY_STORAGE_KEY = 'wpx-theme'
+const GENERAL_SETTINGS_STORAGE_KEY = 'wpx-general-settings'
 
 /** @typedef {'light' | 'dark' | 'system'} ThemeMode */
 
@@ -10,11 +11,17 @@ const VALID_MODES = ['light', 'dark', 'system']
 const THEME_CYCLE = ['light', 'dark', 'system']
 
 function readStoredMode() {
-  if (typeof localStorage === 'undefined') return 'system'
+  if (typeof localStorage === 'undefined') return 'light'
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw && VALID_MODES.includes(raw)) return raw
+
+    const generalRaw = localStorage.getItem(GENERAL_SETTINGS_STORAGE_KEY)
+    if (generalRaw) {
+      const general = JSON.parse(generalRaw)
+      if (VALID_MODES.includes(general?.theme)) return general.theme
+    }
 
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (legacy) {
@@ -27,9 +34,9 @@ function readStoredMode() {
       }
     }
 
-    return 'system'
+    return 'light'
   } catch {
-    return 'system'
+    return 'light'
   }
 }
 
@@ -55,7 +62,7 @@ function applyThemeToDocument(resolved) {
 
 export const useThemeStore = defineStore('theme', () => {
   /** @type {import('vue').Ref<ThemeMode>} */
-  const mode = ref('system')
+  const mode = ref('light')
 
   const resolvedTheme = computed(() =>
     mode.value === 'system' ? getSystemTheme() : mode.value,
