@@ -30,11 +30,32 @@ describe('normalizeModelErrorForDisplay', () => {
       'Model not found',
       'invalid model: deepseek',
       '模型不存在',
+      'The supported API model names are deepseek-v4-pro, deepseek-v4-flash, and deepseek-v4-flash-vision-exp, but you passed deepseek.',
     ]) {
       const result = normalizeModelErrorForDisplay({ message: msg })
       expect(result.needsModelConfig).toBe(true)
       expect(result.content).toContain('模型名称')
     }
+  })
+
+  it('SDK 脱敏文案不再误判为网络失败', () => {
+    const result = normalizeModelErrorForDisplay({ message: 'An error occurred.' })
+    expect(result.needsModelConfig).toBe(true)
+    expect(result.content).not.toContain('无法连接到模型服务')
+    expect(result.content).toMatch(/模型名称|接口地址/)
+  })
+
+  it('嵌套 cause 中的模型名错误可被识别', () => {
+    const result = normalizeModelErrorForDisplay({
+      message: 'An error occurred.',
+      cause: {
+        message:
+          'The supported API model names are deepseek-v4-pro, deepseek-v4-flash, and deepseek-v4-flash-vision-exp, but you passed deepseek.',
+      },
+    })
+    expect(result.needsModelConfig).toBe(true)
+    expect(result.content).toContain('模型名称')
+    expect(result.content).toMatch(/deepseek-v4/)
   })
 
   it('网络/连接类错误 → 提示检查网络与接口地址', () => {

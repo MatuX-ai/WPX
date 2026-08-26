@@ -159,6 +159,26 @@ declare global {
           apiKey?: string
           modelName?: string
         }) => Promise<{ ok: boolean; message: string }>
+        /** 主进程流式 fetch（与 testConnection 同环境） */
+        startFetch?: (payload: {
+          requestId: string
+          url: string
+          method?: string
+          headers?: Record<string, string>
+          body?: string
+        }) => void
+        abortFetch?: (payload: { requestId: string }) => void
+        onFetchEvent?: (
+          callback: (event: {
+            requestId: string
+            type: 'meta' | 'chunk' | 'end' | 'error'
+            status?: number
+            statusText?: string
+            headers?: Record<string, string>
+            chunk?: string
+            message?: string
+          }) => void,
+        ) => () => void
       }
       knowledge?: {
         list?: () => Promise<{ items: KnowledgeItem[] }>

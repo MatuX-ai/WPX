@@ -11,9 +11,14 @@ export const useAppStore = defineStore('app', () => {
   })
   const lastSavedDocument = ref(null)
   const documentTitle = ref('未命名文档')
+  /** 资料库预览中的临时标题（优先于 documentTitle 显示在顶栏） */
+  const browsingTitle = ref(null)
   /** @type {import('vue').Ref<'saved' | 'unsaved' | 'saving'>} */
   const documentSaveStatus = ref('saved')
   const isDocumentSaved = computed(() => documentSaveStatus.value === 'saved')
+  const displayDocumentTitle = computed(
+    () => browsingTitle.value || documentTitle.value || '未命名文档',
+  )
   const newDocumentTick = ref(0)
   const hasOpenDocument = ref(false)
   /** @type {import('vue').Ref<{ path?: string, content: string, title?: string, format?: object | null } | null>} */
@@ -30,10 +35,23 @@ export const useAppStore = defineStore('app', () => {
 
   function toggleKnowledgePanel() {
     knowledgePanelOpen.value = !knowledgePanelOpen.value
+    if (!knowledgePanelOpen.value) {
+      browsingTitle.value = null
+    }
   }
 
   function closeKnowledgePanel() {
     knowledgePanelOpen.value = false
+    browsingTitle.value = null
+  }
+
+  function setBrowsingTitle(title) {
+    const next = typeof title === 'string' ? title.trim() : ''
+    browsingTitle.value = next || null
+  }
+
+  function clearBrowsingTitle() {
+    browsingTitle.value = null
   }
 
   function openSaveDialog({ content = '', defaultTitle = '未命名文档' } = {}) {
@@ -54,6 +72,16 @@ export const useAppStore = defineStore('app', () => {
 
   function setDocumentTitle(title) {
     documentTitle.value = title?.trim() || '未命名文档'
+  }
+
+  /**
+   * 仅在能从正文抽出标题时更新；避免空稿 / 无 H1 时把已有文件名标题冲掉。
+   * @param {string | null | undefined} title
+   */
+  function setDocumentTitleIfPresent(title) {
+    const next = title?.trim()
+    if (!next || next === '未命名文档') return
+    documentTitle.value = next
   }
 
   function setDocumentSaveStatus(status) {
@@ -82,6 +110,7 @@ export const useAppStore = defineStore('app', () => {
 
   function resetDocumentState() {
     documentTitle.value = '未命名文档'
+    browsingTitle.value = null
     documentSaveStatus.value = 'saved'
     lastSavedDocument.value = null
     clearDocumentSource()
@@ -90,10 +119,15 @@ export const useAppStore = defineStore('app', () => {
   /**
    * @param {{ path: string, mtimeMs?: number | null, extension?: string }} source
    */
-  function setDocumentSource({ path, mtimeMs = null, extension = '' }) {
+  function setDocumentSource({ path, mtimeMs = null, extension } = {}) {
     documentSourcePath.value = path || ''
     documentSourceMtime.value = mtimeMs ?? null
-    documentSourceExtension.value = extension || ''
+    if (typeof extension === 'string' && extension) {
+      documentSourceExtension.value = extension
+    } else if (path) {
+      const match = String(path).match(/(\.[A-Za-z0-9]+)$/)
+      if (match) documentSourceExtension.value = match[1].toLowerCase()
+    }
   }
 
   function clearDocumentSource() {
@@ -132,9 +166,14 @@ export const useAppStore = defineStore('app', () => {
     lastSavedDocument,
     notifyDocumentSaved,
     documentTitle,
+    browsingTitle,
+    displayDocumentTitle,
+    setBrowsingTitle,
+    clearBrowsingTitle,
     isDocumentSaved,
     documentSaveStatus,
     setDocumentTitle,
+    setDocumentTitleIfPresent,
     setDocumentSaveStatus,
     markDocumentDirty,
     markDocumentSaved,

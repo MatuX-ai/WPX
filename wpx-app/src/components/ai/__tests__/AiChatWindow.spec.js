@@ -303,6 +303,28 @@ describe('AiChatWindow.vue', () => {
       wrapper.unmount()
     })
 
+    it('IME 组字中按 Enter 不应发送（避免中文无法上屏）', async () => {
+      const wrapper = mountChatWindow()
+      const textarea = wrapper.get('textarea')
+
+      await textarea.setValue('nihao')
+      await textarea.trigger('keydown', { key: 'Enter', isComposing: true })
+
+      expect(wrapper.emitted('send')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('IME keyCode 229 时按 Enter 不应发送', async () => {
+      const wrapper = mountChatWindow()
+      const textarea = wrapper.get('textarea')
+
+      await textarea.setValue('zhong')
+      await textarea.trigger('keydown', { key: 'Enter', keyCode: 229 })
+
+      expect(wrapper.emitted('send')).toBeUndefined()
+      wrapper.unmount()
+    })
+
     it('mousedown 宿主区域应触发 focus 事件', async () => {
       const wrapper = mountChatWindow()
 

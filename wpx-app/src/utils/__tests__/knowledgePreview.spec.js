@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { extractPreviewImages, hasPreviewImages } from '@/utils/knowledgePreview'
+import {
+  displayKnowledgeTitle,
+  extractPreviewImages,
+  hasPreviewImages,
+  prefersRenderedPreview,
+} from '@/utils/knowledgePreview'
 
 describe('knowledgePreview — 图片/文本分离', () => {
   it('从 <img src="data:..."> 抽出 src 并剥离标签', () => {
@@ -64,5 +69,20 @@ describe('knowledgePreview — 图片/文本分离', () => {
     // 再 extract 不能因为 lastIndex 漏掉图
     const r = extractPreviewImages(input)
     expect(r.images).toEqual(['a', 'b'])
+  })
+})
+
+describe('knowledgePreview — 标题与渲染偏好', () => {
+  it('displayKnowledgeTitle 去掉扩展名', () => {
+    expect(displayKnowledgeTitle('聘：AI 编程调试员.md')).toBe('聘：AI 编程调试员')
+    expect(displayKnowledgeTitle('')).toBe('未命名资料')
+    expect(displayKnowledgeTitle('readme')).toBe('readme')
+  })
+
+  it('prefersRenderedPreview 覆盖常见类型', () => {
+    expect(prefersRenderedPreview('markdown')).toBe(true)
+    expect(prefersRenderedPreview('web')).toBe(true)
+    expect(prefersRenderedPreview('pdf')).toBe(true)
+    expect(prefersRenderedPreview('unknown-bin')).toBe(false)
   })
 })

@@ -18,6 +18,19 @@
  */
 const HTML_IMG_SRC = '<img\\b[^>]*?src=["\']([^"\']+)["\'][^>]*>'
 
+/** 去掉扩展名后的可读标题（用于顶栏 / 预览头） */
+export function displayKnowledgeTitle(filename) {
+  const raw = String(filename || '').trim()
+  if (!raw) return '未命名资料'
+  return raw.replace(/\.[^.]+$/i, '').trim() || raw
+}
+
+/** 默认以渲染视图阅读（源码仍可切换） */
+export function prefersRenderedPreview(type) {
+  const t = String(type || '').toLowerCase()
+  return t === 'markdown' || t === 'text' || t === 'web' || t === 'word' || t === 'pdf' || !t
+}
+
 function newImgRegex() {
   // 每次新建实例，避免 g 标志的 lastIndex 状态污染
   return new RegExp(HTML_IMG_SRC, 'gi')

@@ -251,7 +251,12 @@ function slideToPptx(slide, pres) {
     s.addText(props.title || '', { x: 0.6, y: 0.5, w: 8.8, h: 1.0, fontSize: 26, bold: true, color: '1a1a1a' })
     if (props.imageUrl) {
       try {
-        s.addImage({ path: props.imageUrl, x: 5.5, y: 1.8, w: 3.8, h: 2.6 })
+        const url = String(props.imageUrl)
+        if (/^data:/i.test(url)) {
+          s.addImage({ data: url.replace(/^data:/i, ''), x: 5.5, y: 1.8, w: 3.8, h: 2.6 })
+        } else {
+          s.addImage({ path: url, x: 5.5, y: 1.8, w: 3.8, h: 2.6 })
+        }
       } catch {
         s.addText('[图片占位]', { x: 5.5, y: 1.8, w: 3.8, h: 2.6, color: '94a3b8' })
       }
@@ -263,7 +268,87 @@ function slideToPptx(slide, pres) {
   if (component === 'ChartSlide') {
     const s = pres.addSlide()
     s.addText(props.title || '', { x: 0.6, y: 0.5, w: 8.8, h: 1.0, fontSize: 26, bold: true, color: '1a1a1a' })
-    s.addText(`[${props.chartType || 'bar'} 图表占位]`, { x: 0.8, y: 2.0, w: 8.4, h: 3.6, color: '94a3b8', fontSize: 16 })
+    const chartType = String(props.chartType || 'bar').toLowerCase()
+    let raw = props.chartData
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw)
+      } catch {
+        raw = null
+      }
+    }
+
+    /** @type {Array<{ name: string, labels: string[], values: number[] }>} */
+    let series = []
+    if (Array.isArray(raw) && raw.length) {
+      series = [
+        {
+          name: props.title || '数据',
+          labels: raw.map((d) => String(d?.name ?? '')),
+          values: raw.map((d) => Number(d?.value || 0)),
+        },
+      ]
+    } else if (raw && typeof raw === 'object') {
+      const categories = Array.isArray(raw.categories) ? raw.categories.map(String) : []
+      const seriesRaw = Array.isArray(raw.series) ? raw.series : []
+      if (chartType === 'pie' && seriesRaw[0]) {
+        const first = seriesRaw[0]
+        const data = Array.isArray(first.data) ? first.data : []
+        if (data.length && typeof data[0] === 'object') {
+          series = [
+            {
+              name: first.name || '数据',
+              labels: data.map((d) => String(d?.name ?? '')),
+              values: data.map((d) => Number(d?.value || 0)),
+            },
+          ]
+        } else {
+          series = [
+            {
+              name: first.name || '数据',
+              labels: categories,
+              values: data.map((v) => Number(v) || 0),
+            },
+          ]
+        }
+      } else {
+        series = seriesRaw.map((item, i) => ({
+          name: item?.name || `系列 ${i + 1}`,
+          labels: categories,
+          values: (Array.isArray(item?.data) ? item.data : []).map((v) => Number(v) || 0),
+        }))
+      }
+    }
+
+    if (series.length && typeof pres.ChartType === 'object') {
+      const type =
+        chartType === 'pie'
+          ? pres.ChartType.pie
+          : chartType === 'line'
+            ? pres.ChartType.line
+            : pres.ChartType.bar
+      try {
+        s.addChart(type, series, {
+          x: 0.6,
+          y: 1.5,
+          w: 8.8,
+          h: 4.8,
+          showTitle: false,
+          showLegend: chartType === 'pie' || series.length > 1,
+        })
+        return
+      } catch {
+        // fall through to placeholder
+      }
+    }
+    s.addText(`[${chartType} 图表占位]`, {
+      x: 0.8,
+      y: 2.0,
+      w: 8.4,
+      h: 3.6,
+      color: '94a3b8',
+      fontSize: 16,
+    })
     return
   }
 

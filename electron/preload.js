@@ -36,6 +36,7 @@ const electronAPI = {
   cancelClose: () => ipcRenderer.send('window:cancel-close'),
   onCloseCheck: (callback) => onChannel('window:close-check', callback),
   onAiChatToggle: (callback) => onChannel('shortcut:ai-chat-toggle', callback),
+  onEditorMenuCommand: (callback) => onChannel('menu:editor-command', callback),
   onWindowFocus: (callback) => onChannel('window:focus', callback),
   onWindowBlur: (callback) => onChannel('window:blur', callback),
   onOpenFile: (callback) => onChannel('file:open', callback),
@@ -46,6 +47,8 @@ const electronAPI = {
     readDocument: (filePath) => ipcRenderer.invoke('file:read-document', filePath),
     writeDocument: (filePath, content) =>
       ipcRenderer.invoke('file:write-document', filePath, content),
+    writeBinary: (filePath, base64) =>
+      ipcRenderer.invoke('file:write-binary', filePath, base64),
     getModifiedTime: (filePath) => ipcRenderer.invoke('file:get-modified-time', filePath),
     convertDocx: (filePath) => ipcRenderer.invoke('file:convert-docx', filePath),
     /**
@@ -90,6 +93,10 @@ const electronAPI = {
     getAllMasked: () => ipcRenderer.invoke('models:api-key:get-all-masked'),
     getDecryptedApiKey: (payload) => ipcRenderer.invoke('models:api-key:get-decrypted', payload),
     testConnection: (payload) => ipcRenderer.invoke('models:test-connection', payload),
+    /** 主进程流式 fetch：与 testConnection 同环境，避开渲染进程 CORS */
+    startFetch: (payload) => ipcRenderer.send('models:fetch-stream', payload),
+    abortFetch: (payload) => ipcRenderer.send('models:fetch-abort', payload),
+    onFetchEvent: (callback) => onChannel('models:fetch-event', callback),
   },
   knowledge: {
     list: () => ipcRenderer.invoke('knowledge:list'),
@@ -221,6 +228,17 @@ const electronAPI = {
   shell: {
     // 用于在桌面端用系统默认浏览器打开外部链接
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  },
+  slides: {
+    /**
+     * 导出 / 覆盖写回 PPTX。
+     * options.outputPath 存在时静默写入该路径（不弹对话框）。
+     * @param {Array} slides
+     * @param {{ outputPath?: string, filename?: string, title?: string, theme?: string }} [options]
+     */
+    exportPptx: (slides, options) => ipcRenderer.invoke('slides:export-pptx', slides, options ?? {}),
+    exportPptxBuffer: (slides, options) =>
+      ipcRenderer.invoke('slides:export-pptx-buffer', slides, options ?? {}),
   },
 }
 

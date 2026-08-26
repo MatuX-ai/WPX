@@ -7,6 +7,7 @@ const { registerCommercialFontRoutes } = require('./services/commercial-font-rou
 const { registerJcodeRoutes } = require('./services/jcode-routes')
 const { registerHermesRoutes } = require('./services/hermes-routes')
 const { registerLibraryRoutes } = require('./services/library-routes')
+const { registerModelProxyRoutes } = require('./services/model-proxy-routes')
 const hermesLauncher = require('./services/hermes-launcher')
 const { initTokenStore } = require('./services/token-store')
 const { initCommercialFontStore } = require('./services/commercial-font-store')
@@ -38,14 +39,15 @@ async function startLocalServer() {
   const upload = multer({ storage: multer.memoryStorage() })
 
   // 安全约束：
-  // - 仅允许来自 http://localhost:* 和 http://127.0.0.1:* 的请求（本地 Electron 渲染进程）
-  // - 使用 origin 函数动态匹配，避免 origin: true 反射任意 Origin 头
-  // - 同时服务监听地址硬编码为 127.0.0.1，外部网络无法访问
+  // - 服务仅监听 127.0.0.1，外网不可达
+  // - CORS：放行本地开发 Origin，以及 Electron 生产 loadFile 产生的 Origin "null" / file://
+  //   （此前只放行 http://localhost，导致 AI 对话经 /api/model-proxy 时被浏览器 CORS 拦截，
+  //    表现为「无法连接到模型服务」；设置页测试连接走主进程 fetch，故不受影响）
   expressApp.use(cors({
     origin: (origin, callback) => {
-      // 无 origin 头（同源请求或 Electron file:// 协议）直接放行
-      if (!origin) return callback(null, true)
-      // 仅允许本地地址
+      if (!origin || origin === 'null' || String(origin).startsWith('file:')) {
+        return callback(null, true)
+      }
       if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         return callback(null, true)
       }
@@ -66,6 +68,9 @@ async function startLocalServer() {
   // 文库服务：移植自 wpx-app/src/server/library-service.py，
   // 避免 Electron 桌面端 fetch `/api/library/*` 报 Failed to fetch。
   registerLibraryRoutes(expressApp)
+  // 自定义模型代理：渲染进程经 127.0.0.1 转发，避免直连第三方 API 被 CORS 拦截
+  // （设置页「测试连接」走主进程 fetch 故能通，对话必须走此代理）
+  registerModelProxyRoutes(expressApp)
   // M3：Hermes Gateway 适配层（网关不可用时透明降级，不影响其他服务）
   // gatewayKey 动态取 launcher 当前生成的 API_SERVER_KEY
   registerHermesRoutes(expressApp, {

@@ -274,6 +274,18 @@ function setupBaseMasters(pres, theme, author) {
 function renderCoverSlide(slide, pres, theme) {
   const props = slide?.props || {}
   const slide0 = pres.addSlide({ masterName: 'WPX_COVER' })
+
+  // 背景图先画，再叠文字
+  if (props.backgroundImage) {
+    addPptxImage(slide0, props.backgroundImage, {
+      x: 0,
+      y: 0,
+      w: SLIDE_W,
+      h: SLIDE_H,
+      sizing: { type: 'cover', w: SLIDE_W, h: SLIDE_H },
+    })
+  }
+
   // 标题（紫粉渐变用纯色近似；pptxgenjs 不支持渐变文字，使用主色 + 大字号）
   slide0.addText(
     [
@@ -386,6 +398,117 @@ function renderTextSlide(slide, pres, theme) {
   }
 }
 
+/**
+ * 将 ChartSlide / 旧版 [{name,value}] 统一为 pptxgenjs series 数组。
+ * @param {object} props
+ * @returns {{ chartType: string, series: Array<{ name: string, labels: string[], values: number[] }> } | null}
+ */
+function normalizeChartDataForPptx(props) {
+  const chartType = String(props?.chartType || 'bar').toLowerCase()
+  let raw = props?.chartData
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw)
+    } catch {
+      raw = null
+    }
+  }
+
+  // 旧格式：[{ name, value }, ...]
+  if (Array.isArray(raw) && raw.length) {
+    return {
+      chartType,
+      series: [
+        {
+          name: props.title || '数据',
+          labels: raw.map((d) => String(d?.name ?? '')),
+          values: raw.map((d) => Number(d?.value || 0)),
+        },
+      ],
+    }
+  }
+
+  // ChartSlide 格式：{ categories, series }
+  if (raw && typeof raw === 'object') {
+    const categories = Array.isArray(raw.categories) ? raw.categories.map(String) : []
+    const seriesRaw = Array.isArray(raw.series) ? raw.series : []
+    if (!seriesRaw.length) return null
+
+    if (chartType === 'pie') {
+      const first = seriesRaw[0] || { data: [] }
+      const data = Array.isArray(first.data) ? first.data : []
+      if (data.length && typeof data[0] === 'object' && data[0] !== null) {
+        return {
+          chartType: 'pie',
+          series: [
+            {
+              name: first.name || props.title || '数据',
+              labels: data.map((d) => String(d?.name ?? '')),
+              values: data.map((d) => Number(d?.value || 0)),
+            },
+          ],
+        }
+      }
+      return {
+        chartType: 'pie',
+        series: [
+          {
+            name: first.name || props.title || '数据',
+            labels: categories.length
+              ? categories
+              : data.map((_, i) => `项 ${i + 1}`),
+            values: data.map((v) => Number(v) || 0),
+          },
+        ],
+      }
+    }
+
+    const labels =
+      categories.length > 0
+        ? categories
+        : Array.from(
+            {
+              length: Math.max(
+                ...seriesRaw.map((s) => (Array.isArray(s?.data) ? s.data.length : 0)),
+                0,
+              ),
+            },
+            (_, i) => String(i + 1),
+          )
+
+    return {
+      chartType,
+      series: seriesRaw.map((s, i) => ({
+        name: s?.name || `系列 ${i + 1}`,
+        labels,
+        values: (Array.isArray(s?.data) ? s.data : []).map((v) => Number(v) || 0),
+      })),
+    }
+  }
+
+  return null
+}
+
+/**
+ * pptxgenjs 图片：data URL 用 data 字段，其余用 path。
+ * @returns {boolean}
+ */
+function addPptxImage(slide0, url, opts) {
+  if (!url || typeof url !== 'string') return false
+  try {
+    if (/^data:/i.test(url)) {
+      // pptxgenjs 期望 "image/png;base64,XXXX"（可带或不带 data: 前缀）
+      const data = url.replace(/^data:/i, '')
+      slide0.addImage({ data, ...opts })
+      return true
+    }
+    slide0.addImage({ path: url, ...opts })
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
 function renderChartSlide(slide, pres, theme) {
   const props = slide?.props || {}
   const masterName = theme.bg === DEFAULT_THEME.bg ? 'WPX_BASE_LIGHT' : 'WPX_BASE_DARK'
@@ -403,18 +526,8 @@ function renderChartSlide(slide, pres, theme) {
     align: 'center',
   })
 
-  // 解析图表数据
-  const chartType = String(props.chartType || 'bar').toLowerCase()
-  let data = []
-  try {
-    const raw = props.chartData
-    if (typeof raw === 'string') data = JSON.parse(raw)
-    else if (Array.isArray(raw)) data = raw
-  } catch (_) {
-    data = []
-  }
-  if (!Array.isArray(data) || data.length === 0) {
-    // 占位：图表不可用时给一个提示框
+  const normalized = normalizeChartDataForPptx(props)
+  if (!normalized || !normalized.series.length) {
     slide0.addText('图表数据缺失或格式无效', {
       x: SAFE_MARGIN,
       y: SLIDE_H / 2 - 0.5,
@@ -429,27 +542,19 @@ function renderChartSlide(slide, pres, theme) {
     return
   }
 
-  const labels = data.map((d) => d.name || '')
-  const values = data.map((d) => Number(d.value || 0))
-
+  const chartType = normalized.chartType
   const PptxGenJSChartType =
     chartType === 'pie' ? pres.ChartType.pie :
     chartType === 'line' ? pres.ChartType.line :
     pres.ChartType.bar
 
-  slide0.addChart(PptxGenJSChartType, [
-    {
-      name: props.title || '数据',
-      labels,
-      values,
-    },
-  ], {
+  slide0.addChart(PptxGenJSChartType, normalized.series, {
     x: SAFE_MARGIN,
     y: 1.5,
     w: SLIDE_W - SAFE_MARGIN * 2,
     h: SLIDE_H - 2.5,
     chartColors: [theme.accent, theme.accentSecondary, '06B6D4', '10B981', 'F59E0B', 'EF4444'],
-    showLegend: chartType === 'pie',
+    showLegend: chartType === 'pie' || normalized.series.length > 1,
     legendPos: 'b',
     showTitle: false,
     catAxisLabelFontFace: theme.fontFace,
@@ -494,18 +599,14 @@ function renderImageTextSlide(slide, pres, theme) {
 
   const url = props.imageUrl || props.image || ''
   if (url) {
-    // 优先按 URL 处理；如果是 data URI 也能直接传给 pptxgenjs
-    try {
-      slide0.addImage({
-        path: url,
-        x: SAFE_MARGIN,
-        y: 1.7,
-        w: 6,
-        h: 4.5,
-        sizing: { type: 'contain', w: 6, h: 4.5 },
-      })
-    } catch (e) {
-      // 如果 url 是远程地址或 base64 失败，退化为占位框
+    const ok = addPptxImage(slide0, url, {
+      x: SAFE_MARGIN,
+      y: 1.7,
+      w: 6,
+      h: 4.5,
+      sizing: { type: 'contain', w: 6, h: 4.5 },
+    })
+    if (!ok) {
       slide0.addShape(pres.ShapeType.rect, {
         x: SAFE_MARGIN,
         y: 1.7,
@@ -2256,7 +2357,8 @@ async function exportSlidesToPPTX(slides, outputPath, options) {
  *
  * 注册的 channel：
  *  - 'slides:export-pptx'(slides, options?) → { ok, outputPath?, size, title, fileName, base64? }
- *      若提供了 dialog 则弹出保存对话框写入磁盘，返回 outputPath + size；
+ *      若 options.outputPath 存在：直接写入该路径（用于打开 PPTX 后 Ctrl+S 覆盖保存）；
+ *      否则若提供了 dialog 则弹出保存对话框写入磁盘，返回 outputPath + size；
  *      否则把 PPTX 编码为 base64 返回，前端用 Blob 触发浏览器下载。
  *  - 'slides:export-pptx-buffer'(slides, options?) → { ok, base64, size, title, fileName }
  *      不写盘，直接返回 base64，用于前端下载。
@@ -2293,6 +2395,25 @@ function registerExportServiceIpc(ctx) {
       title = r.title
     } catch (err) {
       return { ok: false, error: err?.message || String(err), fileName }
+    }
+
+    // 静默覆盖写回（打开源文件后 Ctrl+S）
+    if (opts.outputPath && typeof opts.outputPath === 'string') {
+      try {
+        const resolved = path.resolve(opts.outputPath)
+        await fsp.mkdir(path.dirname(resolved), { recursive: true })
+        await fsp.writeFile(resolved, buffer)
+        return {
+          ok: true,
+          outputPath: resolved,
+          size: buffer.length,
+          title,
+          fileName: path.basename(resolved),
+          overwritten: true,
+        }
+      } catch (err) {
+        return { ok: false, error: err?.message || String(err), title, fileName }
+      }
     }
 
     if (dialog) {
@@ -2352,6 +2473,7 @@ module.exports = {
   deriveDocTitle,
   deriveAuthor,
   isPptxGenAvailable,
+  normalizeChartDataForPptx,
   DEFAULT_THEME,
   DARK_THEME,
   SLIDE_W,

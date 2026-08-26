@@ -3,9 +3,9 @@
  * knowledge < ai < imageEditor < modal
  */
 export const Z_INDEX = {
-  knowledgeTrigger: 30,
-  knowledgeBackdrop: 40,
-  knowledgePanel: 50,
+  knowledgeTrigger: 77,
+  knowledgeBackdrop: 72,
+  knowledgePanel: 73,
   aiAvatar: 1000,
   aiChat: 1001,
   imageEditor: 1002,

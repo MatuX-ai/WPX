@@ -10,7 +10,7 @@ const appStore = useAppStore()
     class="knowledge-trigger"
     :class="{ 'knowledge-trigger--open': appStore.knowledgePanelOpen }"
     :aria-expanded="appStore.knowledgePanelOpen"
-    aria-label="打开资料库"
+    aria-label="打开资料库（参考资料，与文库不同）"
     @click="appStore.toggleKnowledgePanel()"
   >
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
@@ -53,7 +53,7 @@ const appStore = useAppStore()
 .knowledge-trigger--open {
   color: #7c3aed;
   background: #f5f3ff;
-  transform: translateY(-50%) translateX(min(var(--knowledge-panel-width, 320px), 92vw));
+  transform: translateY(-50%) translateX(min(var(--knowledge-panel-width, 420px), 92vw));
   box-shadow: none;
   border-color: #e2e8f0;
 }

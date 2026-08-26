@@ -48,6 +48,7 @@ const {
   extractAssociablePathsFromArgv,
 } = require('./file-open')
 const { excelFileToMarkdown } = require('./excel-import')
+const { pptxFileToSlides } = require('./pptx-import')
 const WindowManager = require('./window-manager')
 const { initUserDataService } = require('./user-data-service')
 const { initModelIpc } = require('./model-ipc')
@@ -96,10 +97,14 @@ const WPX_APP_ROOT = path.join(__dirname, '..', 'wpx-app')
 
 // 文件对话框过滤器（菜单项 + IPC handler 共享同一份定义）
 const FILE_OPEN_FILTERS = [
-  { name: '所有支持的文件', extensions: ['md', 'txt', 'wpx', 'doc', 'docx', 'html', 'htm'] },
+  {
+    name: '所有支持的文件',
+    extensions: ['md', 'txt', 'wpx', 'doc', 'docx', 'html', 'htm', 'pptx', 'ppt'],
+  },
   { name: 'Markdown', extensions: ['md'] },
   { name: '纯文本', extensions: ['txt'] },
   { name: 'Word 文档', extensions: ['doc', 'docx'] },
+  { name: 'PowerPoint', extensions: ['pptx', 'ppt'] },
   { name: 'HTML', extensions: ['html', 'htm'] },
 ]
 
@@ -258,6 +263,44 @@ async function openAssociatedFile(filePath) {
       return
     }
 
+    // PPTX：有损解析为 SlideDeck；旧版 .ppt 提示另存为 pptx
+    if (ext === '.ppt' || ext === '.pptx') {
+      if (ext === '.ppt') {
+        dialog.showErrorBox(
+          '无法打开旧版 PPT',
+          `${path.basename(filePath)}\n\n请先在 PowerPoint 中另存为 .pptx，再用 WPX 打开。`,
+        )
+        return
+      }
+
+      let pptxPayload
+      try {
+        pptxPayload = await convertPptxFile(filePath)
+      } catch (error) {
+        console.error('[main] pptx import failed:', error)
+        dialog.showErrorBox(
+          '无法打开 PPTX 文件',
+          `${path.basename(filePath)}\n\n${error.message}`,
+        )
+        return
+      }
+
+      const deliverPptx = () => {
+        mainWindow?.webContents?.send('file:open', pptxPayload)
+      }
+
+      if (!mainWindow) return
+
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once('did-finish-load', deliverPptx)
+      } else {
+        deliverPptx()
+      }
+
+      showMainWindow()
+      return
+    }
+
     const payload = await readAssociatedFilePayload(filePath)
     if (!payload) return
 
@@ -328,6 +371,39 @@ async function convertExcelFile(filePath) {
   }
 }
 
+/**
+ * 将 .pptx 解析为 SlideDeck 负载（有损）
+ * @param {string} filePath
+ * @returns {Promise<{
+ *   path: string,
+ *   content: string,
+ *   title: string,
+ *   extension: string,
+ *   contentType: 'pptx',
+ *   slides: Array<{ component: string, props: object }>,
+ *   warnings: string[],
+ *   slideCount: number,
+ * }>}
+ */
+async function convertPptxFile(filePath) {
+  const result = await pptxFileToSlides(filePath)
+  const ext = path.extname(filePath).toLowerCase()
+  const baseTitle = path.basename(filePath, ext)
+  return {
+    path: filePath,
+    // content 保留 slides JSON，便于队列序列化与调试；渲染侧优先用 slides
+    content: JSON.stringify(result.slides),
+    title: result.title || baseTitle,
+    extension: ext,
+    contentType: 'pptx',
+    slides: result.slides,
+    warnings: result.warnings,
+    slideCount: result.slideCount,
+    imageCount: result.imageCount || 0,
+    chartCount: result.chartCount || 0,
+  }
+}
+
 function buildWindowsTraySubmenu() {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   const windows = WindowManager.getWindowList()
@@ -347,6 +423,12 @@ function buildWindowsTraySubmenu() {
       },
     }
   })
+}
+
+function sendEditorMenuCommand(command) {
+  const focused = BrowserWindow.getFocusedWindow()
+  if (!focused || focused.isDestroyed()) return
+  focused.webContents.send('menu:editor-command', { command })
 }
 
 function buildAppMenu() {
@@ -426,6 +508,43 @@ function buildAppMenu() {
         { role: 'copy', label: '复制' },
         { role: 'paste', label: '粘贴' },
         { role: 'selectAll', label: '全选' },
+        { type: 'separator' },
+        {
+          label: '加粗',
+          accelerator: 'CmdOrCtrl+B',
+          click: () => sendEditorMenuCommand('bold'),
+        },
+        {
+          label: '斜体',
+          accelerator: 'CmdOrCtrl+I',
+          click: () => sendEditorMenuCommand('italic'),
+        },
+      ],
+    },
+    {
+      label: '插入',
+      submenu: [
+        {
+          label: '表格…',
+          click: () => sendEditorMenuCommand('insert-table'),
+        },
+        {
+          label: '图片…',
+          click: () => sendEditorMenuCommand('insert-image'),
+        },
+        {
+          label: '图片链接…',
+          click: () => sendEditorMenuCommand('insert-image-url'),
+        },
+        {
+          label: '分隔线',
+          click: () => sendEditorMenuCommand('insert-hr'),
+        },
+        { type: 'separator' },
+        {
+          label: '演示文稿',
+          click: () => sendEditorMenuCommand('insert-slide-deck'),
+        },
       ],
     },
     {
@@ -908,6 +1027,20 @@ function registerIpcHandlers() {
         return { error: error.message, path: filePath, contentType: 'excel-error' }
       }
     }
+    if (ext === '.ppt') {
+      return {
+        error: '不支持旧版 .ppt，请先另存为 .pptx',
+        path: filePath,
+        contentType: 'pptx-error',
+      }
+    }
+    if (ext === '.pptx') {
+      try {
+        return await convertPptxFile(filePath)
+      } catch (error) {
+        return { error: error.message, path: filePath, contentType: 'pptx-error' }
+      }
+    }
     return readAssociatedFilePayload(filePath)
   })
 
@@ -923,6 +1056,25 @@ function registerIpcHandlers() {
       return {
         ok: false,
         error: error instanceof Error ? error.message : '无法写入文档',
+      }
+    }
+  })
+
+  ipcMain.handle('file:write-binary', async (_event, filePath, base64) => {
+    if (!filePath || typeof filePath !== 'string') {
+      return { ok: false, error: '无效路径' }
+    }
+    if (typeof base64 !== 'string' || base64.length === 0) {
+      return { ok: false, error: '无效文件内容' }
+    }
+
+    try {
+      await fsp.writeFile(filePath, Buffer.from(base64, 'base64'))
+      return { ok: true }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : '无法写入文件',
       }
     }
   })

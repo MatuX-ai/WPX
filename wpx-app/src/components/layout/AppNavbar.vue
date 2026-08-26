@@ -15,11 +15,11 @@ const appStore = useAppStore()
 const newDocumentTooltip = shortcutTooltip('新建文档', 'newDocument')
 
 const navItems = [
-  { label: '文档', to: '/editor', icon: FileText },
-  { label: '文库', to: '/library', icon: Library },
-  { label: '资料库', to: '/materials', icon: BookOpen },
-  { label: '字体商店', to: '/fonts', icon: Type },
-  { label: '设置', to: '/settings', icon: Settings },
+  { label: '文档', to: '/editor', icon: FileText, title: '当前编辑器' },
+  { label: '文库', to: '/library', icon: Library, title: '已保存的写作文档' },
+  { label: '资料库', to: '/materials', icon: BookOpen, title: '参考资料上传与检索（与文库不同）' },
+  { label: '字体商店', to: '/fonts', icon: Type, title: '字体商店' },
+  { label: '设置', to: '/settings', icon: Settings, title: '设置' },
 ]
 
 // 意图对话框状态：与 TitleBar.vue 同样交给 NewDocumentIntentDialog（空白 / AI / 按格式新建）。
@@ -90,7 +90,8 @@ async function handleNewDocument() {
             :to="item.to"
             class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
             active-class="bg-brand-50 text-brand-700"
-            :aria-label="`前往${item.label}`"
+            :title="item.title"
+            :aria-label="item.title || `前往${item.label}`"
           >
             <component :is="item.icon" :size="16" aria-hidden="true" />
             {{ item.label }}

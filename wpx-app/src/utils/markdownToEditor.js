@@ -31,10 +31,10 @@ const DIM_SUFFIX_RE = /\s+\(\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\)$/
 // 图片行核心正则：alt 可含 \]、url 可含任意字符（含 ( )）
 const IMAGE_LINE_RE = /^!\[((?:\\.|[^\]\\])*)\]\((.+)\)$/
 const HR_LINE_RE = /^(-{3,}|\*{3,}|_{3,})$/
-// Markdown 表格行：允许前导/尾部 | 与空白
-const TABLE_LINE_RE = /^\s*\|?\s*([^|]+?(\|[^|]+?)+)\s*\|?\s*$/
-// 表格分隔行：| --- | :---: | ---: |
-const TABLE_SEP_RE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/
+// Markdown 表格行：允许单列或多列（Excel 导入常见单列工作表）
+const TABLE_LINE_RE = /^\s*\|?\s*[^|\n]+(?:\s*\|\s*[^|\n]+)*\s*\|?\s*$/
+// 表格分隔行：| --- | 或 | --- | :---: | ---: |
+const TABLE_SEP_RE = /^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$/
 
 function splitTableCells(line) {
   // 去掉首尾 |，再按 | 拆分；trim 每格
@@ -125,7 +125,11 @@ export function markdownToHtml(markdown) {
     ) {
       const tableLines = [trimmed]
       let j = i + 2
-      while (j < lines.length && TABLE_LINE_RE.test(lines[j].trim())) {
+      while (
+        j < lines.length
+        && TABLE_LINE_RE.test(lines[j].trim())
+        && !TABLE_SEP_RE.test(lines[j].trim())
+      ) {
         tableLines.push(lines[j].trim())
         j++
       }

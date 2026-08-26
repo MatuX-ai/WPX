@@ -42,12 +42,14 @@ export function downloadBlob(blob, filename) {
  */
 
 /**
+ * 调用本地导出服务，返回 Blob（不触发下载）。
+ *
  * @param {string} content
  * @param {'docx' | 'pdf' | 'html'} format
- * @param {string} [filename]
  * @param {{ embedFonts?: Array<{ fontId?: string, path?: string, text: string }>, contentFormat?: 'markdown' | 'html', exportOptions?: ExportOptionPayload }} [options]
+ * @returns {Promise<Blob>}
  */
-export async function exportViaApi(content, format, filename = 'document', options = {}) {
+export async function exportBlobViaApi(content, format, options = {}) {
   let apiBase
   try {
     apiBase = await getLocalApiBase()
@@ -97,6 +99,16 @@ export async function exportViaApi(content, format, filename = 'document', optio
     throw new Error(detail ? `${message}：${detail}` : message)
   }
 
-  const blob = await response.blob()
+  return response.blob()
+}
+
+/**
+ * @param {string} content
+ * @param {'docx' | 'pdf' | 'html'} format
+ * @param {string} [filename]
+ * @param {{ embedFonts?: Array<{ fontId?: string, path?: string, text: string }>, contentFormat?: 'markdown' | 'html', exportOptions?: ExportOptionPayload }} [options]
+ */
+export async function exportViaApi(content, format, filename = 'document', options = {}) {
+  const blob = await exportBlobViaApi(content, format, options)
   downloadBlob(blob, `${filename}.${format}`)
 }

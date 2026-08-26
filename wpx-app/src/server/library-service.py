@@ -10,6 +10,7 @@ Run: python src/server/library-service.py
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -38,7 +39,31 @@ DATA_DIR = BASE_DIR / "data" / "library"
 MANIFEST_PATH = DATA_DIR / "manifest.json"
 CORRECTIONS_PATH = DATA_DIR / "path-corrections.json"
 
-DOCUMENT_EXTENSIONS = {".md", ".markdown", ".txt"}
+DOCUMENT_EXTENSIONS = {
+    ".md",
+    ".markdown",
+    ".txt",
+    ".html",
+    ".htm",
+    ".docx",
+    ".pdf",
+    ".xlsx",
+    ".xls",
+    ".xlsm",
+    ".csv",
+}
+EDITABLE_EXTENSIONS = {".md", ".markdown", ".txt"}
+SAVE_FORMAT_EXT = {
+    "md": ".md",
+    "txt": ".txt",
+    "html": ".html",
+    "docx": ".docx",
+    "pdf": ".pdf",
+    "xlsx": ".xlsx",
+    "xls": ".xls",
+    "csv": ".csv",
+}
+BINARY_SAVE_FORMATS = {"docx", "pdf", "xlsx", "xls"}
 
 TAG_KEYWORDS: list[tuple[str, str]] = [
     ("周报", "周报"),
@@ -94,11 +119,13 @@ class AnalyzeRequest(BaseModel):
 
 class SaveRequest(BaseModel):
     title: str
-    content: str
+    content: str = ""
     path: str
     tags: list[str] = Field(default_factory=list)
     summary: str = ""
     suggestedPath: str = ""
+    format: str = "md"
+    contentBase64: str = ""
 
 
 def utc_now_iso() -> str:
@@ -336,13 +363,31 @@ def resolve_library_file(relative_path: str) -> Path:
 
 
 def read_document_record(file_path: Path) -> dict[str, Any]:
-    raw = file_path.read_text(encoding="utf-8")
-    meta, body = parse_frontmatter(raw)
+    ext = file_path.suffix.lower()
     relative_path = str(file_path.relative_to(LIBRARY_ROOT)).replace("\\", "/")
     folder_path = normalize_path(str(Path(relative_path).parent).replace("\\", "/"))
     if folder_path == ".":
         folder_path = ""
+    editable = ext in EDITABLE_EXTENSIONS
+    format_name = ext.lstrip(".") or "md"
 
+    if not editable and ext in {".docx", ".pdf", ".xlsx", ".xls", ".xlsm"}:
+        return {
+            "id": relative_path,
+            "title": file_path.stem,
+            "name": file_path.name,
+            "relativePath": relative_path,
+            "path": folder_path,
+            "tags": [],
+            "summary": "",
+            "content": "",
+            "savedAt": None,
+            "format": format_name,
+            "editable": False,
+        }
+
+    raw = file_path.read_text(encoding="utf-8")
+    meta, body = parse_frontmatter(raw)
     title = str(meta.get("title") or file_path.stem)
     tags = meta.get("tags") if isinstance(meta.get("tags"), list) else []
     tags = [str(tag) for tag in tags]
@@ -357,6 +402,8 @@ def read_document_record(file_path: Path) -> dict[str, Any]:
         "summary": str(meta.get("summary") or extract_summary(body)),
         "content": body,
         "savedAt": meta.get("savedAt"),
+        "format": "txt" if ext == ".txt" else ("html" if ext in {".html", ".htm"} else "md"),
+        "editable": editable,
     }
 
 
@@ -533,8 +580,16 @@ async def analyze_document(body: AnalyzeRequest):
 
 @app.post("/api/library/save")
 async def save_document(body: SaveRequest):
-    content = body.content.strip()
-    if not content:
+    format_raw = (body.format or "md").strip().lower()
+    fmt = format_raw if format_raw in SAVE_FORMAT_EXT else "md"
+    ext = SAVE_FORMAT_EXT[fmt]
+    content = (body.content or "").strip()
+    content_b64 = body.contentBase64 or ""
+
+    if fmt in BINARY_SAVE_FORMATS:
+        if not content_b64:
+            raise HTTPException(status_code=400, detail=f"保存 {fmt} 需要提供转换后的文件数据")
+    elif not (fmt == "html" and content_b64) and not (fmt == "csv" and content_b64) and not content:
         raise HTTPException(status_code=400, detail="文档内容不能为空")
 
     title = sanitize_filename(body.title or extract_title(content))
@@ -546,27 +601,33 @@ async def save_document(body: SaveRequest):
     target_dir = LIBRARY_ROOT / Path(*path.split("/"))
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{title}.md"
+    filename = f"{title}{ext}"
     file_path = target_dir / filename
 
     if file_path.exists():
         stem = file_path.stem
-        suffix = file_path.suffix
-        file_path = target_dir / f"{stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{suffix}"
+        file_path = target_dir / f"{stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
 
-    safe_summary = body.summary.replace('"', "'").replace("\n", " ").strip()
-    frontmatter = [
-        "---",
-        f'title: "{title}"',
-        f"path: {path}",
-        f"tags: [{', '.join(json.dumps(tag, ensure_ascii=False) for tag in body.tags)}]",
-        f'summary: "{safe_summary}"',
-        f"savedAt: {utc_now_iso()}",
-        "---",
-        "",
-    ]
+    saved_at = utc_now_iso()
 
-    file_path.write_text("\n".join(frontmatter) + content + "\n", encoding="utf-8")
+    if fmt in BINARY_SAVE_FORMATS or (fmt == "html" and content_b64) or (fmt == "csv" and content_b64):
+        file_path.write_bytes(base64.b64decode(content_b64))
+    elif fmt == "md":
+        safe_summary = body.summary.replace('"', "'").replace("\n", " ").strip()
+        frontmatter = [
+            "---",
+            f'title: "{title}"',
+            f"path: {path}",
+            f"tags: [{', '.join(json.dumps(tag, ensure_ascii=False) for tag in body.tags)}]",
+            f'summary: "{safe_summary}"',
+            f"savedAt: {saved_at}",
+            "---",
+            "",
+        ]
+        file_path.write_text("\n".join(frontmatter) + content + "\n", encoding="utf-8")
+    else:
+        # txt / html（纯文本写入）
+        file_path.write_text(content + "\n", encoding="utf-8")
 
     suggested_path = normalize_path(body.suggestedPath)
     if suggested_path and suggested_path != path:
@@ -580,7 +641,9 @@ async def save_document(body: SaveRequest):
         "tags": body.tags,
         "summary": body.summary,
         "relativePath": relative_path,
-        "savedAt": utc_now_iso(),
+        "savedAt": saved_at,
+        "format": fmt,
+        "editable": ext in EDITABLE_EXTENSIONS,
     }
     append_manifest(entry)
 
@@ -616,6 +679,11 @@ async def library_search(q: str = Query(default="", min_length=0)):
 async def library_document(relativePath: str = Query(..., min_length=1)):
     file_path = resolve_library_file(relativePath)
     record = read_document_record(file_path)
+    if record.get("editable") is False:
+        raise HTTPException(
+            status_code=415,
+            detail="该格式无法在编辑器中直接打开，请在文库文件夹中用系统默认程序打开",
+        )
     return {
         "title": record["title"],
         "relativePath": record["relativePath"],
@@ -624,6 +692,8 @@ async def library_document(relativePath: str = Query(..., min_length=1)):
         "summary": record["summary"],
         "content": record["content"],
         "savedAt": record["savedAt"],
+        "format": record.get("format", "md"),
+        "editable": record.get("editable", True),
     }
 
 

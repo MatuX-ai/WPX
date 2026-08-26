@@ -76,12 +76,18 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /** AI 正在生成 / 思考中 */
+  loading: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
   'pin-change',
   'dock-change',
   'send',
+  'stop',
   'close',
   'focus',
   'input-focus',
@@ -429,6 +435,7 @@ defineExpose({
 })
 
 function handleSend() {
+  if (props.loading) return
   if (mentionOpen.value) return
 
   const message = inputValue.value.trim()
@@ -479,6 +486,9 @@ function handleSend() {
 }
 
 function handleInputKeydown(event) {
+  // IME 组字中（中文等输入法选词）禁止拦截，否则 Enter 会被当成发送导致汉字无法上屏
+  if (event.isComposing || event.keyCode === 229) return
+
   if (mentionOpen.value && filteredMentionItems.value.length) {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -507,8 +517,36 @@ function handleInputKeydown(event) {
   }
 
   if (event.key !== 'Enter' || event.shiftKey) return
+  if (props.loading) {
+    event.preventDefault()
+    return
+  }
   event.preventDefault()
   handleSend()
+}
+
+function handleStopGeneration() {
+  emit('stop')
+}
+
+/** 普通助理回复 / Skill 成功稿（非错误引导、非欢迎语）可一键插入编辑区 */
+function canUseMessageAsDocument(message) {
+  if (!message || message.role === 'user' || message.role === 'local') return false
+  if (message.needsModelConfig || message.chatErrorMessage) return false
+  if (message.onboardingKind) return false
+  if (message.skillResult && !message.skillSuccess) return false
+  if (message.isWelcome) return false
+  const text = String(message.content || '').trim()
+  if (!text) return false
+  // 欢迎语不展示「使用该文档」
+  if (text.includes('无需接入大模型即可使用本地命令')) return false
+  return true
+}
+
+function handleUseDocument(message) {
+  const text = String(message?.content || '').trim()
+  if (!text) return
+  emit('insert-text', text)
 }
 
 function handleInputFocus() {
@@ -931,12 +969,29 @@ watch(
               </span>
             </div>
             <p v-if="message.skillSuccess" class="ai-chat-panel__skill-result-text">
-              已使用【{{ message.skillName }}】生成内容，已插入编辑器
+              已使用【{{ message.skillName }}】生成内容
+              <template v-if="message.content">，可点击下方按钮插入中央编辑区</template>
             </p>
             <p v-else class="ai-chat-panel__skill-result-text ai-chat-panel__skill-result-text--error">
               {{ message.skillError }}
             </p>
+            <div
+              v-if="message.skillSuccess && message.content"
+              class="ai-chat-panel__message-md ai-chat-panel__skill-result-preview"
+            >
+              <AiMarkdownContent :content="message.content" />
+            </div>
             <div class="ai-chat-panel__skill-result-actions">
+              <button
+                v-if="canUseMessageAsDocument(message)"
+                type="button"
+                class="ai-chat-panel__doc-use-btn wpx-btn"
+                data-testid="ai-chat-use-document"
+                title="将此回复内容插入中央编辑区"
+                @click="handleUseDocument(message)"
+              >
+                使用该文档
+              </button>
               <button
                 type="button"
                 class="ai-chat-panel__skill-retry-btn wpx-btn"
@@ -968,11 +1023,38 @@ watch(
               class="ai-chat-panel__message-md"
               :content="message.content"
             />
+            <div
+              v-if="canUseMessageAsDocument(message)"
+              class="ai-chat-panel__doc-actions"
+            >
+              <button
+                type="button"
+                class="ai-chat-panel__doc-use-btn wpx-btn"
+                data-testid="ai-chat-use-document"
+                title="将此回复内容插入中央编辑区"
+                @click="handleUseDocument(message)"
+              >
+                使用该文档
+              </button>
+            </div>
           </div>
         </div>
       </TransitionGroup>
 
-      <p v-if="messages.length === 0" class="ai-chat-panel__empty">
+      <div
+        v-if="loading"
+        class="ai-chat-panel__thinking"
+        role="status"
+        aria-live="polite"
+        data-testid="ai-chat-thinking"
+      >
+        <span class="ai-chat-panel__thinking-dots" aria-hidden="true">
+          <i /><i /><i />
+        </span>
+        <span>正在思考…</span>
+      </div>
+
+      <p v-if="messages.length === 0 && !loading" class="ai-chat-panel__empty">
         暂无消息，输入内容开始对话
       </p>
     </div>
@@ -1313,25 +1395,52 @@ watch(
           </button>
         </div>
 
-        <textarea
-          ref="textareaRef"
-          v-model="inputValue"
-          class="ai-chat-panel__input wpx-input"
-          rows="3"
-          :disabled="isOffline"
-          :title="isOffline ? networkRequiredTooltip : undefined"
-          :placeholder="
-            isOffline
-              ? '离线模式下无法使用 AI 对话'
-              : selectionContext
-                ? `${localCommandPlaceholders[placeholderIndex] || '输入修改指令，Enter 发送（输入 @ 引用资料）'}`
-                : `${localCommandPlaceholders[placeholderIndex] || '输入消息，Enter 发送，Shift+Enter 换行，输入 @ 引用资料'}`
-          "
-          @focus="handleInputFocus"
-          @blur="handleInputBlur"
-          @input="handleInput"
-          @keydown="handleInputKeydown"
-        />
+        <div class="ai-chat-panel__composer">
+          <textarea
+            ref="textareaRef"
+            v-model="inputValue"
+            class="ai-chat-panel__input wpx-input"
+            rows="3"
+            :disabled="isOffline || loading"
+            :title="isOffline ? networkRequiredTooltip : undefined"
+            :placeholder="
+              loading
+                ? '正在思考，可点击「暂停思考」中止…'
+                : isOffline
+                  ? '离线模式下无法使用 AI 对话'
+                  : selectionContext
+                    ? `${localCommandPlaceholders[placeholderIndex] || '输入修改指令，Enter 发送（输入 @ 引用资料）'}`
+                    : `${localCommandPlaceholders[placeholderIndex] || '输入消息，Enter 发送，Shift+Enter 换行，输入 @ 引用资料'}`
+            "
+            @focus="handleInputFocus"
+            @blur="handleInputBlur"
+            @input="handleInput"
+            @keydown="handleInputKeydown"
+          />
+          <div class="ai-chat-panel__composer-actions">
+            <button
+              v-if="loading"
+              type="button"
+              class="ai-chat-panel__action-btn ai-chat-panel__action-btn--stop wpx-btn"
+              data-testid="ai-chat-stop"
+              aria-label="暂停思考"
+              @click="handleStopGeneration"
+            >
+              暂停思考
+            </button>
+            <button
+              v-else
+              type="button"
+              class="ai-chat-panel__action-btn ai-chat-panel__action-btn--send wpx-btn"
+              data-testid="ai-chat-send"
+              :disabled="isOffline || (!inputValue.trim() && referencedItems.length === 0)"
+              aria-label="发送"
+              @click="handleSend"
+            >
+              发送
+            </button>
+          </div>
+        </div>
       </div>
     </footer>
   </div>
@@ -1559,6 +1668,53 @@ watch(
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+
+.ai-chat-panel__doc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ai-chat-panel__doc-use-btn {
+  padding: 6px 14px;
+  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #ede9fe;
+  color: #5b21b6;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ai-chat-panel__doc-use-btn:hover {
+  background: #ddd6fe;
+  border-color: #a78bfa;
+}
+
+.ai-chat-panel--dark .ai-chat-panel__doc-use-btn {
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(124, 58, 237, 0.22);
+  color: #e9d5ff;
+}
+
+.ai-chat-panel--dark .ai-chat-panel__doc-use-btn:hover {
+  background: rgba(124, 58, 237, 0.34);
+}
+
+.ai-chat-panel__skill-result-preview {
+  margin-top: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.ai-chat-panel--dark .ai-chat-panel__skill-result-preview {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .ai-chat-panel__reasoning {
@@ -1994,8 +2150,121 @@ watch(
   box-sizing: border-box;
 }
 
+.ai-chat-panel__input:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
 .ai-chat-panel__input::placeholder {
   color: #94a3b8;
+}
+
+.ai-chat-panel__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-chat-panel__composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-chat-panel__action-btn {
+  min-width: 88px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ai-chat-panel__action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ai-chat-panel__action-btn--send {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.ai-chat-panel__action-btn--send:hover:not(:disabled) {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+.ai-chat-panel__action-btn--stop {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
+}
+
+.ai-chat-panel__action-btn--stop:hover {
+  background: #ffedd5;
+  border-color: #fb923c;
+}
+
+.ai-chat-panel__thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--theme-bg-subtle, #f8fafc);
+  color: var(--theme-fg-muted, #64748b);
+  font-size: 12px;
+}
+
+.ai-chat-panel__thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.ai-chat-panel__thinking-dots i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ai-chat-thinking-bounce 1.1s infinite ease-in-out;
+}
+
+.ai-chat-panel__thinking-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.ai-chat-panel__thinking-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes ai-chat-thinking-bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.ai-chat-panel--dark .ai-chat-panel__action-btn--stop {
+  background: rgba(251, 146, 60, 0.12);
+  border-color: rgba(251, 146, 60, 0.45);
+  color: #fdba74;
+}
+
+.ai-chat-panel--dark .ai-chat-panel__action-btn--stop:hover {
+  background: rgba(251, 146, 60, 0.2);
 }
 
 .ai-chat-panel__skill-chips {

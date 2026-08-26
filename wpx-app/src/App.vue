@@ -5,6 +5,7 @@ import { RouterView } from 'vue-router'
 import LoginGuide from '@/components/auth/LoginGuide.vue'
 import AuthModal from '@/components/auth/AuthModal.vue'
 import FontRecommendationDialog from '@/components/font/FontRecommendationDialog.vue'
+import PptxImportWarningDialog from '@/components/editor/PptxImportWarningDialog.vue'
 import { useAuth } from '@/composables/useAuth'
 import { provideLoginGuide } from '@/composables/useLoginGuide'
 import { useAuthStore } from '@/stores/auth'
@@ -151,6 +152,7 @@ onUnmounted(() => {
     <LoginGuide v-if="sessionRestored" />
     <!-- 应用内嵌认证模态框：全局唯一，任何需要登录的位置都可调出 -->
     <AuthModal v-if="sessionRestored" />
+    <PptxImportWarningDialog />
 
     <FontRecommendationDialog
       :visible="fontRecommendationDialog.visible.value"

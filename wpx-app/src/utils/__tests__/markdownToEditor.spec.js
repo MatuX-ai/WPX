@@ -51,4 +51,19 @@ describe('markdownToHtml', () => {
     expect(html).toContain('<hr />')
     expect(html).toContain('<p>下文</p>')
   })
+
+  it('支持单列表格（Excel 单列工作表导入）', () => {
+    const html = markdownToHtml('| 姓名 |\n| --- |\n| 甲 |\n| 乙 |')
+    expect(html).toContain('<table>')
+    expect(html).toContain('<th>姓名</th>')
+    expect(html).toContain('<td>甲</td>')
+    expect(html).toContain('<td>乙</td>')
+  })
+
+  it('支持多列表格', () => {
+    const html = markdownToHtml('| A | B |\n| --- | --- |\n| 1 | 2 |')
+    expect(html).toContain('<th>A</th>')
+    expect(html).toContain('<th>B</th>')
+    expect(html).toContain('<td>1</td>')
+  })
 })

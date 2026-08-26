@@ -254,8 +254,11 @@ watch(() => modelSettingsStore.data, syncFormFromStore, { deep: true })
               v-model="form.textModelName"
               type="text"
               class="settings-input"
-              placeholder="deepseek-chat"
+              placeholder="deepseek-chat 或 deepseek-v4-flash"
             />
+            <p class="settings-hint">
+              须与服务商文档中的模型 ID 完全一致。测试连接只验证地址与 Key，不校验模型名。
+            </p>
           </div>
 
           <div class="model-settings__test-row">

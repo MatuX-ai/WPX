@@ -149,9 +149,11 @@ samp {
   --editor-toolbar-height: 36px;
   --z-editor-toolbar: 70;
   --z-title-bar: 80;
-  --z-knowledge-trigger: 30;
-  --z-knowledge-backdrop: 40;
-  --z-knowledge-panel: 50;
+  /* 资料库须盖住编辑器工具栏(70)，否则加粗等按钮会从抽屉缝里“浮”出来 */
+  --z-knowledge-trigger: 77;
+  --z-knowledge-backdrop: 72;
+  --z-knowledge-panel: 73;
+  --knowledge-panel-width: 420px;
   --z-ai-avatar: 1000;
   --z-ai-chat: 1001;
   --z-toast: 1050;

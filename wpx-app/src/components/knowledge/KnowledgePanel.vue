@@ -23,7 +23,15 @@ import { useEscapeKey } from '@/composables/useEscapeKey'
 import { useToast } from '@/composables/useToast'
 import { useEditorStore } from '@/stores/editor'
 import { isElectron } from '@/utils/electron'
-import { extractPreviewImages, hasPreviewImages } from '@/utils/knowledgePreview'
+import {
+  displayKnowledgeTitle,
+  extractPreviewImages,
+  hasPreviewImages,
+  prefersRenderedPreview,
+} from '@/utils/knowledgePreview'
+import { useKnowledgePanelResize } from '@/composables/useKnowledgePanelResize'
+import { useAppStore } from '@/stores/app'
+import KnowledgeMarkdownPreview from '@/components/knowledge/KnowledgeMarkdownPreview.vue'
 
 const props = defineProps({
   open: {
@@ -39,9 +47,11 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const router = useRouter()
+const appStore = useAppStore()
 const editorStore = useEditorStore()
 const overlay = useEditorOverlayOptional()
 const toast = useToast()
+const panelResize = useKnowledgePanelResize({ persist: !props.embedded })
 
 const items = ref([])
 const loading = ref(false)
@@ -51,6 +61,8 @@ const dragOver = ref(false)
 const urlInput = ref('')
 const preview = ref(null)
 const previewLoading = ref(false)
+/** @type {import('vue').Ref<'render' | 'source'>} */
+const previewTab = ref('render')
 const fileInputRef = ref(null)
 const searchInputRef = ref(null)
 const searchQuery = ref('')
@@ -152,6 +164,13 @@ const previewParts = computed(() => extractPreviewImages(preview.value?.content 
 const previewText = computed(() => previewParts.value.textPreview)
 const previewImages = computed(() => previewParts.value.images)
 const previewHasImages = computed(() => hasPreviewImages(preview.value?.content || ''))
+const previewDisplayTitle = computed(() => displayKnowledgeTitle(preview.value?.filename))
+const showRenderedTab = computed(() => prefersRenderedPreview(preview.value?.type))
+const panelStyle = computed(() =>
+  props.embedded
+    ? undefined
+    : { width: `min(${panelResize.effectiveWidth.value}px, 92vw)` },
+)
 
 function buildImportPayload(mode) {
   return {
@@ -164,6 +183,7 @@ function buildImportPayload(mode) {
 
 function insertToEditor() {
   if (!canImportToEditor.value) return
+  appStore.clearBrowsingTitle()
   editorStore.requestKnowledgeImport(buildImportPayload('insert'))
   if (!overlay) {
     router.push({ name: 'editor' })
@@ -173,6 +193,7 @@ function insertToEditor() {
 
 function openAsNewDocument() {
   if (!canImportToEditor.value) return
+  appStore.clearBrowsingTitle()
   editorStore.requestKnowledgeImport(buildImportPayload('open'))
   if (!overlay) {
     router.push({ name: 'editor' })
@@ -180,6 +201,13 @@ function openAsNewDocument() {
     overlay.closeKnowledgePanel()
   }
   closePreview()
+}
+
+async function openItemAsDocument(item) {
+  await openPreview(item)
+  if (canImportToEditor.value) {
+    openAsNewDocument()
+  }
 }
 
 async function importWebContent(webImport) {
@@ -356,11 +384,14 @@ function onUrlPaste(event) {
 
 async function openPreview(item) {
   previewLoading.value = true
+  previewTab.value = prefersRenderedPreview(item?.type) ? 'render' : 'source'
   error.value = ''
   try {
     preview.value = await fetchKnowledgePreview(item.id)
+    appStore.setBrowsingTitle(`预览：${displayKnowledgeTitle(preview.value?.filename || item?.filename)}`)
   } catch (err) {
     error.value = err.message || '预览加载失败'
+    appStore.clearBrowsingTitle()
   } finally {
     previewLoading.value = false
   }
@@ -368,11 +399,14 @@ async function openPreview(item) {
 
 function closePreview() {
   preview.value = null
+  previewTab.value = 'render'
+  appStore.clearBrowsingTitle()
 }
 
 function handleClose() {
   closePreview()
   closeUrlImport()
+  appStore.clearBrowsingTitle()
   emit('close')
 }
 
@@ -508,13 +542,17 @@ onUnmounted(() => {
       :class="{
         'knowledge-panel--open': open || embedded,
         'knowledge-panel--embedded': embedded,
+        'knowledge-panel--resizing': panelResize.isResizing.value,
       }"
+      :style="panelStyle"
       aria-label="资料库"
     >
       <header class="knowledge-panel__header">
         <div>
           <h2 class="knowledge-panel__title">资料库</h2>
-          <p class="knowledge-panel__subtitle">上传文档或粘贴 URL，自动解析并向量化</p>
+          <p class="knowledge-panel__subtitle">
+            上传与检索参考资料；写作成果请保存到「文库」
+          </p>
         </div>
         <button type="button" class="knowledge-panel__close" aria-label="关闭" @click="handleClose">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -653,7 +691,9 @@ onUnmounted(() => {
                 type="button"
                 class="knowledge-item"
                 :class="{ 'knowledge-item--active': preview?.id === item.id }"
+                :title="'单击预览，双击作为新文档编辑'"
                 @click="openPreview(item)"
+                @dblclick.prevent="openItemAsDocument(item)"
               >
                 <span class="knowledge-item__icon" :data-type="item.type">
                   {{ typeLabel(item.type).charAt(0) }}
@@ -707,38 +747,96 @@ onUnmounted(() => {
       />
 
       <Transition name="knowledge-preview">
-        <section v-if="hasPreview || previewLoading" class="knowledge-preview">
+        <section v-if="hasPreview || previewLoading" class="knowledge-preview" data-testid="knowledge-preview">
           <header class="knowledge-preview__header">
-            <div class="knowledge-preview__info">
-              <h3 class="knowledge-preview__title">{{ preview?.filename || '加载预览…' }}</h3>
-              <p v-if="preview" class="knowledge-preview__meta">
-                {{ typeLabel(preview.type) }} · {{ formatTime(preview.uploadedAt) }}
-              </p>
+            <div class="knowledge-preview__top">
+              <button
+                type="button"
+                class="knowledge-preview__back"
+                aria-label="返回资料列表"
+                @click="closePreview"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                返回
+              </button>
+              <button
+                type="button"
+                class="knowledge-preview__close"
+                aria-label="关闭预览"
+                @click="closePreview"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" />
+                </svg>
+              </button>
             </div>
+
+            <h3
+              class="knowledge-preview__title"
+              :title="preview?.filename || '加载预览…'"
+            >
+              {{ previewDisplayTitle || '加载预览…' }}
+            </h3>
+            <p v-if="preview" class="knowledge-preview__meta">
+              <span class="knowledge-preview__type">{{ typeLabel(preview.type) }}</span>
+              <span class="knowledge-preview__dot" aria-hidden="true">·</span>
+              <span>{{ formatTime(preview.uploadedAt) }}</span>
+            </p>
+
             <div v-if="!previewLoading && preview" class="knowledge-preview__actions">
               <button
                 type="button"
                 class="knowledge-preview__action"
                 :disabled="!canImportToEditor"
+                data-testid="knowledge-insert-btn"
                 @click="insertToEditor"
               >
-                插入编辑器
+                插入当前文档
               </button>
               <button
                 type="button"
                 class="knowledge-preview__action knowledge-preview__action--primary"
                 :disabled="!canImportToEditor"
+                data-testid="knowledge-open-btn"
                 @click="openAsNewDocument"
               >
-                作为新文档打开
+                作为新文档编辑
               </button>
             </div>
-            <button type="button" class="knowledge-preview__close" aria-label="关闭预览" @click="closePreview">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" />
-              </svg>
-            </button>
+
+            <div
+              v-if="!previewLoading && preview && showRenderedTab"
+              class="knowledge-preview__tabs"
+              role="tablist"
+              aria-label="预览模式"
+            >
+              <button
+                type="button"
+                role="tab"
+                class="knowledge-preview__tab"
+                :class="{ 'knowledge-preview__tab--active': previewTab === 'render' }"
+                :aria-selected="previewTab === 'render'"
+                data-testid="knowledge-tab-render"
+                @click="previewTab = 'render'"
+              >
+                预览
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="knowledge-preview__tab"
+                :class="{ 'knowledge-preview__tab--active': previewTab === 'source' }"
+                :aria-selected="previewTab === 'source'"
+                data-testid="knowledge-tab-source"
+                @click="previewTab = 'source'"
+              >
+                源码
+              </button>
+            </div>
           </header>
+
           <div class="knowledge-preview__body">
             <p v-if="previewLoading" class="knowledge-preview__loading">加载中…</p>
             <template v-else>
@@ -751,11 +849,35 @@ onUnmounted(() => {
                   <img :src="src" :alt="`预览图 ${idx + 1}`" loading="lazy" />
                 </figure>
               </div>
-              <pre class="knowledge-preview__content">{{ previewText }}</pre>
+              <KnowledgeMarkdownPreview
+                v-if="showRenderedTab && previewTab === 'render'"
+                :content="previewText"
+              />
+              <pre
+                v-else
+                class="knowledge-preview__content"
+                data-testid="knowledge-preview-source"
+              >{{ previewText }}</pre>
             </template>
           </div>
         </section>
       </Transition>
+
+      <div
+        v-if="!embedded"
+        class="knowledge-panel__resizer"
+        :class="{ 'knowledge-panel__resizer--active': panelResize.isResizing.value }"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整资料库宽度"
+        :aria-valuenow="panelResize.effectiveWidth.value"
+        :aria-valuemin="panelResize.minWidth"
+        :aria-valuemax="panelResize.maxWidth"
+        tabindex="0"
+        data-testid="knowledge-panel-resizer"
+        @mousedown="panelResize.startResize"
+        @keydown="panelResize.handleKeydown"
+      />
     </aside>
   </component>
 </template>
@@ -787,7 +909,7 @@ onUnmounted(() => {
   z-index: var(--z-knowledge-panel);
   display: flex;
   flex-direction: column;
-  width: min(var(--knowledge-panel-width, 320px), 92vw);
+  width: min(var(--knowledge-panel-width, 420px), 92vw);
   height: 100vh;
   background: #fff;
   border-right: 1px solid #e2e8f0;
@@ -796,6 +918,10 @@ onUnmounted(() => {
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   pointer-events: auto;
+}
+
+.knowledge-panel--resizing {
+  transition: none;
 }
 
 .knowledge-panel--open {
@@ -811,6 +937,39 @@ onUnmounted(() => {
   transform: none;
   box-shadow: none;
   border-right: none;
+}
+
+.knowledge-panel__resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 2;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.knowledge-panel__resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.knowledge-panel__resizer:hover::after,
+.knowledge-panel__resizer--active::after,
+.knowledge-panel__resizer:focus-visible::after {
+  background: #a78bfa;
+}
+
+.knowledge-panel__resizer:focus-visible {
+  outline: none;
 }
 
 .knowledge-panel__header {
@@ -1223,37 +1382,57 @@ onUnmounted(() => {
 
 .knowledge-preview__header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 16px 20px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 14px;
   border-bottom: 1px solid #f1f5f9;
 }
 
-.knowledge-preview__info {
-  min-width: 0;
-  flex: 1;
-}
-
-.knowledge-preview__actions {
+.knowledge-preview__top {
   display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.knowledge-preview__action {
-  padding: 6px 10px;
-  border: 1px solid #e2e8f0;
+.knowledge-preview__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px 4px 4px;
+  border: none;
   border-radius: 6px;
-  background: #fff;
+  background: transparent;
   color: #475569;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+}
+
+.knowledge-preview__back:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.knowledge-preview__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.knowledge-preview__action {
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
+  text-align: center;
 }
 
 .knowledge-preview__action:hover:not(:disabled) {
@@ -1265,13 +1444,13 @@ onUnmounted(() => {
 .knowledge-preview__action--primary {
   border-color: #ddd6fe;
   background: #f5f3ff;
-  color: #7c3aed;
+  color: #6d28d9;
 }
 
 .knowledge-preview__action--primary:hover:not(:disabled) {
   background: #ede9fe;
   border-color: #c4b5fd;
-  color: #6d28d9;
+  color: #5b21b6;
 }
 
 .knowledge-preview__action:disabled {
@@ -1279,17 +1458,60 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.knowledge-preview__tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.knowledge-preview__tab {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.knowledge-preview__tab--active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
 .knowledge-preview__title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
   color: #0f172a;
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .knowledge-preview__meta {
-  margin: 4px 0 0;
-  font-size: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.knowledge-preview__type {
+  color: #475569;
+  font-weight: 550;
+}
+
+.knowledge-preview__dot {
   color: #94a3b8;
 }
 

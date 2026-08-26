@@ -66,12 +66,17 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
   'pin-change',
   'dock-change',
   'send',
+  'stop',
   'close',
   'focus',
   'input-focus',
@@ -320,7 +325,9 @@ function handleHostMouseDown(event) {
               :is-pinned="isPinned"
               :is-docked="isDocked"
               :auto-focus-input="false"
+              :loading="loading"
               @send="(payload) => emit('send', payload)"
+              @stop="emit('stop')"
               @close="emit('close')"
               @pin-change="(val) => emit('pin-change', val)"
               @dock-change="(val) => emit('dock-change', val)"
@@ -363,7 +370,9 @@ function handleHostMouseDown(event) {
           :is-pinned="isPinned"
           :is-docked="isDocked"
           :auto-focus-input="true"
+          :loading="loading"
           @send="(payload) => emit('send', payload)"
+          @stop="emit('stop')"
           @close="emit('close')"
           @pin-change="(val) => emit('pin-change', val)"
           @dock-change="(val) => emit('dock-change', val)"

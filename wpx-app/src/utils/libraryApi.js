@@ -64,13 +64,27 @@ export async function analyzeDocument({ content, title = '', pathCorrections = [
   return response.json()
 }
 
+/**
+ * @param {{
+ *   title: string,
+ *   content?: string,
+ *   path: string,
+ *   tags?: string[],
+ *   summary?: string,
+ *   suggestedPath?: string,
+ *   format?: 'md' | 'txt' | 'html' | 'docx' | 'pdf' | 'xlsx' | 'xls' | 'csv',
+ *   contentBase64?: string,
+ * }} payload
+ */
 export async function saveDocument({
   title,
-  content,
+  content = '',
   path,
   tags = [],
   summary = '',
   suggestedPath = '',
+  format = 'md',
+  contentBase64 = '',
 }) {
   const base = await getApiBase()
   const response = await fetch(`${base}/api/library/save`, {
@@ -83,6 +97,8 @@ export async function saveDocument({
       tags,
       summary,
       suggestedPath,
+      format,
+      contentBase64: contentBase64 || undefined,
     }),
   })
 

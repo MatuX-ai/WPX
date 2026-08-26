@@ -133,6 +133,9 @@ function handleCancel () {
 }
 
 function handleKeydown (event) {
+  // IME 组字中不拦截，避免中文选词 Enter 被当成提交
+  if (event.isComposing || event.keyCode === 229) return
+
   if (event.key === 'Escape') {
     event.preventDefault()
     handleCancel()

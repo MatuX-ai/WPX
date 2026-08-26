@@ -75,6 +75,8 @@ async function initModelSecretsStore() {
   const { default: Store } = await import('electron-store')
   secretsStore = new Store({
     name: 'model-secrets',
+    cwd: app.getPath('userData'),
+    projectName: 'wpx',
     defaults: {
       text: '',
       vision: '',
@@ -125,6 +127,26 @@ function hasApiKey(block) {
 }
 
 /**
+ * 安全解密：失败时尝试兼容历史明文存储，仍失败则返回空串（不抛错）。
+ * @param {string} stored
+ * @returns {string}
+ */
+function safeDecryptStoredSecret(stored) {
+  const encrypted = String(stored || '').trim()
+  if (!encrypted) return ''
+
+  try {
+    return decryptSecret(encrypted)
+  } catch {
+    // 历史版本可能直接写入明文；仅识别常见 Key 前缀，避免把损坏密文当 Key。
+    if (/^(sk-|api-)[A-Za-z0-9_\-]{8,}$/i.test(encrypted)) {
+      return encrypted
+    }
+    return ''
+  }
+}
+
+/**
  * @param {'text' | 'vision'} block
  */
 function getMaskedApiKey(block) {
@@ -138,12 +160,9 @@ function getMaskedApiKey(block) {
     return { hasKey: false, masked: '' }
   }
 
-  try {
-    const decrypted = decryptSecret(encrypted)
-    return { hasKey: Boolean(decrypted), masked: maskApiKey(decrypted) }
-  } catch {
-    return { hasKey: true, masked: '••••••••' }
-  }
+  const decrypted = safeDecryptStoredSecret(encrypted)
+  // 解密失败时不得虚报 hasKey，否则设置页显示「已保存」但 AI 读不到 Key。
+  return { hasKey: Boolean(decrypted), masked: maskApiKey(decrypted) }
 }
 
 /**
@@ -156,7 +175,7 @@ function getDecryptedApiKey(block) {
   const encrypted = String(secretsStore.get(block) || '').trim()
   if (!encrypted) return ''
 
-  return decryptSecret(encrypted)
+  return safeDecryptStoredSecret(encrypted)
 }
 
 function getAllMaskedApiKeys() {

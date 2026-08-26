@@ -24,6 +24,7 @@ const {
   deriveDocTitle,
   deriveAuthor,
   isPptxGenAvailable,
+  normalizeChartDataForPptx,
   DEFAULT_THEME,
   DARK_THEME,
 } = exportService
@@ -102,6 +103,54 @@ describe('export-service - 纯函数', () => {
     })
     it('空字符串也回退', () => {
       expect(deriveAuthor({ author: '   ' })).toBe('WPX SlideDeck')
+    })
+  })
+
+  describe('normalizeChartDataForPptx', () => {
+    it('兼容旧版 [{name,value}]', () => {
+      const r = normalizeChartDataForPptx({
+        chartType: 'bar',
+        chartData: [
+          { name: 'A', value: 1 },
+          { name: 'B', value: 2 },
+        ],
+      })
+      expect(r.series[0].labels).toEqual(['A', 'B'])
+      expect(r.series[0].values).toEqual([1, 2])
+    })
+
+    it('支持 ChartSlide categories/series', () => {
+      const r = normalizeChartDataForPptx({
+        chartType: 'line',
+        chartData: {
+          categories: ['1月', '2月'],
+          series: [{ name: '销量', data: [3, 4] }],
+        },
+      })
+      expect(r.chartType).toBe('line')
+      expect(r.series[0].labels).toEqual(['1月', '2月'])
+      expect(r.series[0].values).toEqual([3, 4])
+    })
+
+    it('饼图支持 {name,value} data', () => {
+      const r = normalizeChartDataForPptx({
+        chartType: 'pie',
+        chartData: {
+          categories: [],
+          series: [
+            {
+              name: '占比',
+              data: [
+                { name: 'A', value: 40 },
+                { name: 'B', value: 60 },
+              ],
+            },
+          ],
+        },
+      })
+      expect(r.chartType).toBe('pie')
+      expect(r.series[0].labels).toEqual(['A', 'B'])
+      expect(r.series[0].values).toEqual([40, 60])
     })
   })
 })
@@ -195,6 +244,34 @@ describe('export-service - IPC 注册', () => {
     const result = await fn({}, [], { filename: 'custom.pptx' })
     // ok=false 但来自 canceled
     expect(result.ok).toBe(false)
+  })
+
+  it('options.outputPath 存在时跳过 dialog 并写盘（需 pptxgenjs）', async () => {
+    if (!HAS_PPTXGENJS) return
+    const handlers = new Map()
+    const fakeIpcMain = { handle: (c, fn) => handlers.set(c, fn) }
+    const fakeDialog = {
+      showSaveDialog: vi.fn(async () => ({ canceled: true })),
+    }
+    registerExportServiceIpc({ ipcMain: fakeIpcMain, dialog: fakeDialog })
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'wpx-pptx-overwrite-'))
+    const target = path.join(tmp, 'opened.pptx')
+    try {
+      const fn = handlers.get('slides:export-pptx')
+      const result = await fn(
+        {},
+        [{ component: 'CoverSlide', props: { title: '覆盖写回' } }],
+        { outputPath: target, title: '覆盖写回' },
+      )
+      expect(result.ok).toBe(true)
+      expect(result.overwritten).toBe(true)
+      expect(result.outputPath).toBe(path.resolve(target))
+      expect(fakeDialog.showSaveDialog).not.toHaveBeenCalled()
+      const stat = await fsp.stat(target)
+      expect(stat.size).toBeGreaterThan(100)
+    } finally {
+      await fsp.rm(tmp, { recursive: true, force: true })
+    }
   })
 })
 

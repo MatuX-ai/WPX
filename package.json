@@ -1,6 +1,6 @@
 {
   "name": "wpx",
-  "version": "0.1.27",
+  "version": "0.1.31",
   "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
   "author": {
     "name": "WPX Team",
@@ -208,6 +208,13 @@
         "name": "Excel Macro-Enabled Workbook",
         "description": "Microsoft Excel macro-enabled workbook",
         "mimeType": "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "role": "Editor"
+      },
+      {
+        "ext": "pptx",
+        "name": "PowerPoint Presentation",
+        "description": "Microsoft PowerPoint presentation (pptx)",
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "role": "Editor"
       }
     ],

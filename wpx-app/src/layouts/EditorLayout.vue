@@ -26,6 +26,7 @@ import { useEditorFonts } from '@/composables/useEditorFonts'
 import { shortcutTooltip, getShortcutLabel, useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useToast } from '@/composables/useToast'
+import { confirmPptxImport } from '@/composables/usePptxImportWarning'
 import { useModelSettingsStore } from '@/stores/modelSettings'
 import { AI_CHAT_DOCKED } from '@/constants/floatingWindow'
 import { useDockPanelResize } from '@/composables/useDockPanelResize'
@@ -77,8 +78,6 @@ import {
   cancelWindowClose,
   confirmWindowClose,
 } from '@/utils/windowControls'
-
-const KNOWLEDGE_PANEL_WIDTH = 320
 
 const appStore = useAppStore()
 const editorStore = useEditorStore()
@@ -236,6 +235,7 @@ const packing = ref(false)
 const pdfImportVisible = ref(false)
 let closeCheckInProgress = false
 let unsubscribeAiChatToggle = null
+let unsubscribeEditorMenuCommand = null
 
 const focusModeActive = computed(() =>
   isFocusModeApplicable(
@@ -245,7 +245,6 @@ const focusModeActive = computed(() =>
 )
 const focusModePaperWidthPx = computed(() => getPaperWidthPx(userPreferencesStore.paper?.paperSize))
 const editorContainerStyle = computed(() => ({
-  '--knowledge-panel-width': `${KNOWLEDGE_PANEL_WIDTH}px`,
   '--wpx-paper-width': `${focusModePaperWidthPx.value}px`,
 }))
 
@@ -256,7 +255,8 @@ const { scheduleAutoSave } = useAutoSave(() => ({
 
 function onEditorChange(payload) {
   editorOutput.value = payload
-  appStore.setDocumentTitle(getDefaultTitle())
+  const extracted = extractTitleFromMarkdown(payload?.markdown || getMarkdown())
+  appStore.setDocumentTitleIfPresent(extracted)
   scheduleAutoSave()
 }
 
@@ -269,10 +269,91 @@ function getFormatSnapshot() {
 }
 
 function getDefaultTitle() {
-  return extractTitleFromMarkdown(getMarkdown())
+  const extracted = extractTitleFromMarkdown(getMarkdown())
+  if (extracted && extracted !== '未命名文档') return extracted
+  return appStore.documentTitle || '未命名文档'
 }
 
-function openSaveDialog() {
+/**
+ * 从当前编辑器 JSON 中提取第一个 SlideDeck 的 slides 数组。
+ * @returns {{ slides: Array, theme: string } | null}
+ */
+function extractFirstSlideDeck() {
+  const ed = editorRef.value?.getEditor?.()
+  const json = ed?.getJSON?.()
+  if (!json?.content || !Array.isArray(json.content)) return null
+
+  for (const node of json.content) {
+    if (node?.type !== 'slideDeck') continue
+    const raw = node.attrs?.slides
+    let slides = []
+    if (typeof raw === 'string') {
+      try {
+        slides = JSON.parse(raw)
+      } catch {
+        slides = []
+      }
+    } else if (Array.isArray(raw)) {
+      slides = raw
+    }
+    if (!Array.isArray(slides) || !slides.length) continue
+    return {
+      slides,
+      theme: node.attrs?.theme === 'dark' ? 'dark' : 'light',
+    }
+  }
+  return null
+}
+
+/**
+ * 源文件为 .pptx 时：Ctrl+S 直接覆盖写回 PPTX（不弹 SaveDialog）。
+ * @returns {Promise<boolean>} 是否已处理（true=已保存或已报错结束，false=应回退到普通保存对话框）
+ */
+async function trySavePptxInPlace() {
+  const ext = String(appStore.documentSourceExtension || '').toLowerCase()
+  const sourcePath = appStore.documentSourcePath
+  if (ext !== '.pptx' || !sourcePath || !isElectron()) return false
+
+  const deck = extractFirstSlideDeck()
+  if (!deck) {
+    toast.warning('当前文档没有可保存的幻灯片，已打开另存为对话框')
+    return false
+  }
+
+  const api = getElectronAPI()
+  if (typeof api?.slides?.exportPptx !== 'function') {
+    toast.error('当前环境不支持 PPTX 保存')
+    return true
+  }
+
+  appStore.setDocumentSaveStatus('saving')
+  try {
+    const result = await api.slides.exportPptx(deck.slides, {
+      outputPath: sourcePath,
+      title: appStore.documentTitle || 'WPX 演示文稿',
+      theme: deck.theme,
+      filename: appStore.documentTitle || undefined,
+    })
+    if (!result?.ok) {
+      appStore.markDocumentDirty()
+      toast.error(result?.error || '保存 PPTX 失败')
+      return true
+    }
+    await syncDocumentSource(sourcePath, '.pptx')
+    appStore.markDocumentSaved()
+    toast.success(`已保存 PPTX：${result.fileName || sourcePath}`, 2500)
+    return true
+  } catch (error) {
+    appStore.markDocumentDirty()
+    toast.error(error?.message || '保存 PPTX 失败')
+    return true
+  }
+}
+
+async function openSaveDialog() {
+  const handled = await trySavePptxInPlace()
+  if (handled) return
+
   appStore.openSaveDialog({
     content: getMarkdown(),
     defaultTitle: getDefaultTitle(),
@@ -407,14 +488,78 @@ function handleTemplateCreate(template) {
 }
 
 function openExternalDocument(payload) {
+  if (!payload) return
+
+  if (payload.contentType === 'pptx-error' || payload.contentType === 'excel-error') {
+    toast.error(payload.error || '无法打开文件')
+    return
+  }
+
   appStore.openDocument()
   nextTick(async () => {
-    editorRef.value?.loadMarkdown(payload.content || '')
-    editorOutput.value = {
-      html: '',
-      json: null,
-      markdown: payload.content || '',
+    const ed = editorRef.value?.getEditor?.()
+
+    if (payload.contentType === 'pptx') {
+      let slides = Array.isArray(payload.slides) ? payload.slides : null
+      if (!slides && typeof payload.content === 'string') {
+        try {
+          const parsed = JSON.parse(payload.content)
+          if (Array.isArray(parsed)) slides = parsed
+        } catch {
+          slides = null
+        }
+      }
+      if (!slides?.length) {
+        toast.error('PPTX 中未解析到可用幻灯片')
+        return
+      }
+
+      const accepted = await confirmPptxImport(payload)
+      if (!accepted) {
+        toast.info('已取消打开 PPTX', 2000)
+        return
+      }
+
+      // 确保编辑器已挂载
+      await nextTick()
+      const ready = ed || (await waitForEditorInstance())
+      if (!ready) {
+        toast.error('编辑器未就绪，无法打开 PPTX')
+        return
+      }
+
+      ready.commands.clearContent()
+      const inserted = ready
+        .chain()
+        .focus()
+        .insertSlideDeck({
+          slides: JSON.stringify(slides),
+          theme: 'light',
+        })
+        .run()
+
+      if (!inserted) {
+        toast.error('插入幻灯片失败：当前编辑器不支持 SlideDeck 节点')
+        return
+      }
+
+      editorOutput.value = {
+        html: ready.getHTML(),
+        json: ready.getJSON(),
+        markdown: '',
+      }
+
+      const count = payload.slideCount || slides.length
+      toast.success(`已打开 ${count} 页 PPTX`, 2500)
+    } else {
+      editorRef.value?.loadMarkdown(payload.content || '')
+      editorOutput.value = {
+        html: '',
+        json: null,
+        markdown: payload.content || '',
+      }
     }
+
     if (payload.title) {
       appStore.setDocumentTitle(payload.title)
     }
@@ -583,6 +728,9 @@ onMounted(() => {
         toggleAiPanel()
       })
     }
+    if (typeof api?.onEditorMenuCommand === 'function') {
+      unsubscribeEditorMenuCommand = api.onEditorMenuCommand(handleEditorMenuCommand)
+    }
   }
 })
 
@@ -591,7 +739,50 @@ onUnmounted(() => {
   unbindLessonPlanDialogWindowListener()
   unsubscribeAiChatToggle?.()
   unsubscribeAiChatToggle = null
+  unsubscribeEditorMenuCommand?.()
+  unsubscribeEditorMenuCommand = null
 })
+
+function handleEditorMenuCommand(payload) {
+  const command = payload?.command || payload
+  if (!command) return
+
+  const ed = editorRef.value
+  if (!ed) {
+    toast.warning('请先打开文档后再使用菜单')
+    return
+  }
+
+  if (!appStore.hasOpenDocument) {
+    appStore.openDocument()
+  }
+
+  switch (command) {
+    case 'bold':
+      ed.getEditor?.()?.chain().focus().toggleBold().run()
+      break
+    case 'italic':
+      ed.getEditor?.()?.chain().focus().toggleItalic().run()
+      break
+    case 'insert-table':
+      ed.openTableDialog?.()
+      break
+    case 'insert-image':
+      ed.insertImageFromFile?.()
+      break
+    case 'insert-image-url':
+      ed.openImageUrlDialog?.()
+      break
+    case 'insert-hr':
+      ed.insertHorizontalRule?.()
+      break
+    case 'insert-slide-deck':
+      ed.insertSlideDeck?.()
+      break
+    default:
+      break
+  }
+}
 
 function handleImageEditorApply(blob) {
   completeImageEdit(blob)
@@ -637,22 +828,25 @@ function buildKnowledgeInsertContent(content, type) {
 }
 
 async function handleKnowledgeOpenAsDocument({ content, title, type }) {
+  appStore.clearBrowsingTitle()
   appStore.openDocument()
   await nextTick()
+  const nextTitle = getKnowledgeDocumentTitle(title, content)
+  appStore.setDocumentTitle(nextTitle)
   editorRef.value?.loadMarkdown(content || '')
   editorOutput.value = {
     html: '',
     json: null,
     markdown: content || '',
   }
-  appStore.setDocumentTitle(getKnowledgeDocumentTitle(title, content))
   appStore.clearDocumentSource()
   appStore.markDocumentDirty()
   closeKnowledgePanel()
-  toast.success('已作为新文档打开')
+  toast.success(`已打开「${nextTitle}」，可直接编辑`)
 }
 
 async function handleKnowledgeInsert({ content, type }) {
+  appStore.clearBrowsingTitle()
   if (!appStore.hasOpenDocument) {
     appStore.openDocument()
     await nextTick()
@@ -676,7 +870,7 @@ async function handleKnowledgeInsert({ content, type }) {
   }
   appStore.markDocumentDirty()
   scheduleAutoSave()
-  toast.success('已插入编辑器')
+  toast.success('已插入当前文档，可继续编辑')
 }
 
 async function applyPendingKnowledgeImport() {

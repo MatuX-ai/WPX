@@ -102,7 +102,7 @@ function handleQuickFormat(format) {
 
       <h2 class="empty-state__title">开始你的创作</h2>
       <p class="empty-state__description">
-        新建 Markdown 文档即刻动笔，或从资料库导入已有内容，让 AI 助手陪你完成写作。
+        新建 Markdown 文档即刻动笔，或从「资料库」导入参考内容；写作成品可保存到「文库」。
       </p>
 
       <div class="empty-state__actions">

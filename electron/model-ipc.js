@@ -7,6 +7,7 @@ const {
   getDecryptedApiKey,
   getAllMaskedApiKeys,
 } = require('./services/model-secrets-store')
+const { registerModelFetchIpcHandlers } = require('./services/model-fetch-bridge')
 
 /**
  * @param {string} endpoint
@@ -102,6 +103,9 @@ function registerModelIpcHandlers() {
 
     return requestModelsList({ endpoint, apiKey })
   })
+
+  // AI 对话流式请求：与「测试连接」同走主进程 fetch，避开渲染进程 CORS
+  registerModelFetchIpcHandlers()
 }
 
 async function initModelIpc() {

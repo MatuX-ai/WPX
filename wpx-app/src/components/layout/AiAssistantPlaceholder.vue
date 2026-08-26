@@ -59,7 +59,9 @@ import {
   setDefaultTemplate,
 } from '@/utils/markdownFormatPreference'
 import { getDocumentSkillContext, buildQuickSkillMessage } from '@/utils/templateSkillContext'
+import { useToast } from '@/composables/useToast'
 
+const toast = useToast()
 const editorStore = useEditorStore()
 const settingsStore = useSettingsStore()
 const modelSettingsStore = useModelSettingsStore()
@@ -418,6 +420,7 @@ function buildWelcomeMessages() {
       id: createMessageId(),
       role: 'assistant',
       content: AI_ASSISTANT_DEFAULT_WELCOME,
+      isWelcome: true,
     },
   ]
 }
@@ -447,7 +450,7 @@ function handleChatIdle() {
   }
 }
 
-const { chatRef, isLoading, sendMessage, pendingSkill, submitSkillForm, cancelSkillForm, selectSkillCandidate, retrySkill, lastSkillInvocation, resolvedApiKey } = useAiChat(systemPrompt, {
+const { chatRef, isLoading, sendMessage, stopGeneration, pendingSkill, submitSkillForm, cancelSkillForm, selectSkillCandidate, retrySkill, lastSkillInvocation, resolvedApiKey } = useAiChat(systemPrompt, {
   skillExecutor,
   skillsStore,
   getDocumentContext: () => documentSkillContext.value,
@@ -455,6 +458,10 @@ const { chatRef, isLoading, sendMessage, pendingSkill, submitSkillForm, cancelSk
   onChatFinish: handleChatIdle,
   onChatError: () => handleChatIdle(),
 })
+
+function handleStopGeneration() {
+  void stopGeneration()
+}
 
 // 关闭/切换候选弹窗时重置拖拽偏移
 watch(
@@ -499,6 +506,7 @@ function finishOnboarding() {
       id: createMessageId(),
       role: 'assistant',
       content: AI_ASSISTANT_DEFAULT_WELCOME,
+      isWelcome: true,
     },
   ]
 }
@@ -1151,6 +1159,16 @@ async function handleSend(payload) {
     })
     return
   }
+
+  if (!result?.ok && result?.message) {
+    editorStore.clearPendingReplace()
+    displayMessages.value.push({
+      id: createMessageId(),
+      role: 'assistant',
+      content: result.message,
+      chatErrorMessage: result.message,
+    })
+  }
 }
 
 function handleSkillQuickUse(skill) {
@@ -1177,18 +1195,13 @@ function handleSkillResponse() {
     const content = extractReplacementText(rawContent)
 
     if (lastDisplay?.role === 'assistant' && lastDisplay.content === rawContent && !lastDisplay.skillResult) {
-      if (editorStore.pendingReplace && content) {
-        editorStore.requestReplace(content, editorStore.pendingReplace)
-      }
+      if (content) insertGeneratedDocument(content)
       return
     }
 
     if (content) {
-      // 成功：插入编辑器
-      if (editorStore.pendingReplace) {
-        editorStore.requestReplace(content, editorStore.pendingReplace)
-        editorStore.clearPendingReplace()
-      }
+      // 尽量自动插入；失败时仍展示内容，用户可点「使用该文档」
+      insertGeneratedDocument(content)
 
       displayMessages.value.push({
         id: createMessageId(),
@@ -1254,24 +1267,69 @@ function handleInsertSlideDeck(payload) {
 }
 
 /**
- * M3-C：Hermes 任务结果插入文档（复用选区替换链路）
- * 有 pendingReplace 时替换选区；否则在光标处插入。
+ * 将 AI 回复插入中央编辑区：
+ * - 有待替换选区 → 替换选中内容
+ * - 否则插入到当前光标；若无光标则插到文档末尾
  * @param {string} text
  */
 function handleInsertText(text) {
   if (typeof text !== 'string' || !text.trim()) return
-  const content = String(text).trim()
+  const content = extractReplacementText(String(text))
+  if (!content) return
+
+  const insertOptions = { asMarkdown: true }
+
   if (editorStore.pendingReplace) {
-    editorStore.requestReplace(content, editorStore.pendingReplace)
+    editorStore.requestReplace(content, editorStore.pendingReplace, insertOptions)
     editorStore.clearPendingReplace()
+    toast.success('已插入到中央编辑区')
     return
   }
-  const pos = editorStore.activeSelection.from ?? null
-  if (pos != null) {
-    editorStore.setPendingReplace({ from: pos, to: pos })
-    editorStore.requestReplace(content, { from: pos, to: pos })
-    editorStore.clearPendingReplace()
+
+  const sel = editorStore.activeSelection
+  if (sel?.from != null) {
+    const to = sel.hasSelection && sel.to != null ? sel.to : sel.from
+    editorStore.requestReplace(content, { from: sel.from, to }, insertOptions)
+    toast.success('已插入到中央编辑区')
+    return
   }
+
+  const editor = getActiveEditor()
+  if (!editor) {
+    toast.info('没有可用的编辑器')
+    return
+  }
+  const endPos = editor.state.doc.content.size
+  editorStore.requestReplace(content, { from: endPos, to: endPos }, insertOptions)
+  toast.success('已插入到中央编辑区')
+}
+
+/**
+ * Skill / 自动同步：把生成稿写入编辑器（有选区则替换，否则插到光标或文末）
+ * @param {string} content
+ */
+function insertGeneratedDocument(content) {
+  if (!content) return false
+  const insertOptions = { asMarkdown: true }
+
+  if (editorStore.pendingReplace) {
+    editorStore.requestReplace(content, editorStore.pendingReplace, insertOptions)
+    editorStore.clearPendingReplace()
+    return true
+  }
+
+  const sel = editorStore.activeSelection
+  if (sel?.from != null) {
+    const to = sel.hasSelection && sel.to != null ? sel.to : sel.from
+    editorStore.requestReplace(content, { from: sel.from, to }, insertOptions)
+    return true
+  }
+
+  const editor = getActiveEditor()
+  if (!editor) return false
+  const endPos = editor.state.doc.content.size
+  editorStore.requestReplace(content, { from: endPos, to: endPos }, insertOptions)
+  return true
 }
 
 function handleClose() {
@@ -1349,6 +1407,7 @@ function syncLatestAssistantMessage() {
 
   const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
   if (lastDisplay?.role === 'assistant' && lastDisplay.content === content) {
+    // 有选区待替换时自动写入（改写场景）；无选区不自动改文档，留给「使用该文档」
     if (editorStore.pendingReplace) {
       editorStore.requestReplace(content, editorStore.pendingReplace)
     }
@@ -1485,7 +1544,9 @@ watch(
       :cleanable-count="cleanableCount"
       :batch-progress="batchProgress"
       :recommended-skills="recommendedSkills"
+      :loading="isLoading"
       @send="handleSend"
+      @stop="handleStopGeneration"
       @close="handleClose"
       @pin-change="handlePinChange"
       @dock-change="handleDockChange"
@@ -1517,7 +1578,9 @@ watch(
     :cleanable-count="cleanableCount"
     :batch-progress="batchProgress"
     :recommended-skills="recommendedSkills"
+    :loading="isLoading"
     @send="handleSend"
+    @stop="handleStopGeneration"
     @close="handleClose"
     @pin-change="handlePinChange"
     @dock-change="handleDockChange"

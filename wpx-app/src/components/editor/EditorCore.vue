@@ -37,6 +37,8 @@ import { editorDragOutProps, useDragDrop } from '@/composables/useDragDrop'
 import { shortcutTooltip } from '@/composables/useGlobalShortcuts'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useToast } from '@/composables/useToast'
+import { syncDocumentSource } from '@/composables/useDocumentFocusRefresh'
+import { confirmPptxImport } from '@/composables/usePptxImportWarning'
 import { toEditorContent } from '@/utils/aiSelection'
 import { tiptapJsonToMarkdown } from '@/utils/tiptapToMarkdown'
 import { markdownToHtml } from '@/utils/markdownToEditor'
@@ -137,7 +139,10 @@ function applyReplaceRequest(request) {
   const currentEditor = editor.value
   if (!currentEditor || !request) return
 
-  const content = toEditorContent(request.text)
+  // 「使用该文档」等整篇稿：按 Markdown 转 HTML，保留标题/列表等结构
+  const content = request.asMarkdown
+    ? markdownToHtml(request.text || '')
+    : toEditorContent(request.text)
 
   currentEditor
     .chain()
@@ -359,16 +364,6 @@ function getMarkdown() {
   return tiptapJsonToMarkdown(currentEditor.getJSON())
 }
 
-defineExpose({
-  getMarkdown,
-  getMarkdownForExport,
-  getHtmlForExport,
-  getFormatSnapshot,
-  loadMarkdown,
-  openImageEditor,
-  getEditor: () => editor.value,
-})
-
 function getFormatSnapshot() {
   return extractFormatFromEditor(editor.value)
 }
@@ -389,11 +384,19 @@ function loadMarkdown(markdown) {
 }
 
 function handleExternalFileOpen(payload) {
-  if (!payload || payload.content == null) return
+  if (!payload) return
+
+  // PPTX / Excel 错误负载：content 可能为空，需单独处理
+  if (payload.contentType === 'pptx-error' || payload.contentType === 'excel-error') {
+    toast.error(payload.error || '无法打开文件')
+    return
+  }
+
+  if (payload.content == null && payload.contentType !== 'pptx') return
 
   appStore.openDocument()
 
-  nextTick(() => {
+  nextTick(async () => {
     const currentEditor = editor.value
     if (!currentEditor) {
       // 编辑器未就绪，保留 pending 数据供后续重试
@@ -403,7 +406,48 @@ function handleExternalFileOpen(payload) {
     // 编辑器确认就绪后消费 pending 数据
     appStore.takePendingExternalFile()
 
-    if (payload.contentType === 'html') {
+    /** @type {Array<{ component: string, props: object }>|null} */
+    let loadedPptxSlides = null
+
+    if (payload.contentType === 'pptx') {
+      let slides = Array.isArray(payload.slides) ? payload.slides : null
+      if (!slides && typeof payload.content === 'string') {
+        try {
+          const parsed = JSON.parse(payload.content)
+          if (Array.isArray(parsed)) slides = parsed
+        } catch {
+          slides = null
+        }
+      }
+      if (!slides?.length) {
+        toast.error('PPTX 中未解析到可用幻灯片')
+        return
+      }
+
+      // 有损导入确认：用户取消则不写入编辑器，避免误覆盖原文件
+      const accepted = await confirmPptxImport(payload)
+      if (!accepted) {
+        toast.info('已取消打开 PPTX', 2000)
+        return
+      }
+
+      loadedPptxSlides = slides
+
+      currentEditor.commands.clearContent()
+      const inserted = currentEditor
+        .chain()
+        .focus()
+        .insertSlideDeck({
+          slides: JSON.stringify(slides),
+          theme: 'light',
+        })
+        .run()
+
+      if (!inserted) {
+        toast.error('插入幻灯片失败：当前编辑器不支持 SlideDeck 节点')
+        return
+      }
+    } else if (payload.contentType === 'html') {
       // DOCX 等导入返回 HTML，直接设置到编辑器
       currentEditor.commands.setContent(payload.content)
     } else {
@@ -415,6 +459,10 @@ function handleExternalFileOpen(payload) {
     }
 
     appStore.markDocumentDirty()
+
+    if (payload.path) {
+      await syncDocumentSource(payload.path, payload.extension)
+    }
 
     if (payload.format) {
       nextTick(() => applyFormat(payload.format))
@@ -431,6 +479,11 @@ function handleExternalFileOpen(payload) {
       } else {
         toast.success(`已导入 ${payload.sheetCount} 个 Excel 工作表`, 2500)
       }
+    }
+
+    if (payload.contentType === 'pptx') {
+      const count = payload.slideCount || loadedPptxSlides?.length || 0
+      toast.success(`已打开 ${count} 页 PPTX`, 2500)
     }
   })
 }
@@ -657,6 +710,21 @@ function handleContextMenuAiRewrite() {
 function handleContextMenuInsertImage() {
   imageInputRef.value?.click()
 }
+
+defineExpose({
+  getMarkdown,
+  getMarkdownForExport,
+  getHtmlForExport,
+  getFormatSnapshot,
+  loadMarkdown,
+  openImageEditor,
+  getEditor: () => editor.value,
+  openTableDialog,
+  openImageUrlDialog,
+  insertHorizontalRule,
+  insertSlideDeck,
+  insertImageFromFile: () => handleContextMenuInsertImage(),
+})
 
 function handleContextMenuLessonToPpt() {
   // 教案 → 课件：通知父组件打开 LessonPlanToPptDialog

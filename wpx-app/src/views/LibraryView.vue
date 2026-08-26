@@ -34,7 +34,7 @@ async function handleOpenDocument(doc) {
     <div class="mb-6">
       <h1 class="text-2xl font-semibold text-slate-900">智能文库</h1>
       <p class="mt-2 text-sm text-slate-500">
-        浏览已保存文档，点击条目在下方编辑器中打开。
+        浏览已保存的写作文档。参考资料请到「资料库」上传与检索。
       </p>
       <p v-if="activeTitle" class="mt-2 text-sm text-brand-700">
         当前文档：{{ activeTitle }}

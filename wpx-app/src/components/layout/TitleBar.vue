@@ -10,6 +10,7 @@ import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { useSettingsStore } from '@/stores/settings'
 import { useAppStore } from '@/stores/app'
 import { useFocusModeFormatPrompt } from '@/composables/useFocusModeFormatPrompt'
+import { useToast } from '@/composables/useToast'
 import { getElectronAPI, isElectron } from '@/utils/electron'
 import { requestCreateAppWindow } from '@/composables/useCreateAppWindow'
 import { shortcutTooltip } from '@/composables/useGlobalShortcuts'
@@ -66,6 +67,7 @@ const props = defineProps({
 
 const trayStore = useTrayStore()
 const authStore = useAuthStore()
+const toast = useToast()
 const userPreferencesStore = useUserPreferencesStore()
 const settingsStore = useSettingsStore()
 const floatingWindows = useFloatingWindows()
@@ -120,6 +122,11 @@ async function handleOpenFile() {
   // 否则读取文件内容并加载到当前编辑器
   const payload = await api.files.readDocument(filePath)
   if (!payload) return
+
+  if (payload.contentType === 'pptx-error' || payload.contentType === 'excel-error') {
+    toast.error(payload.error || '无法打开文件')
+    return
+  }
 
   appStore.openDocument()
   appStore.queueExternalFile(payload)

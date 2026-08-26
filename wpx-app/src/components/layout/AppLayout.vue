@@ -101,7 +101,7 @@ onUnmounted(() => {
     :class="{ 'app-shell--archive-drag': isArchiveDragOver }"
   >
     <TitleBar
-      :document-name="appStore.documentTitle"
+      :document-name="appStore.displayDocumentTitle"
       :save-status="appStore.documentSaveStatus"
       :save-status-refresh-tick="appStore.saveStatusRefreshTick"
       :overlay="!showNavbar"

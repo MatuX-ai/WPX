@@ -285,11 +285,23 @@ export default defineConfig(({ mode }) => {
         },
         '/api/remove-bg': 'http://localhost:3002',
         '/api/knowledge': `http://localhost:${knowledgePort}`,
-        '/api/library': 'http://localhost:3004',
+        '/api/library': {
+          target: `http://localhost:${localServerPort}`,
+          changeOrigin: true,
+        },
         '/api/ai': 'http://localhost:3005',
         '/api/ck': `http://localhost:${copilotkitPort}`,
         // jcode 适配层（jcode-routes）位于 local-server 进程内
         '/api/jcode': {
+          target: `http://localhost:${localServerPort}`,
+          changeOrigin: true,
+        },
+        // 自定义模型代理：渲染进程经 local-server 转发，避免 CORS
+        '/api/model-proxy': {
+          target: `http://localhost:${localServerPort}`,
+          changeOrigin: true,
+        },
+        '/api/hermes': {
           target: `http://localhost:${localServerPort}`,
           changeOrigin: true,
         },

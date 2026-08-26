@@ -74,11 +74,17 @@ export const useEditorStore = defineStore('editor', () => {
     pendingReplace.value = null
   }
 
-  function requestReplace(text, range) {
+  /**
+   * @param {string} text
+   * @param {{ from: number, to: number }} range
+   * @param {{ asMarkdown?: boolean }} [options] asMarkdown=true 时按 Markdown 解析后插入
+   */
+  function requestReplace(text, range, options = {}) {
     replaceRequest.value = {
       text,
       from: range.from,
       to: range.to,
+      asMarkdown: Boolean(options?.asMarkdown),
       ts: Date.now(),
     }
   }

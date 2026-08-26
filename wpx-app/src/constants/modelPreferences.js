@@ -115,6 +115,26 @@ export function normalizeModelEndpoint(endpoint) {
 }
 
 /**
+ * 归一化为 OpenAI 兼容 SDK 使用的 baseURL（通常以 /v1 结尾）。
+ * @param {string} endpoint
+ * @param {string} [fallback]
+ */
+export function ensureOpenAICompatibleBase(endpoint, fallback = 'https://api.deepseek.com/v1') {
+  const normalized = normalizeModelEndpoint(endpoint)
+  if (!normalized) return normalizeModelEndpoint(fallback) || 'https://api.deepseek.com/v1'
+
+  if (normalized.endsWith('/chat/completions')) {
+    return normalized.replace(/\/chat\/completions$/, '')
+  }
+
+  if (normalized.endsWith('/v1') || /\/v\d+$/.test(normalized)) {
+    return normalized
+  }
+
+  return `${normalized}/v1`
+}
+
+/**
  * @param {string} endpoint
  */
 export function buildChatCompletionsUrl(endpoint) {

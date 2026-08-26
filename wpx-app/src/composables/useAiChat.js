@@ -6,16 +6,22 @@ import {
   MISSING_CUSTOM_API,
   MISSING_CUSTOM_API_MESSAGE,
 } from '@/constants/aiModelMessages'
+import { ensureOpenAICompatibleBase } from '@/constants/modelPreferences'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useModelSettingsStore } from '@/stores/modelSettings'
 import { isElectron, getElectronAPI } from '@/utils/electron'
+import {
+  canUseElectronModelFetch,
+  createElectronModelFetch,
+} from '@/utils/electronModelFetch'
+import { getLocalApiBase } from '@/utils/localApi'
 import { buildChatEpisode, isEpisodeRecordingEnabled } from '@/utils/memoryEpisode'
 import { shouldAutoRouteHermes, buildHermesAssistantMessage } from '@/utils/hermesRouter'
 import { runHermesTask } from '@/composables/useHermesTask'
 import { routeTask, shouldUseJcode } from '@/server/ai-router'
 
-const DEFAULT_BASE_URL = 'https://api.deepseek.com'
+const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1'
 const DEFAULT_MODEL = 'deepseek-chat'
 
 /**
@@ -37,6 +43,60 @@ export function buildContextPrompt(text, context = []) {
 }
 
 /**
+ * 从 SDK / 代理层层包装的错误对象中尽量还原真实报错文案。
+ * AI SDK 的 UI 流默认会把细节压成 "An error occurred."，需从 cause / data / body 回捞。
+ *
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function extractModelErrorText(error) {
+  if (error == null) return '未知错误'
+
+  /** @type {string[]} */
+  const parts = []
+  const seen = new Set()
+
+  const push = (value) => {
+    if (value == null) return
+    const text = typeof value === 'string' ? value : String(value)
+    const trimmed = text.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    // 跳过 SDK 默认脱敏文案，优先保留更有信息量的片段
+    if (/^an error occurred\.?$/i.test(trimmed)) return
+    seen.add(trimmed)
+    parts.push(trimmed)
+  }
+
+  const visit = (value, depth = 0) => {
+    if (value == null || depth > 4) return
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      push(value)
+      return
+    }
+    if (typeof value !== 'object') return
+
+    push(value.message)
+    push(value.error?.message)
+    push(value.error)
+    push(value.statusText)
+    push(value.responseBody)
+    push(value.body)
+    push(value.data?.error?.message)
+    push(value.data?.message)
+    push(typeof value.data === 'string' ? value.data : null)
+    push(value.cause?.message)
+    if (value.cause) visit(value.cause, depth + 1)
+  }
+
+  visit(error)
+  if (parts.length === 0) {
+    const fallback = String(error?.message || error || '未知错误').trim()
+    return fallback || '未知错误'
+  }
+  return parts.join(' | ')
+}
+
+/**
  * 把底层模型错误映射为面向用户的友好提示。
  *
  * 命中「未配置 / 配置错误」类错误（API Key 无效、模型名错误、接口地址不通）时，
@@ -48,7 +108,7 @@ export function buildContextPrompt(text, context = []) {
  * @returns {{ content: string, needsModelConfig?: boolean, suggestConfigure?: boolean, suggestWriteSelf?: boolean }}
  */
 export function normalizeModelErrorForDisplay(error, options = {}) {
-  const raw = String(error?.message || error || '未知错误')
+  const raw = extractModelErrorText(error)
   const lower = raw.toLowerCase()
 
   // 开发环境提醒：调用方未传 apiKey 时给出警告，
@@ -101,8 +161,9 @@ export function normalizeModelErrorForDisplay(error, options = {}) {
     }
   }
 
+  // 覆盖官方 DeepSeek 与第三方兼容网关（如仅支持 deepseek-v4-*）的模型名报错
   if (
-    /(model not exist|model not found|invalid model|unknown model|model.?not.?support|404|模型不存在|模型名)/i.test(
+    /(model not exist|model not found|invalid model|unknown model|model.?not.?support|supported api model|supported.?model.?names|but you passed|404|模型不存在|模型名)/i.test(
       lower,
     )
   ) {
@@ -110,9 +171,21 @@ export function normalizeModelErrorForDisplay(error, options = {}) {
       '[normalizeModelErrorForDisplay] 命中「模型名称不正确」分支：原始错误 =',
       raw,
     )
+    const suggested = raw.match(
+      /(?:are|：|:)\s*([a-z0-9._-]+(?:\s*,\s*[a-z0-9._-]+){0,5})(?:\s*,?\s*and\s+([a-z0-9._-]+))?/i,
+    )
+    let hint = '请前往「我的模型」核对模型名称（需与服务商文档一致，如 deepseek-chat、deepseek-v4-flash）。'
+    if (suggested) {
+      const list = [suggested[1], suggested[2]]
+        .filter(Boolean)
+        .join(', ')
+        .replace(/\s+/g, ' ')
+      if (list) {
+        hint = `当前接口支持的模型名：${list}。请在「我的模型」中改成其中之一后重试。`
+      }
+    }
     return {
-      content:
-        'AI 调用失败：模型名称不正确。请前往「我的模型」核对模型名称（如 deepseek-chat）。',
+      content: `AI 调用失败：模型名称不正确。${hint}`,
       needsModelConfig: true,
       suggestConfigure: true,
     }
@@ -135,18 +208,15 @@ export function normalizeModelErrorForDisplay(error, options = {}) {
     }
   }
 
-  // 兜底：SDK 可能把底层网络错误（如 Failed to fetch、DNS 解析失败）
-  // 包装成通用的 "An error occurred."，导致正则无法匹配。
-  // 这类通用错误几乎总是网络/连接层面的问题（模型服务不可达、DNS 解析失败等），
-  // 直接归类为「无法连接模型服务」，避免用户看到无意义的原始报错。
-  if (/an error occurred/i.test(lower)) {
+  // SDK 默认脱敏文案：不再武断归为「网络失败」（模型名错误也会被压成这句）
+  if (/^an error occurred\.?$/i.test(lower)) {
     console.info(
-      '[normalizeModelErrorForDisplay] 命中「SDK 包装的通用错误 → 网络/连接失败」兜底分支：原始错误 =',
+      '[normalizeModelErrorForDisplay] 命中「SDK 脱敏通用错误」分支：原始错误 =',
       raw,
     )
     return {
       content:
-        'AI 调用失败：无法连接到模型服务。请检查网络连接，或核对「我的模型」中的接口地址。',
+        'AI 调用失败：请核对「我的模型」中的接口地址与模型名称是否与服务商一致（测试连接通过仅说明地址可达，模型名仍可能不对）。',
       needsModelConfig: true,
       suggestConfigure: true,
     }
@@ -162,17 +232,39 @@ export function normalizeModelErrorForDisplay(error, options = {}) {
 function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {}) {
   // V1.1 起仅使用用户在「我的模型」中自行配置的 API Key，平台不提供任何密钥。
   const apiKey = aiConfig.apiKey || ''
-  const baseURL = aiConfig.baseUrl || DEFAULT_BASE_URL
+  const upstreamBase = ensureOpenAICompatibleBase(aiConfig.baseUrl, DEFAULT_BASE_URL)
   const model = aiConfig.model || DEFAULT_MODEL
 
   if (aiConfig.source === 'custom' && !apiKey && import.meta.env.DEV) {
     console.debug('[useAiChat] 自定义模型 API Key 未配置，发送消息前请在设置页填写。')
   }
 
+  // Electron：优先主进程 fetch（与「测试连接」同路，无 CORS）。
+  // 回退：经 local-server /api/model-proxy 转发（旧路径）。
+  const useMainFetch = Boolean(aiConfig.useMainFetch)
+  const proxyBaseUrl = String(aiConfig.proxyBaseUrl || '').replace(/\/$/, '')
+  const baseURL = useMainFetch
+    ? upstreamBase
+    : proxyBaseUrl
+      ? `${proxyBaseUrl}/api/model-proxy`
+      : upstreamBase
+
+  let fetchImpl = fetch
+  if (useMainFetch) {
+    fetchImpl = createElectronModelFetch()
+  } else if (proxyBaseUrl) {
+    fetchImpl = (input, init = {}) => {
+      const headers = new Headers(init.headers || {})
+      headers.set('X-WPX-Upstream-Base', upstreamBase)
+      return fetch(input, { ...init, headers })
+    }
+  }
+
   const provider = createOpenAICompatible({
     name: 'deepseek',
     apiKey,
     baseURL,
+    fetch: fetchImpl,
   })
 
   const agent = new ToolLoopAgent({
@@ -188,7 +280,16 @@ function createDeepSeekChat(systemPrompt, syncTick, aiConfig = {}, callbacks = {
   })
 
   return new Chat({
-    transport: new DirectChatTransport({ agent }),
+    transport: new DirectChatTransport({
+      agent,
+      // AI SDK 默认 onError 会把真实报错脱敏成 "An error occurred."，
+      // 导致模型名错误被误判成「无法连接」。这里保留上游原文。
+      onError: (error) => {
+        if (error == null) return '未知错误'
+        if (typeof error === 'string') return error
+        return error.message || String(error)
+      },
+    }),
     onData: () => {
       syncTick.value += 1
     },
@@ -254,10 +355,28 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     }
     resolvedApiKey.value = apiKey
 
+    let proxyBaseUrl = ''
+    let useMainFetch = false
+    if (isElectron() && apiKey) {
+      // 优先主进程 fetch：与设置页测试连接同一网络路径，彻底避开 CORS
+      if (canUseElectronModelFetch()) {
+        useMainFetch = true
+      } else {
+        try {
+          proxyBaseUrl = (await getLocalApiBase()) || ''
+        } catch (error) {
+          console.warn('[useAiChat] 本地模型代理不可用:', error?.message || error)
+          proxyBaseUrl = ''
+        }
+      }
+    }
+
     return {
       source: 'custom',
       apiKey: apiKey || '',
       baseUrl: textConfig.baseUrl,
+      proxyBaseUrl,
+      useMainFetch,
       model: textConfig.model,
       temperature: textConfig.temperature,
       topP: textConfig.topP,
@@ -330,18 +449,39 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
 
   const chatRef = shallowRef(createDeepSeekChat(toValue(systemPrompt), syncTick, {}, buildChatCallbacks()))
 
-  async function recreateChat() {
+  /**
+   * 防止「初始 resolve / watch recreate / send 前 recreate」互相覆盖：
+   * 较晚完成的旧 resolve 若带着空 apiKey 写回 chatRef，会出现设置页已保存 Key、
+   * 发送校验也通过，但实际请求仍用空 Key → 被归一成「未配置大模型」。
+   */
+  let chatGeneration = 0
+
+  /**
+   * 已持有完整 aiConfig 时同步落到 chatRef（发送路径专用，不可被并发 recreate 取消）。
+   * @param {Awaited<ReturnType<typeof resolveAiConfig>>} aiConfig
+   */
+  function applyChatConfig(aiConfig) {
+    chatGeneration += 1
     const previousMessages = chatRef.value.messages
-    const aiConfig = await resolveAiConfig()
     chatRef.value = createDeepSeekChat(toValue(systemPrompt), syncTick, aiConfig, buildChatCallbacks())
     chatRef.value.messages = previousMessages
     syncTick.value += 1
   }
 
-  void resolveAiConfig().then((aiConfig) => {
-    chatRef.value = createDeepSeekChat(toValue(systemPrompt), syncTick, aiConfig, buildChatCallbacks())
+  /**
+   * @param {Awaited<ReturnType<typeof resolveAiConfig>>} [aiConfig]
+   */
+  async function recreateChat(aiConfig) {
+    const generation = ++chatGeneration
+    const previousMessages = chatRef.value.messages
+    const nextConfig = aiConfig || (await resolveAiConfig())
+    if (generation !== chatGeneration) return
+    chatRef.value = createDeepSeekChat(toValue(systemPrompt), syncTick, nextConfig, buildChatCallbacks())
+    chatRef.value.messages = previousMessages
     syncTick.value += 1
-  })
+  }
+
+  void recreateChat()
 
   watch(
     () => toValue(systemPrompt),
@@ -482,6 +622,19 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
         suggestConfigure: true,
       }
     }
+
+    // 桌面端必须经主进程 fetch 或本地代理；生产 file:// 直连会被 CORS 拦截。
+    if (isElectron() && !aiConfig.useMainFetch && !aiConfig.proxyBaseUrl) {
+      return {
+        ok: false,
+        code: 'LOCAL_PROXY_UNAVAILABLE',
+        message: '本地模型通道未就绪，无法调用大模型。请重启 WPX 后重试。',
+        suggestConfigure: false,
+      }
+    }
+
+    // 每次发送前同步注入刚解析到的配置（含本地代理），避免竞态留下空 Key 实例。
+    applyChatConfig(aiConfig)
 
     // ── jcode 路由检查（仅复杂任务 · 仅桌面端 · 不阻塞主流程） ──
     tryJcodeRoute(text)
@@ -656,6 +809,17 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     input.value = ''
   }
 
+  /** 中止当前生成（保留已流出的内容） */
+  async function stopGeneration() {
+    try {
+      await chatRef.value?.stop?.()
+    } catch (error) {
+      console.warn('[useAiChat] stopGeneration 失败:', error?.message || error)
+    } finally {
+      syncTick.value += 1
+    }
+  }
+
   return {
     messages,
     input,
@@ -663,6 +827,7 @@ export function useAiChat(systemPrompt = '', skillOptions = {}) {
     isLoading,
     chatRef,
     sendMessage,
+    stopGeneration,
     submitSkillForm,
     cancelSkillForm,
     selectSkillCandidate,
