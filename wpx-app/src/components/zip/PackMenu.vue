@@ -95,7 +95,7 @@ onUnmounted(() => {
   <div ref="menuRef" class="relative inline-block text-left">
     <button
       type="button"
-      class="wpx-btn inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+      class="wpx-btn inline-flex items-center gap-1.5 rounded-md border border-border bg-surface text-sm font-medium text-fg-muted transition hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
       :class="iconOnly ? 'p-1.5' : 'px-3 py-1.5'"
       :disabled="loading"
       :title="iconOnly ? (loading ? '打包中…' : '打包') : '打包当前文档'"
@@ -130,7 +130,7 @@ onUnmounted(() => {
       <template v-else>
         <span>{{ loading ? '打包中…' : '打包' }}</span>
         <svg
-          class="h-4 w-4 text-slate-400"
+          class="h-4 w-4 text-fg-subtle"
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden="true"
@@ -146,14 +146,14 @@ onUnmounted(() => {
 
     <div
       v-if="isOpen"
-      class="absolute right-0 z-50 mt-1 w-56 origin-top-right rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+      class="absolute right-0 z-50 mt-1 w-56 origin-top-right rounded-lg border border-border bg-surface py-1 shadow-lg"
       role="menu"
     >
       <button
         v-for="option in PACK_OPTIONS"
         :key="option.key"
         type="button"
-        class="block w-full px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+        class="block w-full px-3 py-2 text-left text-sm text-fg transition hover:bg-bg-muted hover:text-fg"
         role="menuitem"
         @click="handlePack(option)"
       >

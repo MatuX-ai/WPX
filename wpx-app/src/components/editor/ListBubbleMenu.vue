@@ -135,7 +135,7 @@ function stopProp(event) {
     :options="{ placement: 'top' }"
   >
     <div
-      class="flex flex-wrap items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-1 shadow-lg"
+      class="flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-surface px-1 py-1 shadow-lg"
       @mousedown="stopProp"
     >
       <!-- 列表类型切换 -->
@@ -145,8 +145,8 @@ function stopProp(event) {
         :class="[
           'rounded px-2 py-1 text-xs font-medium transition',
           activeListType === 'bulletList'
-            ? 'bg-slate-900 text-white'
-            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+            ? 'bg-accent text-white'
+            : 'text-fg-muted hover:bg-bg-muted hover:text-fg',
         ]"
         @click="toggleList('bulletList')"
       >
@@ -158,22 +158,22 @@ function stopProp(event) {
         :class="[
           'rounded px-2 py-1 text-xs font-medium transition',
           activeListType === 'orderedList'
-            ? 'bg-slate-900 text-white'
-            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+            ? 'bg-accent text-white'
+            : 'text-fg-muted hover:bg-bg-muted hover:text-fg',
         ]"
         @click="toggleList('orderedList')"
       >
         1. 列表
       </button>
 
-      <span class="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+      <span class="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
       <!-- 编号样式下拉 -->
       <div class="relative">
         <button
           type="button"
           title="编号样式"
-          class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-fg-muted transition hover:bg-bg-muted hover:text-fg"
           @click="orderedTabOpen = !orderedTabOpen; unorderedTabOpen = false; emojiTabOpen = false"
         >
           编号
@@ -187,20 +187,20 @@ function stopProp(event) {
         </button>
         <div
           v-if="orderedTabOpen"
-          class="absolute bottom-full left-0 z-10 mb-1 min-w-[10rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          class="absolute bottom-full left-0 z-10 mb-1 min-w-[10rem] rounded-md border border-border bg-surface py-1 shadow-lg"
         >
           <button
             v-for="s in ORDERED_STYLES"
             :key="s.value"
             type="button"
             :class="[
-              'flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition hover:bg-slate-50',
-              currentStyleType === s.value ? 'bg-slate-100 text-slate-900' : 'text-slate-700',
+              'flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition hover:bg-bg-muted',
+              currentStyleType === s.value ? 'bg-bg-muted text-fg' : 'text-fg-muted',
             ]"
             @click="applyOrderedStyle(s.value)"
           >
             <span>{{ s.label }}</span>
-            <span class="ml-3 font-mono text-slate-400">{{ s.sample }}</span>
+            <span class="ml-3 font-mono text-fg-subtle">{{ s.sample }}</span>
           </button>
         </div>
       </div>
@@ -210,7 +210,7 @@ function stopProp(event) {
         <button
           type="button"
           title="无序符号"
-          class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-fg-muted transition hover:bg-bg-muted hover:text-fg"
           @click="unorderedTabOpen = !unorderedTabOpen; orderedTabOpen = false; emojiTabOpen = false"
         >
           符号
@@ -224,15 +224,15 @@ function stopProp(event) {
         </button>
         <div
           v-if="unorderedTabOpen"
-          class="absolute bottom-full left-0 z-10 mb-1 min-w-[8rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          class="absolute bottom-full left-0 z-10 mb-1 min-w-[8rem] rounded-md border border-border bg-surface py-1 shadow-lg"
         >
           <button
             v-for="s in UNORDERED_STYLES"
             :key="s.value"
             type="button"
             :class="[
-              'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-slate-50',
-              currentStyleType === s.value ? 'bg-slate-100 text-slate-900' : 'text-slate-700',
+              'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-bg-muted',
+              currentStyleType === s.value ? 'bg-bg-muted text-fg' : 'text-fg-muted',
             ]"
             @click="applyUnorderedStyle(s.value)"
           >
@@ -247,7 +247,7 @@ function stopProp(event) {
         <button
           type="button"
           title="emoji 行首符号"
-          class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-fg-muted transition hover:bg-bg-muted hover:text-fg"
           @click="emojiTabOpen = !emojiTabOpen; orderedTabOpen = false; unorderedTabOpen = false"
         >
           表情
@@ -261,7 +261,7 @@ function stopProp(event) {
         </button>
         <div
           v-if="emojiTabOpen"
-          class="absolute bottom-full left-0 z-10 mb-1 w-[12rem] rounded-md border border-slate-200 bg-white p-2 shadow-lg"
+          class="absolute bottom-full left-0 z-10 mb-1 w-[12rem] rounded-md border border-border bg-surface p-2 shadow-lg"
         >
           <div class="grid grid-cols-6 gap-1">
             <button
@@ -270,8 +270,8 @@ function stopProp(event) {
               type="button"
               :title="`使用 ${g} 作为行首符号`"
               :class="[
-                'flex h-7 w-7 items-center justify-center rounded text-base transition hover:bg-slate-100',
-                currentStyleImage === emojiToImageUrl(g) ? 'bg-slate-200' : '',
+                'flex h-7 w-7 items-center justify-center rounded text-base transition hover:bg-bg-muted',
+                currentStyleImage === emojiToImageUrl(g) ? 'bg-bg-muted' : '',
               ]"
               @click="applyEmoji(g)"
             >
@@ -281,22 +281,22 @@ function stopProp(event) {
         </div>
       </div>
 
-      <span class="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+      <span class="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
       <!-- 起始编号 -->
       <div class="flex items-center gap-1 px-1">
-        <span class="text-xs text-slate-500">起始</span>
+        <span class="text-xs text-fg-subtle">起始</span>
         <input
           v-model="startInput"
           type="number"
           min="1"
           placeholder="1"
-          class="w-12 rounded border border-slate-200 px-1 py-0.5 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+          class="w-12 rounded border border-border bg-surface px-1 py-0.5 text-xs text-fg focus:border-accent focus:outline-none"
           @change="applyStart"
         />
       </div>
 
-      <span class="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+      <span class="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
       <button
         type="button"

@@ -932,7 +932,7 @@ const toolbarItems = computed(() => {
 </script>
 
 <template>
-  <div class="editor-shell rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div class="editor-shell rounded-xl border shadow-sm">
     <div
       v-if="editor"
       class="editor-toolbar"
@@ -1099,7 +1099,7 @@ const toolbarItems = computed(() => {
 
     <div
       v-if="editorStore.selection.hasSelection"
-      class="border-t border-brand-100 bg-brand-50 px-4 py-2 text-xs text-brand-700"
+      class="editor-selection-hint"
     >
       已选中 {{ editorStore.selection.text.length }} 字 · 打开 AI 助手并输入指令即可修改选区
     </div>
@@ -1107,6 +1107,20 @@ const toolbarItems = computed(() => {
 </template>
 
 <style scoped>
+.editor-shell {
+  border-color: var(--theme-border);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.editor-selection-hint {
+  border-top: 1px solid color-mix(in srgb, var(--theme-accent) 25%, var(--theme-border));
+  background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-bg-subtle));
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: var(--theme-accent);
+}
+
 .editor-toolbar {
   position: sticky;
   /*
@@ -1266,12 +1280,12 @@ const toolbarItems = computed(() => {
 }
 
 .editor-content :deep(.tiptap) {
-  color: #0f172a;
+  color: var(--theme-fg);
 }
 
 .editor-content :deep(.tiptap p.is-editor-empty:first-child::before),
 .editor-content :deep(.tiptap p.is-empty::before) {
-  color: #94a3b8;
+  color: var(--theme-fg-subtle);
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -1318,7 +1332,7 @@ const toolbarItems = computed(() => {
   font-weight: 600;
   line-height: 1.5;
   margin: 0.5rem 0 0.375rem;
-  color: #475569;
+  color: var(--theme-fg-muted);
 }
 
 .editor-content :deep(.editor-prose) {
@@ -1358,16 +1372,17 @@ const toolbarItems = computed(() => {
 }
 
 .editor-content :deep(.editor-prose blockquote) {
-  border-left: 3px solid #c4b5fd;
-  color: #475569;
+  border-left: 3px solid var(--theme-accent-muted);
+  color: var(--theme-fg-muted);
   margin: 0.75rem 0;
   padding: 0.25rem 0 0.25rem 1rem;
 }
 
 .editor-content :deep(.editor-prose pre) {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--theme-bg-muted);
+  border: 1px solid var(--theme-border);
   border-radius: 0.5rem;
+  color: var(--theme-fg);
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.875rem;
   margin: 0.75rem 0;
@@ -1376,8 +1391,9 @@ const toolbarItems = computed(() => {
 }
 
 .editor-content :deep(.editor-prose code) {
-  background: #f1f5f9;
+  background: var(--theme-bg-subtle);
   border-radius: 0.25rem;
+  color: var(--theme-fg);
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.875em;
   padding: 0.125rem 0.375rem;
@@ -1474,8 +1490,9 @@ const toolbarItems = computed(() => {
 
 .editor-content :deep(.tiptap td),
 .editor-content :deep(.tiptap th) {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--theme-border);
   box-sizing: border-box;
+  color: var(--theme-fg);
   min-width: 2rem;
   padding: 0.375rem 0.5rem;
   position: relative;
@@ -1483,7 +1500,7 @@ const toolbarItems = computed(() => {
 }
 
 .editor-content :deep(.tiptap th) {
-  background-color: #f8fafc;
+  background-color: var(--theme-bg-muted);
   font-weight: 600;
   text-align: left;
 }

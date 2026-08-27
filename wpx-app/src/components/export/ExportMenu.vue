@@ -502,7 +502,7 @@ onUnmounted(() => {
   <div ref="menuRef" class="relative inline-block text-left">
     <button
       type="button"
-      class="wpx-btn inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+      class="wpx-btn inline-flex items-center gap-1.5 rounded-md border border-border bg-surface text-sm font-medium text-fg-muted transition hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
       :class="iconOnly ? 'p-1.5' : 'px-3 py-1.5'"
       :disabled="loading || confirmLoading"
       :title="iconOnly ? (loading ? '导出中…' : '导出') : '导出文档'"
@@ -544,7 +544,7 @@ onUnmounted(() => {
       <template v-else>
         <span>{{ loading ? '导出中…' : '导出' }}</span>
         <svg
-          class="h-4 w-4 text-slate-400"
+          class="h-4 w-4 text-fg-subtle"
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden="true"
@@ -560,17 +560,17 @@ onUnmounted(() => {
 
     <div
       v-if="isOpen"
-      class="absolute right-0 z-50 mt-1 w-60 origin-top-right rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+      class="absolute right-0 z-50 mt-1 w-60 origin-top-right rounded-lg border border-border bg-surface py-1 shadow-lg"
     >
-      <div class="border-b border-slate-100 px-3 py-2">
-        <label class="mb-1 block text-xs font-medium text-slate-500" for="export-document-type">
+      <div class="border-b border-border px-3 py-2">
+        <label class="mb-1 block text-xs font-medium text-fg-muted" for="export-document-type">
           文档类型标签
         </label>
         <input
           id="export-document-type"
           v-model="documentType"
           type="text"
-          class="wpx-input w-full rounded-md px-2 py-1.5 text-sm text-slate-700"
+          class="wpx-input w-full rounded-md px-2 py-1.5 text-sm text-fg"
           placeholder="如：周报、需求文档"
           @keydown.stop
         />
@@ -579,7 +579,7 @@ onUnmounted(() => {
             v-for="type in recentTypes"
             :key="type"
             type="button"
-            class="wpx-btn rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700"
+            class="wpx-btn rounded-full bg-bg-muted px-2 py-0.5 text-xs text-fg-muted transition hover:bg-accent-muted hover:text-accent"
             @click="applyRecentType(type)"
           >
             {{ type }}
@@ -594,8 +594,8 @@ onUnmounted(() => {
         class="block w-full px-3 py-2 text-left text-sm transition"
         :class="
           isExportOptionDisabled(option)
-            ? 'cursor-not-allowed text-slate-400'
-            : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+            ? 'cursor-not-allowed text-fg-subtle'
+            : 'text-fg hover:bg-bg-muted hover:text-fg'
         "
         :disabled="isExportOptionDisabled(option)"
         :title="exportOptionTitle(option)"

@@ -144,7 +144,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   >
     <div class="flex flex-col gap-1">
       <div
-        class="flex flex-wrap items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-1 shadow-lg"
+        class="flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-surface px-1 py-1 shadow-lg"
       >
         <button
           v-for="action in rowColumnActions"
@@ -152,13 +152,13 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           type="button"
           :title="action.title"
           :disabled="!action.can(editor)"
-          class="rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded px-2 py-1 text-xs font-medium text-fg-muted transition hover:bg-bg-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
           @click="runAction(action)"
         >
           {{ action.label }}
         </button>
 
-        <span class="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+        <span class="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
         <button
           v-for="action in cellActions"
@@ -166,23 +166,23 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           type="button"
           :title="action.title"
           :disabled="!action.can(editor)"
-          class="rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded px-2 py-1 text-xs font-medium text-fg-muted transition hover:bg-bg-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
           @click="runAction(action)"
         >
           {{ action.label }}
         </button>
 
-        <span class="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+        <span class="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
         <div ref="exportMenuRef" class="relative">
           <button
             type="button"
             title="导出表格"
-            class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            class="inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs font-medium text-fg-muted transition hover:bg-bg-muted hover:text-fg"
             @click="toggleExportMenu"
           >
             导出 {{ defaultExportFormat.toUpperCase() }}
-            <svg class="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <svg class="h-3 w-3 text-fg-subtle" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path
                 fill-rule="evenodd"
                 d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z"
@@ -192,25 +192,25 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           </button>
           <div
             v-if="exportMenuOpen"
-            class="absolute bottom-full left-0 z-10 mb-1 min-w-[8rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+            class="absolute bottom-full left-0 z-10 mb-1 min-w-[8rem] rounded-md border border-border bg-surface py-1 shadow-lg"
           >
             <button
               type="button"
-              class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              class="block w-full px-3 py-1.5 text-left text-xs text-fg hover:bg-bg-muted"
               @click="handleExportDefault"
             >
               导出 {{ defaultExportFormat.toUpperCase() }}（默认）
             </button>
             <button
               type="button"
-              class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              class="block w-full px-3 py-1.5 text-left text-xs text-fg hover:bg-bg-muted"
               @click="handleExportXls"
             >
               导出 XLS
             </button>
             <button
               type="button"
-              class="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              class="block w-full px-3 py-1.5 text-left text-xs text-fg hover:bg-bg-muted"
               @click="handleExportXlsx"
             >
               导出 XLSX
@@ -218,7 +218,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           </div>
         </div>
 
-        <span class="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+        <span class="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
         <button
           type="button"
