@@ -56,7 +56,9 @@ const SKIP_INSTALL = process.env.WPX_SKIP_INSTALL === '1' || process.env.VERCEL 
 // 注意：不能写 'admin'！会误删源码 admin/ 目录
 const STALE_PATHS = [
   'index.html', 'index.html.gz', 'index.html.br',
-  'favicon.svg', 'browserconfig.xml', 'og-image.svg',
+  'favicon.svg', 'favicon.ico', 'wpx-icon.png', 'icon.png', 'apple-touch-icon.png',
+  'site.webmanifest', 'browserconfig.xml',
+  'browserconfig.xml', 'og-image.svg',
   'robots.txt', 'sitemap.xml',
   'assets', 'blog', 'about',
   'admin', 'admin.html', 'api',

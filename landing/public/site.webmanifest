@@ -1,0 +1,23 @@
+{
+  "name": "WPX",
+  "short_name": "WPX",
+  "description": "永久免费的桌面写作工具",
+  "icons": [
+    {
+      "src": "/wpx-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#4F46E5",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/"
+}

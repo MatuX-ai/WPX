@@ -77,7 +77,7 @@ export const siteConfig = {
   locale: 'zh_CN',
   themeColor: '#4F46E5',
   // 站点图标 / PWA
-  favicon: '/favicon.svg',
+  favicon: '/wpx-icon.png',
   // 发布者 / 验证（部署前替换为真实值）
   fbAppId: '',
   googleSiteVerification: ''

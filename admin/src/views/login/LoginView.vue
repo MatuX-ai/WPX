@@ -9,9 +9,9 @@
       <div class="relative z-10">
         <div class="flex items-center gap-3">
           <img
-            src="@/assets/logo.svg"
+            src="@/assets/wpx-icon.png"
             alt="WPX"
-            class="w-10 h-10"
+            class="w-10 h-10 rounded-lg object-cover"
           >
           <span class="text-xl font-bold">WPX Admin</span>
         </div>
@@ -42,9 +42,9 @@
         <!-- 移动端 Logo -->
         <div class="lg:hidden flex items-center gap-2 mb-8">
           <img
-            src="@/assets/logo.svg"
+            src="@/assets/wpx-icon.png"
             alt="WPX"
-            class="w-9 h-9"
+            class="w-9 h-9 rounded-lg object-cover"
           >
           <span class="text-lg font-bold wpx-gradient-text">WPX Admin</span>
         </div>

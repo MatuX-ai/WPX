@@ -129,7 +129,7 @@ let recentDocuments = []
 const ICON_CANDIDATES = [
   path.join(WPX_APP_ROOT, 'public', 'icon.ico'),
   path.join(WPX_APP_ROOT, 'public', 'icon.png'),
-  path.join(WPX_APP_ROOT, 'public', 'favicon.svg'),
+  path.join(WPX_APP_ROOT, 'public', 'wpx-icon.png'),
 ]
 
 function resolveIconPath() {

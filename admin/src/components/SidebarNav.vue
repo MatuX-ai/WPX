@@ -11,9 +11,9 @@
     >
       <div class="flex items-center gap-2 overflow-hidden">
         <img
-          src="@/assets/logo.svg"
+          src="@/assets/wpx-icon.png"
           alt="WPX"
-          class="w-8 h-8 shrink-0"
+          class="w-8 h-8 shrink-0 rounded-lg object-cover"
         >
         <span
           v-if="!collapsed"

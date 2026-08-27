@@ -115,33 +115,13 @@ onBeforeUnmount(() => {
         class="group flex items-center gap-2"
         @click="mobileOpen = false"
       >
-        <span
-          class="relative flex h-9 w-9 items-center justify-center rounded-xl bg-wpx-gradient text-white shadow-wpx transition-transform group-hover:rotate-3"
-        >
-          <!-- 文档 + 闪光 图标 -->
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2.2"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M13 3v5a1 1 0 001 1h5"
-            />
-          </svg>
-          <span
-            class="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent-yellow ring-2 ring-white"
-          />
-        </span>
+        <img
+          src="/wpx-icon.png"
+          alt=""
+          class="h-9 w-9 rounded-xl object-cover shadow-wpx transition-transform group-hover:rotate-3"
+          width="36"
+          height="36"
+        />
         <span class="text-lg font-extrabold tracking-tight">
           <span class="wpx-gradient-text">WPX</span>
         </span>
@@ -249,25 +229,13 @@ onBeforeUnmount(() => {
           class="flex items-center gap-2"
           @click="closeMobile"
         >
-          <span
-            class="flex h-9 w-9 items-center justify-center rounded-xl bg-wpx-gradient text-white shadow-wpx"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2.2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 3v5a1 1 0 001 1h5" />
-            </svg>
-          </span>
+          <img
+            src="/wpx-icon.png"
+            alt=""
+            class="h-9 w-9 rounded-xl object-cover shadow-wpx"
+            width="36"
+            height="36"
+          />
           <span class="text-lg font-extrabold tracking-tight">
             <span class="wpx-gradient-text">WPX</span>
           </span>

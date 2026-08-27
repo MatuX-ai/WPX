@@ -1,6 +1,6 @@
 {
   "name": "wpx",
-  "version": "0.1.33",
+  "version": "0.1.34",
   "description": "WPX - AI 智能文档编辑器，多窗口 Electron + Vue3 应用",
   "author": {
     "name": "WPX Team",
@@ -20,6 +20,7 @@
     "electron:build:linux": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --linux",
     "electron:pack:win": "node scripts/bump-pack-version.mjs print && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm --prefix wpx-app run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/bump-pack-version.mjs bump",
     "electron:pack": "npm run electron:pack:win",
+    "generate:icons": "node scripts/generate-icons.mjs",
     "smoke:prod": "node scripts/smoke-prod-electron.mjs"
   },
   "build": {

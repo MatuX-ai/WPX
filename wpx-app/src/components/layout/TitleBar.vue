@@ -405,7 +405,7 @@ onUnmounted(() => {
   >
     <div class="title-bar__leading">
       <img
-        src="/favicon.svg"
+        src="/wpx-icon.png"
         alt=""
         class="title-bar__icon"
         width="16"

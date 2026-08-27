@@ -187,7 +187,13 @@ const wpxPoints = [
         <!-- WPX 卡片 -->
         <div class="rounded-2xl border border-primary-500/20 bg-wpx-gradient-soft/50 p-5 shadow-wpx">
           <div class="mb-3 flex items-center gap-2">
-            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-wpx-gradient text-sm font-extrabold text-white shadow-wpx">W</span>
+            <img
+              src="/wpx-icon.png"
+              alt=""
+              class="h-7 w-7 rounded-lg object-cover shadow-wpx"
+              width="28"
+              height="28"
+            />
             <span class="text-sm font-bold text-primary-700">WPX · 解放</span>
             <span class="ml-auto text-[10px] text-emerald-600">免费</span>
           </div>
@@ -287,9 +293,13 @@ const wpxPoints = [
         >
           <div class="wpx-bg h-full w-full p-8 md:p-12">
             <div class="flex items-center gap-3">
-              <span
-                class="flex h-10 w-10 items-center justify-center rounded-xl bg-wpx-gradient text-lg font-extrabold text-white shadow-wpx"
-              >W</span>
+              <img
+                src="/wpx-icon.png"
+                alt=""
+                class="h-10 w-10 rounded-xl object-cover shadow-wpx"
+                width="40"
+                height="40"
+              />
               <div>
                 <div class="text-xs uppercase tracking-wider text-primary-600">WPX 用户</div>
                 <div class="text-lg font-bold text-dark">免费 · 纯净 · 流畅</div>

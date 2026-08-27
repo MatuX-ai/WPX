@@ -56,7 +56,8 @@ export default defineConfig(({ mode }) => {
                 media: '(prefers-color-scheme: light)'
               },
               { name: 'color-scheme', value: 'light' },
-              { rel: 'canonical', href: siteUrl }
+              { rel: 'canonical', href: siteUrl },
+              { rel: 'manifest', href: '/site.webmanifest' }
             ]
           }
         },

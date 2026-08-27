@@ -78,7 +78,7 @@ onBeforeUnmount(() => {
 
     <header class="landing__header">
       <div class="landing__brand">
-        <span class="landing__logo" aria-hidden="true">W</span>
+        <img class="landing__logo" src="/wpx-icon.png" width="36" height="36" alt="" aria-hidden="true" />
         <strong>WPX</strong>
       </div>
       <nav class="landing__nav" aria-label="主导航">
@@ -214,15 +214,11 @@ onBeforeUnmount(() => {
   font-size: 1.125rem;
 }
 .landing__logo {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
-  background: var(--c-accent);
-  color: #fff;
-  font-weight: 700;
+  object-fit: cover;
 }
 .landing__nav {
   display: flex;

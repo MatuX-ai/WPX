@@ -110,7 +110,7 @@ onUnmounted(() => {
         @click="handleTrayClick"
         @contextmenu="handleTrayContextMenu"
       >
-        <img src="/favicon.svg" alt="" width="20" height="20" />
+        <img src="/wpx-icon.png" alt="" width="20" height="20" />
       </button>
     </div>
   </div>

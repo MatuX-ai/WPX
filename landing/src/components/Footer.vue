@@ -85,11 +85,13 @@ const socials = [
             to="/"
             class="inline-flex items-center gap-2"
           >
-            <span
-              class="flex h-9 w-9 items-center justify-center rounded-xl bg-wpx-gradient text-white font-extrabold shadow-wpx"
-            >
-              W
-            </span>
+            <img
+              src="/wpx-icon.png"
+              alt=""
+              class="h-9 w-9 rounded-xl object-cover shadow-wpx"
+              width="36"
+              height="36"
+            />
             <span class="text-lg font-extrabold tracking-tight">
               <span class="wpx-gradient-text">WPX</span>
             </span>
