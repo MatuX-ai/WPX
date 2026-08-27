@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTrayStore } from '@/stores/tray'
+import { WPX_ICON_URL } from '@/constants/aboutInfo'
 import { isEditorRoute } from '@/utils/windowContext'
 
 const trayStore = useTrayStore()
@@ -110,7 +111,7 @@ onUnmounted(() => {
         @click="handleTrayClick"
         @contextmenu="handleTrayContextMenu"
       >
-        <img src="/wpx-icon.png" alt="" width="20" height="20" />
+        <img :src="WPX_ICON_URL" alt="" width="20" height="20" />
       </button>
     </div>
   </div>

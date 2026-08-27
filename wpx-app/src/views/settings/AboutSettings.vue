@@ -10,6 +10,7 @@ import {
   SEVEN_ZIP_DECLARATION,
   THIRD_PARTY_ACKNOWLEDGMENTS,
   WEBSITE_URL,
+  WPX_ICON_URL,
 } from '@/constants/aboutInfo'
 import {
   checkForAppUpdates,
@@ -119,7 +120,7 @@ function closeSevenZipDialog() {
 <template>
   <section class="settings-panel about-panel">
     <header class="about-hero">
-      <img class="about-hero__logo" src="/wpx-icon.png" width="64" height="64" alt="" />
+      <img class="about-hero__logo" :src="WPX_ICON_URL" width="64" height="64" alt="" />
       <div class="about-hero__text">
         <h2 class="about-hero__title">{{ APP_NAME }}</h2>
         <p class="about-hero__tagline">{{ APP_TAGLINE }}</p>

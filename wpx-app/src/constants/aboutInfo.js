@@ -4,6 +4,9 @@ export const APP_NAME = 'WPX'
 export const APP_VERSION = '0.1.0'
 export const APP_TAGLINE = 'AI 智能文档编辑器'
 
+/** public/ 静态 logo；Electron 打包 base 为 ./，须用 BASE_URL 而非 / 根路径 */
+export const WPX_ICON_URL = `${import.meta.env.BASE_URL}wpx-icon.png`
+
 export const WEBSITE_URL = 'https://wpx.app'
 export const FEEDBACK_URL = 'mailto:dev@wpx.app?subject=WPX%20用户反馈'
 

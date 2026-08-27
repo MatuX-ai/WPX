@@ -10,6 +10,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import AppPicture from '@/components/common/AppPicture.vue'
 import LazySection from '@/components/common/LazySection.vue'
+import { WPX_ICON_URL } from '@/constants/aboutInfo'
 import { setMeta } from '@/utils/seo'
 
 const FEATURES = [
@@ -78,7 +79,7 @@ onBeforeUnmount(() => {
 
     <header class="landing__header">
       <div class="landing__brand">
-        <img class="landing__logo" src="/wpx-icon.png" width="36" height="36" alt="" aria-hidden="true" />
+        <img class="landing__logo" :src="WPX_ICON_URL" width="36" height="36" alt="" aria-hidden="true" />
         <strong>WPX</strong>
       </div>
       <nav class="landing__nav" aria-label="主导航">

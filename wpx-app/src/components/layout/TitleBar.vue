@@ -27,6 +27,7 @@ import {
   queryIsMaximized,
   toggleMaximizeWindow,
 } from '@/utils/windowControls'
+import { WPX_ICON_URL } from '@/constants/aboutInfo'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import UserAccountMenu from '@/components/layout/UserAccountMenu.vue'
 import WindowListMenu from '@/components/layout/WindowListMenu.vue'
@@ -405,7 +406,7 @@ onUnmounted(() => {
   >
     <div class="title-bar__leading">
       <img
-        src="/wpx-icon.png"
+        :src="WPX_ICON_URL"
         alt=""
         class="title-bar__icon"
         width="16"
