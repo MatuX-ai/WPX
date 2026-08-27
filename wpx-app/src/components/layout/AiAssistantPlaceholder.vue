@@ -29,6 +29,14 @@ import {
   buildSelectionPrompt,
   extractReplacementText,
 } from '@/utils/aiSelection'
+import {
+  buildDocumentEditPrompt,
+  createAssistantSyncTracker,
+  getActiveDocumentMarkdown,
+  getAssistantSyncFingerprint,
+  looksLikeDocumentEditIntent,
+  resolveDocumentEditSync,
+} from '@/utils/aiDocumentEdit'
 import { buildEditorAiSystemPrompt } from '@/utils/buildAiSystemPrompt'
 import {
   AI_ASSISTANT_DEFAULT_WELCOME,
@@ -426,6 +434,18 @@ function buildWelcomeMessages() {
 }
 
 const displayMessages = ref(buildWelcomeMessages())
+
+const assistantSyncTracker = createAssistantSyncTracker()
+
+function getLastUserMessageText() {
+  for (let i = displayMessages.value.length - 1; i >= 0; i -= 1) {
+    const message = displayMessages.value[i]
+    if (message?.role === 'user') {
+      return String(message.content || '')
+    }
+  }
+  return ''
+}
 
 const skillExecutor = useSkillExecutor()
 
@@ -1106,6 +1126,7 @@ async function handleSend(payload) {
     content: text,
     references: references.map((item) => item.filename),
   })
+  assistantSyncTracker.reset()
 
   let result
 
@@ -1127,7 +1148,14 @@ async function handleSend(payload) {
       })
     } else {
       editorStore.clearPendingReplace()
-      result = await sendMessage({ text, context })
+      const documentMarkdown = getActiveDocumentMarkdown()
+      const outboundText = looksLikeDocumentEditIntent(text)
+        ? buildDocumentEditPrompt(text, documentMarkdown)
+        : text
+      result = await sendMessage({
+        text: outboundText,
+        context,
+      })
     }
   } catch (error) {
     // 发送链路意外异常（如 IPC/本地引擎挂起被中断等）也不允许“无声失败”，
@@ -1399,15 +1427,39 @@ function syncLatestAssistantMessage() {
 
   if (!lastAssistant) return
 
-  const content = extractReplacementText(getMessageText(lastAssistant))
-  // 提取 reasoning（思考过程）以便在折叠面板中渲染，仅供展示，不会插入编辑器
+  const rawContent = getMessageText(lastAssistant)
   const reasoning = getMessageReasoning(lastAssistant)
+  const fingerprint = getAssistantSyncFingerprint(lastAssistant, rawContent)
 
+  if (assistantSyncTracker.has(fingerprint)) return
+
+  // 无选区 + 编辑意图：画布内 AI 修订（document_edit JSON → 直接写入 + summary）
+  if (!editorStore.pendingReplace) {
+    const editSync = resolveDocumentEditSync({
+      rawContent,
+      userText: getLastUserMessageText(),
+      syncTracker: assistantSyncTracker,
+      lastAssistant,
+    })
+
+    if (editSync.status === 'synced') {
+      displayMessages.value.push({
+        id: createMessageId(),
+        role: 'assistant',
+        content: editSync.message,
+        reasoning: reasoning || undefined,
+        documentEditApplied: editSync.documentEditApplied,
+        documentEditFailed: editSync.documentEditFailed,
+      })
+      return
+    }
+  }
+
+  const content = extractReplacementText(rawContent)
   if (!content) return
 
   const lastDisplay = displayMessages.value[displayMessages.value.length - 1]
   if (lastDisplay?.role === 'assistant' && lastDisplay.content === content) {
-    // 有选区待替换时自动写入（改写场景）；无选区不自动改文档，留给「使用该文档」
     if (editorStore.pendingReplace) {
       editorStore.requestReplace(content, editorStore.pendingReplace)
     }
@@ -1420,6 +1472,8 @@ function syncLatestAssistantMessage() {
     content,
     reasoning: reasoning || undefined,
   })
+
+  assistantSyncTracker.add(fingerprint)
 
   if (editorStore.pendingReplace) {
     editorStore.requestReplace(content, editorStore.pendingReplace)

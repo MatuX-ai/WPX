@@ -216,6 +216,22 @@ describe('AiChatPanelContent — 使用该文档', () => {
     wrapper.unmount()
   })
 
+  it('画布修订 summary 不应显示「使用该文档」', () => {
+    const wrapper = mountPanel({
+      messages: [
+        {
+          id: 'd1',
+          role: 'assistant',
+          content: '已在「邮箱」处填入 1055603323@qq.com',
+          documentEditApplied: true,
+        },
+      ],
+    })
+
+    expect(wrapper.find('[data-testid="ai-chat-use-document"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('Skill 成功且含内容时应显示「使用该文档」', async () => {
     const doc = '教案正文……'
     const wrapper = mountPanel({

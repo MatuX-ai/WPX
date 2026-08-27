@@ -536,6 +536,7 @@ function canUseMessageAsDocument(message) {
   if (message.onboardingKind) return false
   if (message.skillResult && !message.skillSuccess) return false
   if (message.isWelcome) return false
+  if (message.documentEditApplied || message.documentEditFailed) return false
   const text = String(message.content || '').trim()
   if (!text) return false
   // 欢迎语不展示「使用该文档」
