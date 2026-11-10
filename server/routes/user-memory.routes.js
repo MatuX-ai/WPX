@@ -5,11 +5,13 @@
 'use strict';
 
 const router = require('express').Router();
-const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const ctrl = require('../controllers/user-memory.controller');
 
 // 用户记忆
-router.post('/user-memory/record', optionalAuth, ctrl.recordDocument);
+// P0-2 补充修复：记忆数据必须归属账户，改为强制登录；
+// 旧版 optionalAuth + body.userId 兜底允许客户端伪造任意账户写入记忆。
+router.post('/user-memory/record', requireAuth, ctrl.recordDocument);
 router.get('/user-memory/list', requireAuth, ctrl.listMemories);
 router.get('/user-memory/template-ready', requireAuth, ctrl.getTemplateReadyTypes);
 router.get('/user-memory/:docType/template-prompt', requireAuth, ctrl.getTemplatePrompt);

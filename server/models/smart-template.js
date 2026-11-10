@@ -141,25 +141,32 @@ async function listByUser(userId, options = {}) {
 }
 
 /**
- * 获取单个模板
+ * 获取单个模板（P0-2 修复：必须携带服务端验证的 userId，强制归属校验）
  * @param {string} id
+ * @param {string} userId 当前登录用户 ID（来自 req.user.accountId，禁止来自客户端提交）
  * @returns {Promise<object|null>}
  */
-async function findById(id) {
+async function findById(id, userId) {
   await init();
-  const res = await db.query(`SELECT * FROM ${TABLE} WHERE id = $1 LIMIT 1`, [id]);
+  if (!userId) throw new BadRequestError('缺少用户标识');
+  const res = await db.query(
+    `SELECT * FROM ${TABLE} WHERE id = $1 AND user_id = $2 LIMIT 1`,
+    [id, userId]
+  );
   return res.rows[0] || null;
 }
 
 /**
- * 更新模板
+ * 更新模板（P0-2 修复：必须校验模板归属）
  * @param {string} id
+ * @param {string} userId 当前登录用户 ID（服务端身份）
  * @param {object} patch
  */
-async function update(id, patch) {
+async function update(id, userId, patch) {
   await init();
+  if (!userId) throw new BadRequestError('缺少用户标识');
   const fields = [];
-  const params = [id];
+  const params = [id, userId];
   const map = {
     name: 'name',
     description: 'description',
@@ -175,12 +182,12 @@ async function update(id, patch) {
     }
   }
 
-  if (fields.length === 0) return findById(id);
+  if (fields.length === 0) return findById(id, userId);
 
   const sql = `
     UPDATE ${TABLE}
     SET ${fields.join(', ')}, updated_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND user_id = $2
     RETURNING *
   `;
 
@@ -189,26 +196,34 @@ async function update(id, patch) {
 }
 
 /**
- * 增加模板使用计数
+ * 增加模板使用计数（P0-2 修复：必须校验模板归属，返回是否命中）
  * @param {string} id
+ * @param {string} userId 当前登录用户 ID（服务端身份）
+ * @returns {Promise<boolean>} 是否存在且属于该用户
  */
-async function incrementUsage(id) {
+async function incrementUsage(id, userId) {
   await init();
-  await db.query(
-    `UPDATE ${TABLE} SET usage_count = usage_count + 1, updated_at = NOW() WHERE id = $1`,
-    [id]
+  if (!userId) throw new BadRequestError('缺少用户标识');
+  const res = await db.query(
+    `UPDATE ${TABLE} SET usage_count = usage_count + 1, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [id, userId]
   );
+  return res.rowCount > 0;
 }
 
 /**
- * 删除模板（软删除）
+ * 删除模板（软删除，P0-2 修复：必须校验模板归属）
  * @param {string} id
+ * @param {string} userId 当前登录用户 ID（服务端身份）
  */
-async function remove(id) {
+async function remove(id, userId) {
   await init();
+  if (!userId) throw new BadRequestError('缺少用户标识');
   const res = await db.query(
-    `UPDATE ${TABLE} SET is_active = FALSE, updated_at = NOW() WHERE id = $1 RETURNING id`,
-    [id]
+    `UPDATE ${TABLE} SET is_active = FALSE, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [id, userId]
   );
   return res.rowCount > 0;
 }

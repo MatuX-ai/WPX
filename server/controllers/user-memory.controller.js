@@ -13,7 +13,7 @@
 
 const asyncHandler = require('../utils/async-handler');
 const { ok } = require('../utils/response');
-const { BadRequestError, NotFoundError } = require('../utils/errors');
+const { BadRequestError, NotFoundError, UnauthorizedError } = require('../utils/errors');
 const userMemoryModel = require('../models/user-memory');
 const smartTemplateModel = require('../models/smart-template');
 
@@ -25,10 +25,12 @@ const smartTemplateModel = require('../models/smart-template');
  * POST /api/user-memory/record
  * Body: { docType, docId?, content? }
  * 记录一篇文档写入，自动分析并更新用户记忆
+ * P0-2 补充修复：userId 只取自服务端身份（req.user.accountId），
+ * 不再接受客户端提交的 body.userId（可伪造任意账户身份写入记忆）。
  */
 const recordDocument = asyncHandler(async (req, res) => {
-  const userId = req.user?.accountId || req.body.userId;
-  if (!userId) throw new BadRequestError('缺少用户标识');
+  const userId = req.user?.accountId;
+  if (!userId) throw new UnauthorizedError('缺少用户标识');
 
   const { docType, docId, content } = req.body || {};
   if (!docType) throw new BadRequestError('缺少 docType');
@@ -187,39 +189,48 @@ const getRecommendedTemplates = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/smart-templates/:id
- * 获取单个模板详情
+ * 获取单个模板详情（P0-2 修复：userId 取自服务端身份，禁止客户端伪造）
  */
 const getTemplate = asyncHandler(async (req, res) => {
-  const template = await smartTemplateModel.findById(req.params.id);
+  const userId = req.user?.accountId;
+  if (!userId) throw new BadRequestError('缺少用户标识');
+  const template = await smartTemplateModel.findById(req.params.id, userId);
   if (!template) throw new NotFoundError('模板不存在');
   return ok(res, template);
 });
 
 /**
  * PUT /api/smart-templates/:id
- * 更新模板
+ * 更新模板（P0-2 修复：仅允许模板所有者更新）
  */
 const updateTemplate = asyncHandler(async (req, res) => {
-  const updated = await smartTemplateModel.update(req.params.id, req.body || {});
+  const userId = req.user?.accountId;
+  if (!userId) throw new BadRequestError('缺少用户标识');
+  const updated = await smartTemplateModel.update(req.params.id, userId, req.body || {});
   if (!updated) throw new NotFoundError('模板不存在');
   return ok(res, { template: updated });
 });
 
 /**
  * POST /api/smart-templates/:id/use
- * 标记模板被使用（增加使用计数）
+ * 标记模板被使用（增加使用计数，P0-2 修复：仅允许模板所有者使用）
  */
 const useTemplate = asyncHandler(async (req, res) => {
-  await smartTemplateModel.incrementUsage(req.params.id);
+  const userId = req.user?.accountId;
+  if (!userId) throw new BadRequestError('缺少用户标识');
+  const used = await smartTemplateModel.incrementUsage(req.params.id, userId);
+  if (!used) throw new NotFoundError('模板不存在');
   return ok(res, { used: true });
 });
 
 /**
  * DELETE /api/smart-templates/:id
- * 删除模板（软删除）
+ * 删除模板（软删除，P0-2 修复：仅允许模板所有者删除）
  */
 const deleteTemplate = asyncHandler(async (req, res) => {
-  const okDeleted = await smartTemplateModel.remove(req.params.id);
+  const userId = req.user?.accountId;
+  if (!userId) throw new BadRequestError('缺少用户标识');
+  const okDeleted = await smartTemplateModel.remove(req.params.id, userId);
   if (!okDeleted) throw new NotFoundError('模板不存在');
   return ok(res, { deleted: true });
 });

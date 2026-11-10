@@ -23,6 +23,9 @@ const { BadRequestError, NotFoundError } = require('../utils/errors');
 /**
  * POST /api/feedback/submit
  * Body: { category?, title, content, contact?, appVersion?, os? }
+ * P0-2 补充修复：保留匿名反馈能力，但 userId 只取自服务端身份；
+ * 未登录用户一律记录为 'anonymous'，客户端提交的 body.userId 不再被采信
+ * （旧逻辑 body.userId 兜底允许匿名请求伪造任意账户提交反馈）。
  */
 router.post('/submit', optionalAuth, asyncHandler(async (req, res) => {
   const body = req.body || {};
@@ -31,7 +34,7 @@ router.post('/submit', optionalAuth, asyncHandler(async (req, res) => {
   }
 
   const feedback = await feedbackModel.submit({
-    userId: req.user?.accountId || body.userId || 'anonymous',
+    userId: req.user?.accountId || 'anonymous',
     category: body.category || 'general',
     title: body.title || '',
     content: body.content,
