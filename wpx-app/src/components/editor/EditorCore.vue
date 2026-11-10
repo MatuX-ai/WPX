@@ -1140,21 +1140,17 @@ const toolbarItems = computed(() => {
 .editor-toolbar {
   position: sticky;
   /*
-   * 修复：top 从 var(--title-bar-height, 36px) 调整为 0。
+   * top 必须为 0，不要改成 var(--title-bar-height) 等正值。
    *
-   * 原因（语义层避免 sticky 与 padding-top 的“双重占位”临界）：
-   * sticky 元素的 top 是相对 scrollport（.app-main--immersive）顶部 + top 值。
-   * 原版 top = 36px 正好等于 .editor-layout（AppLayout 中 :deep 设置）的 padding-top = 36px，
-   * 两个 36px 占位在同一个 viewport 边界上同时占据：1) padding 把 .editor-shell 推到 viewport 36px，
-   * 2) sticky top = 36px 锁定 scrollport 顶部 + 36px = 同样 viewport 36px。
-   * 当“自然位置 = sticky 阈值”时，Chromium 中两个独立背景 blur 合成层在 sub-pixel 舍入阶段
-   * 各自 round-to-pixel，与 fixed TitleBar（z-index: 80）下边造成 ~1px 的双重合成继继。
-   *
-   * 现在 top = 0：sticky 阈值 = scrollport 顶部 = viewport 0，
-   * 但 sticky 元素的自然位置仍是 viewport 36px（padding-top 提供）。
-   * natural (36) ≥ threshold (0)，sticky 不介入，元素仍在 viewport 36px。
-   * 视觉上与原版一致，但 sticky 阈值与 padding-top 不再重叠在一起，
-   * 消除了“自然位置 = 阈值”这个临界条件，1px 合成继继不再出现。
+   * 实测（浏览器验证，2026-11）：
+   * - 编辑页的实际滚动容器是 .editor-layout__main（EditorLayout 内 overflow-y: auto），
+   *   其 scrollport 顶部 = 视口 36px，正好是 fixed TitleBar（高 36px，z-index 80）的底边；
+   *   旧注释假设 scrollport 是 .app-main--immersive（顶部=视口 0），前提不成立。
+   * - 本工具栏是滚动内容的第一行（自然位置也在视口 36px），此时 sticky 的
+   *   吸附线 = scrollport 顶 + top。若 top > 0，静止时吸附线低于自然位置，
+   *   sticky 会把工具栏向下推 top 像素，脱离外壳顶部并遮住正文首行（已实测复现）。
+   * - top: 0 时：静止 = 正常文档流位置（外壳顶边内侧）；
+   *   滚动后吸附在视口 36px = TitleBar 正下方，浮窗效果完整。
    */
   top: 0;
   z-index: var(--z-editor-toolbar, 70);
