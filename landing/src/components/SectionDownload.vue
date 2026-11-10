@@ -11,16 +11,17 @@ const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
 /** 与 package.json / 最近一次成功 CI 产物对齐的静态兜底 */
 const FALLBACK = {
-  version: 'v0.1.47',
-  tag: 'v0.1.47',
-  date: '2026-11-10',
+  version: 'v0.1.48',
+  tag: 'v0.1.48',
+  date: '2026-11-11',
   assets: {
     windows:
-      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.47/WPX-Setup-0.1.47.exe',
+      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.48/WPX-Setup-0.1.48.exe',
+    // macOS / Linux 自 v0.1.47 起 CI 不再产出对应资产，兜底指向最后一个三平台版本 v0.1.46
     macos:
-      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27-arm64.dmg',
+      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.46/WPX-0.1.36-arm64.dmg',
     linux:
-      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27.AppImage',
+      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.46/WPX-0.1.36.AppImage',
   },
 }
 

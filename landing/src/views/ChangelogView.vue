@@ -24,13 +24,22 @@ const chipLabels = {
   breaking: '不兼容'
 }
 
-// 倒序：v0.1.47 → v0.1.26 → v0.1.18 → v0.1.17 → … → v1.0.0 → v0.9.x ……
+// 倒序：v0.1.48 → v0.1.47 → v0.1.26 → v0.1.18 → v0.1.17 → … → v1.0.0 → v0.9.x ……
 const releases = [
+  {
+    version: 'v0.1.48',
+    date: '2026-11-11',
+    badge: '最新',
+    badgeClass: 'bg-wpx-gradient text-white',
+    summary: '维护性版本：安装包版本节点对齐，功能与 v0.1.47 一致（仅编辑器工具栏实现注释修正，无行为变更）。',
+    docLink: null,
+    changes: [
+      { type: 'fix', text: '修正编辑器工具栏滚动吸附（sticky）实现说明：实际滚动容器为 editor-layout__main，top>0 会下推工具栏遮挡正文首行' }
+    ]
+  },
   {
     version: 'v0.1.47',
     date: '2026-11-10',
-    badge: '最新',
-    badgeClass: 'bg-wpx-gradient text-white',
     summary: '文件 IPC 授权链路全面收紧（安全）+ OS 关联打开保存回归修复 + 外部文件打开竞态修复；通过 8 项打包产物 E2E 回归。',
     docLink: null,
     changes: [

@@ -56,17 +56,18 @@ const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
 const FALLBACK_ASSETS = {
   windows:
-    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.47/WPX-Setup-0.1.47.exe',
+    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.48/WPX-Setup-0.1.48.exe',
+  // macOS / Linux 自 v0.1.47 起 CI 不再产出对应资产，兜底指向最后一个三平台版本 v0.1.46
   macos:
-    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27-arm64.dmg',
+    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.46/WPX-0.1.36-arm64.dmg',
   linux:
-    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27.AppImage',
+    'https://github.com/MatuX-ai/WPX/releases/download/v0.1.46/WPX-0.1.36.AppImage',
 }
 
 // 静态 fallback（产品版本；下载走平台安装包直链）
 const fallbackVersion = {
-  version: 'v0.1.47',
-  date: '2026-11-10',
+  version: 'v0.1.48',
+  date: '2026-11-11',
   size: '以 Releases 为准',
   url: 'https://github.com/MatuX-ai/WPX/releases/latest',
   assets: { ...FALLBACK_ASSETS },

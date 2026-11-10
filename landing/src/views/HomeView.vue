@@ -101,7 +101,7 @@ function scrollToShowcase(e) {
             aria-hidden="true"
             class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-from"
           />
-          v0.1.47 · Windows / macOS / Linux
+          v0.1.48 · Windows / macOS / Linux
         </span>
 
         <h1
