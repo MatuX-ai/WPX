@@ -24,13 +24,27 @@ const chipLabels = {
   breaking: '不兼容'
 }
 
-// 倒序：v0.1.26 → v0.1.18 → v0.1.17 → … → v1.0.0 → v0.9.x ……
+// 倒序：v0.1.47 → v0.1.26 → v0.1.18 → v0.1.17 → … → v1.0.0 → v0.9.x ……
 const releases = [
+  {
+    version: 'v0.1.47',
+    date: '2026-11-10',
+    badge: '最新',
+    badgeClass: 'bg-wpx-gradient text-white',
+    summary: '文件 IPC 授权链路全面收紧（安全）+ OS 关联打开保存回归修复 + 外部文件打开竞态修复；通过 8 项打包产物 E2E 回归。',
+    docLink: null,
+    changes: [
+      { type: 'fix', text: '修复 OS 双击 .md 打开后无法保存写回的问题（D01，关联打开统一签发读写授权）' },
+      { type: 'feature', text: '文件 IPC 授权链路收紧：知识库 / 导出服务写路径校验加强，未授权写入一律拒绝' },
+      { type: 'fix', text: '修复冷启动携带文件时导入确认弹窗偶发不出现的竞态（外部文件缓冲 + 投递重试）' },
+      { type: 'feature', text: '新增文件访问边界、知识库路径安全与外部文件缓冲共 3 组回归测试' }
+    ]
+  },
   {
     version: 'v0.1.26',
     date: '2026-08-24',
-    badge: '最新',
-    badgeClass: 'bg-wpx-gradient text-white',
+    badge: '特性',
+    badgeClass: 'bg-primary-from/10 text-primary-600',
     summary: 'Hermes Agent 可选本地智能体上线 + SKILL.md 技能互通 + 四层本地 AI 记忆 + 文库 Node 内嵌路由；彻底移除平台 free-quota / Token 配额代码。',
     docLink: { label: '相关文档', href: '/docs#hermes-agent' },
     changes: [

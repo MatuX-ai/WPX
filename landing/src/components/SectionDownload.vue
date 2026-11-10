@@ -11,12 +11,12 @@ const GH_API = 'https://api.github.com/repos/MatuX-ai/WPX/releases/latest'
 
 /** 与 package.json / 最近一次成功 CI 产物对齐的静态兜底 */
 const FALLBACK = {
-  version: 'v0.1.44',
-  tag: 'v0.1.44',
-  date: '2026-08-25',
+  version: 'v0.1.47',
+  tag: 'v0.1.47',
+  date: '2026-11-10',
   assets: {
     windows:
-      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-Setup-0.1.27.exe',
+      'https://github.com/MatuX-ai/WPX/releases/download/v0.1.47/WPX-Setup-0.1.47.exe',
     macos:
       'https://github.com/MatuX-ai/WPX/releases/download/v0.1.44/WPX-0.1.27-arm64.dmg',
     linux:
