@@ -18,12 +18,12 @@ const DEFAULT_MARKDOWN_FILTERS = [{ name: 'Markdown', extensions: ['md'] }]
  * 返回结构：`{ canceled, filePath }`，其中 canceled 必为 boolean，
  * filePath 在用户取消或未选择时为 null。
  *
- * @param {{ dialog: any, BrowserWindow: any }} deps 依赖注入的 Electron 句柄
+ * @param {{ dialog: any, BrowserWindow: any, onFilePicked?: (event: any, filePath: string) => Promise<void> | void }} deps 依赖注入的 Electron 句柄
  * @param {Electron.IpcMainInvokeEvent} event IPC 事件对象
  * @param {{ title?: string, defaultPath?: string, filters?: Array }} [payload]
  * @returns {Promise<{ canceled: boolean, filePath: string | null }>}
  */
-async function handleShowSaveDialog({ dialog, BrowserWindow }, event, payload = {}) {
+async function handleShowSaveDialog({ dialog, BrowserWindow, onFilePicked }, event, payload = {}) {
   const safePayload = payload && typeof payload === 'object' ? payload : {}
   const { title, defaultPath, filters } = safePayload
 
@@ -34,9 +34,16 @@ async function handleShowSaveDialog({ dialog, BrowserWindow }, event, payload = 
     filters: Array.isArray(filters) ? filters : DEFAULT_MARKDOWN_FILTERS,
   })
 
+  const filePath = result.filePath || null
+  // P0-3：用户在系统对话框亲手选定的保存路径 → 由主进程签发写授权，
+  // 后续 file:write-document / file:write-binary 才被允许写入该路径。
+  if (!result.canceled && filePath && typeof onFilePicked === 'function') {
+    await onFilePicked(event, filePath)
+  }
+
   return {
     canceled: Boolean(result.canceled),
-    filePath: result.filePath || null,
+    filePath,
   }
 }
 
@@ -45,11 +52,12 @@ async function handleShowSaveDialog({ dialog, BrowserWindow }, event, payload = 
  *
  * @param {{ ipcMain: any, dialog: any, BrowserWindow: any }} deps
  */
-function registerDialogIpc({ ipcMain, dialog, BrowserWindow }) {
+function registerDialogIpc(deps) {
+  const { ipcMain } = deps || {}
   if (!ipcMain || typeof ipcMain.handle !== 'function') return
 
   ipcMain.handle('dialog:show-save-dialog', (event, payload) =>
-    handleShowSaveDialog({ dialog, BrowserWindow }, event, payload),
+    handleShowSaveDialog(deps, event, payload),
   )
 }
 

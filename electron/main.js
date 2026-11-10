@@ -50,6 +50,8 @@ const {
 const { excelFileToMarkdown } = require('./excel-import')
 const { pptxFileToSlides } = require('./pptx-import')
 const WindowManager = require('./window-manager')
+const { createFileAccessService } = require('./file-access')
+const { registerFileIpc, authorizeDocPathTransfer } = require('./file-ipc')
 const { initUserDataService } = require('./user-data-service')
 const { initModelIpc } = require('./model-ipc')
 const { initAuthStore } = require('./auth-store')
@@ -146,6 +148,10 @@ function getSenderWindow(event) {
   return BrowserWindow.fromWebContents(event.sender)
 }
 
+// P0-3：文件访问授权服务 —— 授权仅由系统对话框 / 窗口 docPath 签发，
+// 按 WebContents 隔离，窗口关闭即撤销（详见 file-access.js / file-ipc.js）。
+const fileAccess = createFileAccessService()
+
 function showMainWindow() {
   if (!mainWindow) return
   if (!mainWindow.isVisible()) {
@@ -198,6 +204,9 @@ async function openAssociatedFile(filePath) {
 
       if (!mainWindow) return
 
+      // P0-3：主进程代为打开的关联文件 → 为主窗口签发读写授权
+      void fileAccess.grant(mainWindow.webContents.id, filePath, { read: true, write: true })
+
       if (mainWindow.webContents.isLoading()) {
         mainWindow.webContents.once('did-finish-load', deliverArchive)
       } else {
@@ -222,6 +231,9 @@ async function openAssociatedFile(filePath) {
       }
 
       if (!mainWindow) return
+
+      // P0-3：主进程代为打开的关联文件 → 为主窗口签发读写授权
+      void fileAccess.grant(mainWindow.webContents.id, filePath, { read: true, write: true })
 
       if (mainWindow.webContents.isLoading()) {
         mainWindow.webContents.once('did-finish-load', deliverDocx)
@@ -252,6 +264,9 @@ async function openAssociatedFile(filePath) {
       }
 
       if (!mainWindow) return
+
+      // P0-3：主进程代为打开的关联文件 → 为主窗口签发读写授权
+      void fileAccess.grant(mainWindow.webContents.id, filePath, { read: true, write: true })
 
       if (mainWindow.webContents.isLoading()) {
         mainWindow.webContents.once('did-finish-load', deliverExcel)
@@ -290,6 +305,9 @@ async function openAssociatedFile(filePath) {
       }
 
       if (!mainWindow) return
+
+      // P0-3：主进程代为打开的关联文件 → 为主窗口签发读写授权
+      void fileAccess.grant(mainWindow.webContents.id, filePath, { read: true, write: true })
 
       if (mainWindow.webContents.isLoading()) {
         mainWindow.webContents.once('did-finish-load', deliverPptx)
@@ -815,6 +833,15 @@ function createManagedWindow(docPath, options = {}) {
   }
 
   bindManagedWindow(window, { isMain })
+
+  // P0-3：窗口绑定的 docPath（OS 关联打开 / 已授权路径转移）→ 签发读写授权；
+  // 窗口关闭时撤销其全部授权，避免残留。
+  const wcId = window.webContents.id
+  if (docPath) {
+    void fileAccess.grant(wcId, docPath, { read: true, write: true })
+  }
+  window.once('closed', () => fileAccess.revoke(wcId))
+
   refreshTrayMenu()
   return { ok: true, windowId }
 }
@@ -990,7 +1017,17 @@ function registerIpcHandlers() {
     return { ok: true }
   })
 
-  ipcMain.handle('window:create', (_event, docPath, options = {}) => {
+  ipcMain.handle('window:create', async (event, docPath, options = {}) => {
+    // P0-3：携带 docPath 的新窗口必须经授权转移——发送方窗口须已持有
+    // 该路径的 read+write 授权（来自对话框选择或自身 docPath），
+    // 渲染层不能凭空指定任意路径开新窗口读取。
+    const transfer = await authorizeDocPathTransfer({
+      event,
+      docPath,
+      fileAccess,
+      findWindowIdByWebContents: (wc) => WindowManager.findWindowIdByWebContents(wc),
+    })
+    if (!transfer.ok) return transfer
     return createManagedWindow(docPath, { suppressDialog: true, ...options })
   })
 
@@ -1014,98 +1051,32 @@ function registerIpcHandlers() {
     }
   })
 
-  ipcMain.handle('file:read-document', async (_event, filePath) => {
-    if (!filePath || typeof filePath !== 'string') return null
-    const ext = path.extname(filePath).toLowerCase()
-    if (ext === '.docx' || ext === '.doc') {
-      return convertDocxFile(filePath)
-    }
-    if (ext === '.xlsx' || ext === '.xls' || ext === '.xlsm') {
-      try {
-        return await convertExcelFile(filePath)
-      } catch (error) {
-        return { error: error.message, path: filePath, contentType: 'excel-error' }
-      }
-    }
-    if (ext === '.ppt') {
-      return {
-        error: '不支持旧版 .ppt，请先另存为 .pptx',
-        path: filePath,
-        contentType: 'pptx-error',
-      }
-    }
-    if (ext === '.pptx') {
-      try {
-        return await convertPptxFile(filePath)
-      } catch (error) {
-        return { error: error.message, path: filePath, contentType: 'pptx-error' }
-      }
-    }
-    return readAssociatedFilePayload(filePath)
-  })
-
-  ipcMain.handle('file:write-document', async (_event, filePath, content) => {
-    if (!filePath || typeof filePath !== 'string') {
-      return { ok: false, error: '无效路径' }
-    }
-
-    try {
-      await fsp.writeFile(filePath, content ?? '', 'utf8')
-      return { ok: true }
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : '无法写入文档',
-      }
-    }
-  })
-
-  ipcMain.handle('file:write-binary', async (_event, filePath, base64) => {
-    if (!filePath || typeof filePath !== 'string') {
-      return { ok: false, error: '无效路径' }
-    }
-    if (typeof base64 !== 'string' || base64.length === 0) {
-      return { ok: false, error: '无效文件内容' }
-    }
-
-    try {
-      await fsp.writeFile(filePath, Buffer.from(base64, 'base64'))
-      return { ok: true }
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : '无法写入文件',
-      }
-    }
-  })
-
-  ipcMain.handle('file:convert-docx', async (_event, filePath) => {
-    if (!filePath || typeof filePath !== 'string') return null
-    return convertDocxFile(filePath)
-  })
-
-  ipcMain.handle('dialog:open-file', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: FILE_OPEN_FILTERS,
-    })
-    if (result.canceled || !result.filePaths.length) return null
-    return result.filePaths[0]
+  // P0-3：文件读写 IPC 统一接入「发送方验证 + 精确路径授权」
+  //（处理器实现与授权逻辑见 file-ipc.js / file-access.js，含单测覆盖）
+  registerFileIpc({
+    ipcMain,
+    fsp,
+    fileAccess,
+    findWindowIdByWebContents: (wc) => WindowManager.findWindowIdByWebContents(wc),
+    convertDocxFile,
+    convertExcelFile,
+    convertPptxFile,
+    readAssociatedFilePayload,
+    dialog,
+    FILE_OPEN_FILTERS,
   })
 
   // 文件对话框相关 IPC（保存到本地文件等）。
-  // 拆到独立模块便于单测。
-  registerDialogIpc({ ipcMain, dialog, BrowserWindow })
-
-  ipcMain.handle('file:get-modified-time', async (_event, filePath) => {
-    if (!filePath || typeof filePath !== 'string') return null
-
-    try {
-      const stat = await fsp.stat(filePath)
-      return { mtimeMs: stat.mtimeMs }
-    } catch {
-      return null
-    }
+  // 拆到独立模块便于单测。onFilePicked：用户另存为选定路径 → 签发写授权。
+  registerDialogIpc({
+    ipcMain,
+    dialog,
+    BrowserWindow,
+    onFilePicked: async (event, filePath) => {
+      if (event?.sender?.id != null && filePath) {
+        await fileAccess.grant(event.sender.id, filePath, { read: true, write: true })
+      }
+    },
   })
 
   ipcMain.handle('local-server:get-base-url', () => {
