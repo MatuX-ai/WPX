@@ -113,64 +113,17 @@ module.exports = async function handler(req, res) {
 
     req.url = rewrittenUrl
 
-    // 诊断捷径（rewrite 后）：req.url 现在是 /api/health
+    // 健康检查（P0-1 安全修复 2026-11-10）：
+    // 旧实现在此内联诊断（PG 主机/端口/库名、全量用户 email/roles、
+    // delete require.cache 强制重建 pg 连接池、X-WPX-Diag 泄露头），
+    // 属于高危信息泄露，已全部移除。
+    // 公开端点只返回最小化健康状态，不查库、不读环境变量、不清缓存；
+    // 数据库/Redis 就绪探针请走 Express 自带的 /healthz（存活）/readyz（就绪，仅布尔值），
+    // 详细诊断如需保留应设计为 requireAuth + requireRole('admin') 的独立端点。
     if (req.url === '/api/health' || req.url.startsWith('/api/health?') || req.url.startsWith('/api/health/')) {
-      const diag = {
-        // ⭐ Marker: WPX_INLINE_PGPROBE_V3_2026_07_01 ⭐（用于区分 inline 版本 vs 旧 _shared/db-probe）
-        inlineMarker: 'WPX_INLINE_PGPROBE_V3_2026_07_01',
-        handlerFile: __filename,
-        url: req.url,
-        method: req.method,
-        ct: req.headers['content-type'] || null,
-        cl: req.headers['content-length'] || null,
-        nodeEnv: process.env.NODE_ENV || null,
-        hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
-        hasPgHost: Boolean(process.env.PG_HOST),
-        pgHost: process.env.PG_HOST || null,
-        pgPort: process.env.PG_PORT || null,
-        pgDb: process.env.PG_DATABASE || null,
-        pgSsl: process.env.PG_SSL || null,
-        hasRedis: Boolean(process.env.REDIS_URL),
-        hasJwt: Boolean(process.env.ACCOUNT_JWT_SECRET),
-        ts: new Date().toISOString()
-      }
-      // 尝试探针 PG：看 runtime 连接的 DB、feedbacks 表 schema
-      try {
-        // 动态 require server/models/db，避开 require cache 问题
-        // handler.js 在 /var/task/api/admin/，_server 在 /var/task/api/admin/_server/（同目录）
-        const dbPath = require('path').join(__dirname, '_server', 'models', 'db.js')
-        delete require.cache[require.resolve(dbPath)] // 强制重连，避免 pg.Pool 复用
-        // 同时重置 _server/models/ 模块缓存，确保走全局重新初始化
-        const serverAppPath = require('path').join(__dirname, '_server', 'app.js')
-        const db = require(dbPath)
-        const { rows: dbRow } = await db.query(
-          `SELECT current_database() AS db, current_user AS "user", current_setting('search_path') AS search_path`
-        )
-        const dbInfo = dbRow[0] || {}
-        const { rows: cols } = await db.query(
-          `SELECT column_name, data_type
-           FROM information_schema.columns
-           WHERE table_schema = $1 AND table_name = $2
-           ORDER BY ordinal_position`,
-          ['public', 'feedbacks']
-        )
-        const { rows: fbc } = await db.query('SELECT COUNT(*)::int AS n FROM public.feedbacks')
-        const { rows: users } = await db.query('SELECT email, roles FROM public.users ORDER BY created_at')
-        diag.pgProbe = {
-          db: dbInfo.db,
-          user: dbInfo['user'],
-          search_path: dbInfo.search_path,
-          feedbacks_columns: cols.map((c) => `${c.column_name}:${c.data_type}`),
-          feedbacks_rowcount: fbc[0] ? fbc[0].n : 0,
-          users_count: users.length,
-          users: users.map((u) => ({ email: u.email, roles: u.roles }))
-        }
-      } catch (e) {
-        diag.pgProbeErr = String(e && e.message || e)
-      }
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
-      res.setHeader('X-WPX-Diag', Buffer.from(JSON.stringify(diag)).toString('base64').slice(0, 768))
-      res.status(200).end(JSON.stringify({ ok: true, diag }))
+      res.setHeader('Cache-Control', 'no-store')
+      res.status(200).end(JSON.stringify({ ok: true, status: 'healthy' }))
       return
     }
 
