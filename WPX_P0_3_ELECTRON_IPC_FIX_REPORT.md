@@ -65,7 +65,10 @@ electron/file-ipc.js  —— 受保护的文件 IPC 注册
 1. `dialog:open-file`（file-ipc.js）→ 用户选定 → read+write；
 2. `dialog:show-save-dialog`（dialog-ipc.js 新增 onFilePicked 回调）→ read+write；
 3. `createManagedWindow(docPath)`（main.js）→ OS 关联打开 / 已授权转移 → read+write；
-4. `openAssociatedFile` 四个交付分支 → 为主窗口签发 read+write；
+4. `openAssociatedFile` 五个交付分支 → 为主窗口签发 read+write
+   〔状态更正 2026-11-10 / TASK-01 #8 + TASK-04：原报告写"四个分支"，
+   实际 default 分支（.md/.wpx 等普通文档）当时漏签发，构成 D01 功能回归，
+   已由 TASK-04 补齐（证据：debug/TASK-04-fix-d01.md）；〕
 5. `window:create` 携 docPath → 发送方窗口须已持 read+write 才允许转移。
 
 ## 5. 文件路径校验方案（file-access.js）
@@ -229,6 +232,12 @@ window:create 携 docPath 须发送方窗口已持该路径 read+write（授权�
 ## 15. P0-3 验收结论
 
 **满足验收条件。**
+
+> 〔状态更新 2026-11-10 / TASK-01~04：上述第 2 条"用户正常打开/保存…全部保持可用"
+> 经 TASK-02/03 取证存在一处例外——OS 关联打开（openAssociatedFile default 分支）
+> 因漏签发授权导致写回被拒（D01），**已由 TASK-04 修复并关闭**
+> （diff 与测试见 debug/TASK-04-fix-d01.md）。遗留：T01b/G01/S01 及
+> A 场景（应用未运行时双击内容不渲染）交付时序缺陷，见 debug/TASK-04-fix-d01.md §4。〕
 1. 渲染进程不再能凭任意路径获得磁盘读写：读/写/二进制写全部要求
    「受管窗口主 frame + 主进程签发的精确真实路径授权」。
 2. 用户正常打开/保存/另存为/导入/导出全部保持可用（对话框授权自动签发，

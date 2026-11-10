@@ -11,6 +11,7 @@ import { useGeneralSettingsStore } from '@/stores/generalSettings'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useWindowFocus } from '@/composables/useWindowFocus'
 import { isElectron } from '@/utils/electron'
+import { armExternalFileBuffer } from '@/utils/externalFileBuffer'
 import { primeLocalApiBase } from '@/utils/localApi'
 import { primeLibraryApiBase } from '@/utils/libraryApi'
 import '@/composables/useWindowCloseInterceptor'
@@ -22,6 +23,11 @@ import {
 } from '@/utils/windowContext'
 
 initWindowContext()
+
+// A 场景（应用未运行时双击关联文件）：主进程在 did-finish-load 单次发送 file:open，
+// 早于组件 onMounted 的订阅注册。这里在挂载前同步 arm，早期 payload 进缓冲，
+// 由 EditorCore / AppLayout 在实时订阅注册后 drain 消费。
+armExternalFileBuffer()
 
 const app = createApp(Root)
 const pinia = createPinia()

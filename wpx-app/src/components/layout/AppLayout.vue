@@ -6,6 +6,7 @@ import { useOpenSettings } from '@/composables/useOpenSettings'
 import { useAppStore } from '@/stores/app'
 import { useTrayStore } from '@/stores/tray'
 import { getElectronAPI, isElectron } from '@/utils/electron'
+import { drainExternalFileArchives } from '@/utils/externalFileBuffer'
 import { isEditorRoute } from '@/utils/windowContext'
 import TitleBar from './TitleBar.vue'
 import AppNavbar from './AppNavbar.vue'
@@ -82,6 +83,15 @@ onMounted(() => {
       if (!archivePath) return
       zipArchiveHostRef.value?.openArchivePreview?.(archivePath)
     })
+  }
+
+  // A 场景（.zip 冷启动）：入口 arm 的早期 file:open-archive payload。
+  // 紧跟实时订阅注册后同步 drain，不与实时订阅重复投递。
+  const bufferedArchives = drainExternalFileArchives()
+  for (const payload of bufferedArchives) {
+    const archivePath = payload?.archivePath
+    if (!archivePath) continue
+    zipArchiveHostRef.value?.openArchivePreview?.(archivePath)
   }
 })
 

@@ -41,6 +41,37 @@ function sanitizeFilename(filename) {
     .slice(0, 180)
 }
 
+// =========================
+// ID 路径安全（TASK-08 修复）
+// =========================
+
+/**
+ * id/docId/verId 白名单：正常值由 randomUUID 生成，按严格 UUID 格式校验。
+ * 拒绝路径分隔符、`..`、控制字符、空段等一切非 UUID 输入。
+ */
+const KNOWLEDGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isValidKnowledgeId(value) {
+  return typeof value === 'string' && KNOWLEDGE_ID_PATTERN.test(value)
+}
+
+/**
+ * 双保险：在格式白名单之外，再用 path.resolve + path.relative 断言
+ * 拼接结果仍位于 rootDir 内。非法时返回 null，调用方按"不存在/缺少参数"
+ * 返回既有错误文案，不泄露内部路径。
+ * @param {string} rootDir 边界根目录
+ * @param {string[]} segments 已通过 isValidKnowledgeId 校验的段 + 固定后缀
+ * @returns {string | null}
+ */
+function resolveWithinRoot(rootDir, ...segments) {
+  const target = path.resolve(rootDir, ...segments)
+  const rel = path.relative(rootDir, target)
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+    return null
+  }
+  return target
+}
+
 function toBuffer(data) {
   if (Buffer.isBuffer(data)) return data
   if (data instanceof ArrayBuffer) return Buffer.from(data)
@@ -147,13 +178,19 @@ async function getKnowledgeList() {
 }
 
 async function getKnowledgePreview(id) {
+  if (!isValidKnowledgeId(id)) {
+    throw new Error('资料不存在')
+  }
   const items = await readDbItems()
   const item = items.find((entry) => entry.id === id)
   if (!item) {
     throw new Error('资料不存在')
   }
 
-  const textPath = path.join(textDir, `${id}.txt`)
+  const textPath = resolveWithinRoot(textDir, `${id}.txt`)
+  if (!textPath) {
+    throw new Error('资料不存在')
+  }
   if (!fs.existsSync(textPath)) {
     throw new Error('资料内容不存在')
   }
@@ -212,7 +249,14 @@ async function archiveVersion(docId, currentRecord) {
 
 async function getDocVersions(docId) {
   if (!docId) throw new Error('缺少文档 ID')
-  const verDir = path.join(versionsDir, docId)
+  // 非法 docId 按"无版本"返回（与 manifest 缺失同形状，不泄露路径）
+  if (!isValidKnowledgeId(docId)) {
+    return { versions: [] }
+  }
+  const verDir = resolveWithinRoot(versionsDir, docId)
+  if (!verDir) {
+    return { versions: [] }
+  }
   const manifestPath = path.join(verDir, 'manifest.json')
   if (!fs.existsSync(manifestPath)) return { versions: [] }
   const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'))
@@ -221,23 +265,32 @@ async function getDocVersions(docId) {
 
 async function getVersionContent(docId, verId) {
   if (!docId || !verId) throw new Error('缺少文档 ID 或版本 ID')
-  const verPath = path.join(versionsDir, docId, `${verId}.txt`)
+  if (!isValidKnowledgeId(docId) || !isValidKnowledgeId(verId)) {
+    throw new Error('版本内容不存在')
+  }
+  const verDir = resolveWithinRoot(versionsDir, docId)
+  const verPath = verDir ? resolveWithinRoot(verDir, `${verId}.txt`) : null
+  if (!verPath) throw new Error('版本内容不存在')
   if (!fs.existsSync(verPath)) throw new Error('版本内容不存在')
   const content = await fsp.readFile(verPath, 'utf8')
-  const metaPath = path.join(versionsDir, docId, `${verId}.json`)
+  const metaPath = resolveWithinRoot(verDir, `${verId}.json`)
   let meta = {}
-  if (fs.existsSync(metaPath)) meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'))
+  if (metaPath && fs.existsSync(metaPath)) meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'))
   return { docId, verId, content, meta }
 }
 
 async function rollbackToVersion(docId, verId) {
+  // getVersionContent 内已做 docId/verId 校验；此处对写出路径再断言一次边界
   const verData = await getVersionContent(docId, verId)
   const items = await readDbItems()
   const record = items.find((entry) => entry.id === docId)
   if (record && record.parseStatus === 'parsed') {
     await archiveVersion(docId, record)
   }
-  const textPath = path.join(textDir, `${docId}.txt`)
+  const textPath = resolveWithinRoot(textDir, `${docId}.txt`)
+  if (!textPath) {
+    throw new Error('版本内容不存在')
+  }
   await fsp.writeFile(textPath, verData.content, 'utf8')
   if (record) {
     record.charCount = verData.content.length
@@ -408,6 +461,9 @@ async function deleteKnowledge(id) {
   if (!id) {
     throw new Error('缺少资料 ID')
   }
+  if (!isValidKnowledgeId(id)) {
+    throw new Error('资料不存在')
+  }
 
   const items = await readDbItems()
   const index = items.findIndex((entry) => entry.id === id)
@@ -418,9 +474,16 @@ async function deleteKnowledge(id) {
   const [removed] = items.splice(index, 1)
   await writeDbItems(items)
 
-  const deleteTasks = [fsp.rm(path.join(textDir, `${id}.txt`), { force: true })]
+  const textPath = resolveWithinRoot(textDir, `${id}.txt`)
+  if (!textPath) {
+    throw new Error('资料不存在')
+  }
+  const deleteTasks = [fsp.rm(textPath, { force: true })]
   if (removed.storedFilename) {
-    deleteTasks.push(fsp.rm(path.join(filesDir, removed.storedFilename), { force: true }))
+    const storedPath = resolveWithinRoot(filesDir, removed.storedFilename)
+    if (storedPath) {
+      deleteTasks.push(fsp.rm(storedPath, { force: true }))
+    }
   }
   await Promise.allSettled(deleteTasks)
 

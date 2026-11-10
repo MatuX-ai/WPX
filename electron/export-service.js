@@ -19,6 +19,8 @@
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
+// P0-3：文件写入路径授权（isTrustedSender / DENY_WRITE 与 file-ipc 同构）
+const { isTrustedSender, DENY_WRITE } = require('./file-ipc')
 
 /* ───────── pptxgenjs 懒加载 ───────── */
 
@@ -2367,12 +2369,16 @@ async function exportSlidesToPPTX(slides, outputPath, options) {
  * @param {Electron.IpcMain} ctx.ipcMain  - 必填
  * @param {Electron.Dialog}  [ctx.dialog] - 可选，提供则支持保存到磁盘
  * @param {string}            [ctx.defaultDir] - 保存对话框的默认目录
+ * @param {import('./file-access').FileAccessService} [ctx.fileAccess] - 可选；
+ *   与 ctx.findWindowIdByWebContents 同时提供时，outputPath 分支启用
+ *   「发送方验证 + 精确路径授权」（TASK-10，P0-3 file-access 同构）
+ * @param {(wc: unknown) => number | null} [ctx.findWindowIdByWebContents] - 可选
  */
 function registerExportServiceIpc(ctx) {
   if (!ctx || !ctx.ipcMain) {
     throw new Error('[registerExportServiceIpc] 缺少 ipcMain')
   }
-  const { ipcMain, dialog, defaultDir } = ctx
+  const { ipcMain, dialog, defaultDir, fileAccess, findWindowIdByWebContents } = ctx
   const sanitizeFilename = (name) => {
     const fallback = 'WPX-Deck'
     if (!name || typeof name !== 'string') return `${fallback}-${Date.now()}.pptx`
@@ -2384,7 +2390,7 @@ function registerExportServiceIpc(ctx) {
     return `${cleaned || fallback}-${Date.now()}.pptx`
   }
 
-  ipcMain.handle('slides:export-pptx', async (_event, slides, options) => {
+  ipcMain.handle('slides:export-pptx', async (event, slides, options) => {
     const opts = options || {}
     const fileName = sanitizeFilename(opts.filename || deriveDocTitle(slides || [], opts))
     let buffer
@@ -2399,6 +2405,21 @@ function registerExportServiceIpc(ctx) {
 
     // 静默覆盖写回（打开源文件后 Ctrl+S）
     if (opts.outputPath && typeof opts.outputPath === 'string') {
+      // TASK-10：写入路径授权——必须在 mkdir/writeFile 之前完成校验；
+      // 依赖可选（未注入时保持既有行为，兼容无授权环境的单测直调）。
+      if (fileAccess && findWindowIdByWebContents) {
+        if (!isTrustedSender(event, { findWindowIdByWebContents })) {
+          return { ...DENY_WRITE }
+        }
+        const authorized = await fileAccess.check(
+          event.sender.id,
+          path.resolve(opts.outputPath),
+          'write',
+        )
+        if (!authorized) {
+          return { ...DENY_WRITE }
+        }
+      }
       try {
         const resolved = path.resolve(opts.outputPath)
         await fsp.mkdir(path.dirname(resolved), { recursive: true })

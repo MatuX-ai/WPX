@@ -32,6 +32,7 @@ import { useEditorStore } from '@/stores/editor'
 import { useAppStore } from '@/stores/app'
 import { useUserPreferencesStore } from '@/stores/userPreferences'
 import { getElectronAPI, isElectron } from '@/utils/electron'
+import { drainExternalFileOpens } from '@/utils/externalFileBuffer'
 import { useUserHabits, extractFormatFromEditor } from '@/composables/useUserHabits'
 import { editorDragOutProps, useDragDrop } from '@/composables/useDragDrop'
 import { shortcutTooltip } from '@/composables/useGlobalShortcuts'
@@ -399,7 +400,9 @@ function handleExternalFileOpen(payload) {
   nextTick(async () => {
     const currentEditor = editor.value
     if (!currentEditor) {
-      // 编辑器未就绪，保留 pending 数据供后续重试
+      // 编辑器未就绪：payload 交回既有 pending 队列（不新造第二套队列），
+      // 待 editor 实例就绪后由 watch(() => editor.value) 重试。
+      appStore.queueExternalFile(payload)
       return
     }
 
@@ -511,6 +514,13 @@ onMounted(() => {
   if (pending) {
     handleExternalFileOpen(pending)
   }
+
+  // A 场景：入口 arm 的早期 payload。紧跟实时订阅注册后同步 drain
+  // （同一同步块内，事件循环不会插入 IPC 投递 → 不会与实时订阅重复投递）。
+  const bufferedOpens = drainExternalFileOpens()
+  for (const payload of bufferedOpens) {
+    handleExternalFileOpen(payload)
+  }
 })
 
 // 监听 editor 实例变化（Tiptap 异步初始化 / props.content 改变触发重建），
@@ -520,6 +530,12 @@ watch(
   (next, prev) => {
     if (prev) clearActiveEditor(prev)
     if (next) setActiveEditor(next)
+
+    // 编辑器实例就绪后重试 pending 外部文件（此前只会「保留 pending」而无重试点）。
+    if (next) {
+      const pending = appStore.pendingExternalFile
+      if (pending) handleExternalFileOpen(pending)
+    }
   },
 )
 

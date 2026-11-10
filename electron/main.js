@@ -328,6 +328,9 @@ async function openAssociatedFile(filePath) {
 
     if (!mainWindow) return
 
+    // P0-3：主进程代为打开的关联文件 → 为主窗口签发读写授权
+    void fileAccess.grant(mainWindow.webContents.id, filePath, { read: true, write: true })
+
     if (mainWindow.webContents.isLoading()) {
       mainWindow.webContents.once('did-finish-load', deliver)
     } else {
@@ -1165,7 +1168,13 @@ function registerIpcHandlers() {
 
   registerExportAiLayoutSuggestHandler(ipcMain)
 
-  registerExportServiceIpc({ ipcMain, dialog })
+  registerExportServiceIpc({
+    ipcMain,
+    dialog,
+    // P0-3 / TASK-10：slides:export-pptx outputPath 分支接入发送方验证 + 精确路径授权
+    fileAccess,
+    findWindowIdByWebContents: (wc) => WindowManager.findWindowIdByWebContents(wc),
+  })
 }
 
 function registerGlobalShortcuts() {
