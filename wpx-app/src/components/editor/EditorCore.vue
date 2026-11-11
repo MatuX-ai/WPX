@@ -948,7 +948,7 @@ const toolbarItems = computed(() => {
 </script>
 
 <template>
-  <div class="editor-shell rounded-xl border shadow-sm">
+  <div class="editor-root">
     <div
       v-if="editor"
       class="editor-toolbar"
@@ -1051,6 +1051,7 @@ const toolbarItems = computed(() => {
       </div>
     </div>
 
+    <div class="editor-shell rounded-xl border shadow-sm">
     <TableBubbleMenu v-if="editor" :editor="editor" />
     <ImageBubbleMenu v-if="editor" :editor="editor" @edit-image="openImageEditor" />
     <ListBubbleMenu v-if="editor" :editor="editor" />
@@ -1119,6 +1120,7 @@ const toolbarItems = computed(() => {
     >
       已选中 {{ editorStore.selection.text.length }} 字 · 打开 AI 助手并输入指令即可修改选区
     </div>
+    </div>
   </div>
 </template>
 
@@ -1140,30 +1142,34 @@ const toolbarItems = computed(() => {
 .editor-toolbar {
   position: sticky;
   /*
-   * top 必须为 0，不要改成 var(--title-bar-height) 等正值。
-   *
-   * 实测（浏览器验证，2026-11）：
-   * - 编辑页的实际滚动容器是 .editor-layout__main（EditorLayout 内 overflow-y: auto），
-   *   其 scrollport 顶部 = 视口 36px，正好是 fixed TitleBar（高 36px，z-index 80）的底边；
-   *   旧注释假设 scrollport 是 .app-main--immersive（顶部=视口 0），前提不成立。
-   * - 本工具栏是滚动内容的第一行（自然位置也在视口 36px），此时 sticky 的
-   *   吸附线 = scrollport 顶 + top。若 top > 0，静止时吸附线低于自然位置，
-   *   sticky 会把工具栏向下推 top 像素，脱离外壳顶部并遮住正文首行（已实测复现）。
-   * - top: 0 时：静止 = 正常文档流位置（外壳顶边内侧）；
-   *   滚动后吸附在视口 36px = TitleBar 正下方，浮窗效果完整。
+   * 悬浮卡片工具栏（Notion 风格，2026-11）：
+   * - DOM 上工具栏已移出 .editor-shell，成为独立卡片（圆角 + 边框 + 阴影 + 毛玻璃）；
+   * - 编辑页实际滚动容器是 .editor-layout__main（scrollport 顶 = 视口 36px，
+   *   正好是 fixed TitleBar 的底边）；
+   * - 吸附线 = scrollport 顶 + top(8px) = 视口 44px；
+   *   自然位置 = scrollport 顶 + margin-top(8px) = 视口 44px。
+   *   两者重合 → 静止时 sticky 位移为 0，滚动后悬浮在 TitleBar 下方 8px。
+   * - 历史教训（勿重蹈）：若工具栏自然位置贴着 scrollport 顶（无 margin-top），
+   *   top>0 会让 sticky 在静止时把工具栏下推、遮挡正文首行；
+   *   top 与 margin-top 必须同步调整，保持“自然位置 == 吸附线”。
    */
-  top: 0;
+  top: 8px;
   z-index: var(--z-editor-toolbar, 70);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: var(--editor-toolbar-height, 36px);
-  padding: 0 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-border, #e2e8f0) 38%, transparent);
-  background: color-mix(in srgb, var(--theme-bg-subtle, #f8fafc) 52%, transparent);
+  height: var(--editor-toolbar-height, 40px);
+  margin: 8px 8px 8px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-border, #e2e8f0) 55%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-surface, #fff) 82%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 4px 14px rgba(15, 23, 42, 0.08);
 }
 
 .editor-toolbar__primary {
@@ -1173,6 +1179,16 @@ const toolbarItems = computed(() => {
   gap: 2px;
   min-width: 0;
   overflow-x: auto;
+  /*
+   * 窄窗口（含 Electron 打包按钮挤占宽度 / 系统 DPI 缩放）下按钮组溢出时，
+   * 隐藏滚动条避免出现“灰色长条”，按钮组仍可横向滚动；
+   * 更窄时由 .editor-toolbar--icon-only（宽度 < 900px）折叠为纯图标。
+   */
+  scrollbar-width: none;
+}
+
+.editor-toolbar__primary::-webkit-scrollbar {
+  display: none;
 }
 
 .editor-toolbar__actions {

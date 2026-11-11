@@ -146,7 +146,7 @@ samp {
 
 :root {
   --title-bar-height: 36px;
-  --editor-toolbar-height: 36px;
+  --editor-toolbar-height: 40px;
   --z-editor-toolbar: 70;
   --z-title-bar: 80;
   /* 资料库须盖住编辑器工具栏(70)，否则加粗等按钮会从抽屉缝里“浮”出来 */

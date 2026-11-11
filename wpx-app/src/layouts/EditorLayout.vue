@@ -1254,15 +1254,22 @@ watch(
 .editor-layout__editor--focus :deep(.editor-shell) {
   margin: 0 auto;
   max-width: var(--wpx-paper-width, 794px);
-  min-height: calc(100vh - var(--title-bar-height, 36px) - 64px);
+  min-height: calc(
+    100vh - var(--title-bar-height, 36px) - var(--editor-toolbar-height, 40px) - 80px
+  );
   box-shadow: var(--wpx-focus-mode-paper-shadow);
   transition:
     max-width 0.3s ease,
     box-shadow 0.3s ease;
 }
 
+/*
+ * 焦点写作模式：工具栏为独立悬浮卡片，宽度与纸张对齐并居中。
+ */
 .editor-layout__editor--focus :deep(.editor-toolbar) {
-  border-radius: 10px 10px 0 0;
+  max-width: var(--wpx-paper-width, 794px);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .editor-layout__editor--focus :deep(.editor-drop-zone),
@@ -1316,7 +1323,9 @@ watch(
 }
 
 .editor-layout__editor :deep(.editor-shell) {
-  min-height: calc(100vh - var(--title-bar-height, 36px));
+  min-height: calc(
+    100vh - var(--title-bar-height, 36px) - var(--editor-toolbar-height, 40px) - 16px
+  );
   display: flex;
   flex-direction: column;
   border-color: var(--theme-border);
